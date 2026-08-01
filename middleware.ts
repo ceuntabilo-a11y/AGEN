@@ -1,4 +1,5 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
@@ -21,7 +22,11 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.redirect(new URL('/login', request.url))
 
-  const { data: member } = await supabase.from('business_members').select('role').eq('user_id', user.id).eq('active', true).limit(1).maybeSingle()
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const membershipDb = serviceRoleKey
+    ? createClient(url, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
+    : supabase
+  const { data: member } = await membershipDb.from('business_members').select('role').eq('user_id', user.id).eq('active', true).limit(1).maybeSingle()
   const path = request.nextUrl.pathname
   if (path.startsWith('/admin') && !member?.role?.match(/OWNER|ADMIN|RECEPTIONIST/)) return NextResponse.redirect(new URL(member?.role === 'PROFESSIONAL' ? '/profesional' : '/cliente', request.url))
   if (path.startsWith('/profesional') && member?.role !== 'PROFESSIONAL') return NextResponse.redirect(new URL(member ? '/admin' : '/cliente', request.url))

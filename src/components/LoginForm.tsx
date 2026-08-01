@@ -17,14 +17,11 @@ export function LoginForm() {
       const db = createClient()
       const { data, error: authError } = await db.auth.signInWithPassword({ email, password })
       if (authError) throw authError
-      const { data: member, error: memberError } = await db.from('business_members').select('role').eq('user_id', data.user.id).eq('active', true).limit(1).maybeSingle()
-      if (memberError) throw memberError
-      if (member) router.replace(member.role === 'PROFESSIONAL' ? '/profesional' : '/admin')
-      else {
-        const { data: client } = await db.from('clients').select('id').eq('user_id', data.user.id).limit(1).maybeSingle()
-        if (client) router.replace('/cliente')
-        else router.replace(data.user.user_metadata?.account_type === 'BUSINESS' ? '/configurar-negocio' : '/cliente/onboarding')
-      }
+      const response = await fetch('/api/session', { cache: 'no-store' })
+      if (response.ok) {
+        const session = await response.json() as { role?: string }
+        router.replace(session.role === 'PROFESSIONAL' ? '/profesional' : session.role === 'CLIENT' ? '/cliente' : '/admin')
+      } else router.replace(data.user.user_metadata?.account_type === 'BUSINESS' ? '/configurar-negocio' : '/cliente/onboarding')
       router.refresh()
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'No se pudo iniciar sesión') }
     finally { setLoading(false) }

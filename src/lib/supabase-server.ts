@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { createAdminClient } from '@/lib/supabase-admin'
 
 export function createServerSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -17,9 +18,10 @@ export function createServerSupabase() {
 }
 
 export async function requireBusinessContext(roles?: string[]) {
-  const db = createServerSupabase()
-  const { data: { user } } = await db.auth.getUser()
+  const session = createServerSupabase()
+  const { data: { user } } = await session.auth.getUser()
   if (!user) throw new Error('UNAUTHORIZED')
+  const db = createAdminClient()
   const { data: member, error } = await db.from('business_members').select('business_id,role,id').eq('user_id', user.id).eq('active', true).limit(1).maybeSingle()
   if (error || !member) throw new Error('FORBIDDEN')
   if (roles && !roles.includes(member.role)) throw new Error('FORBIDDEN')
