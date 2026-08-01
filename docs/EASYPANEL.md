@@ -8,7 +8,7 @@ Crear una aplicación desde GitHub con el constructor Node/Nixpacks de EasyPanel
 - Directorio raíz: `/`.
 - Build: `npm ci && npm run build`.
 - Start: `npm start`.
-- Puerto: `3000`.
+- Puerto: `3010`.
 - Health check: `/api/health`.
 
 Configurar las variables indicadas en `.env.example` desde el panel. No subir archivos `.env` al repositorio.

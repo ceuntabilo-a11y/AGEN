@@ -14,7 +14,7 @@ Crear una aplicación desde el repositorio GitHub y configurar:
 
 - Build command: `npm ci && npm run build`
 - Start command: `npm start`
-- Puerto: `3000`
+- Puerto: `3010`
 - Node.js: `20` o `22`
 - Health check: `/api/health`
 
