@@ -1,0 +1,25 @@
+# Agen
+
+**Agenda + Agente inteligente** para negocios de servicios.
+
+## Desarrollo local
+
+1. Copiar `.env.example` a `.env.local` y configurar Supabase.
+2. Instalar dependencias con `npm install`.
+3. Iniciar con `npm run dev`.
+
+## EasyPanel sin Docker
+
+Crear una aplicación desde el repositorio GitHub y configurar:
+
+- Build command: `npm ci && npm run build`
+- Start command: `npm start`
+- Puerto: `3000`
+- Node.js: `20` o `22`
+- Health check: `/api/health`
+
+Las credenciales se cargan como variables de entorno en EasyPanel. La base de datos se crea con las migraciones de `supabase/migrations` y los workflows se importan desde `n8n-workflows`.
+
+## Regla de reservas
+
+El agente nunca inserta directamente en `appointments`. Primero resuelve especialidad y servicio; después consulta disponibilidad y finalmente llama a la función transaccional de reserva. PostgreSQL es la autoridad final ante conflictos.

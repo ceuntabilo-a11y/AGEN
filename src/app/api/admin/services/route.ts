@@ -1,0 +1,11 @@
+import { NextResponse } from 'next/server'
+import { requireBusinessContext } from '@/lib/supabase-server'
+import { apiError } from '@/lib/http-errors'
+
+export async function POST(request:Request){
+  try{const {db,businessId}=await requireBusinessContext(['OWNER','ADMIN']);const body=await request.json() as {specialtyId?:string;name?:string;description?:string;durationMinutes?:number;bufferBeforeMinutes?:number;bufferAfterMinutes?:number;price?:number;materialCost?:number;depositAmount?:number;professionalIds?:string[]};if(!body.specialtyId||!body.name||!body.durationMinutes)return NextResponse.json({error:'Especialidad, nombre y duración son obligatorios'},{status:400});const {data:service,error}=await db.from('services').insert({business_id:businessId,specialty_id:body.specialtyId,name:body.name.trim(),description:body.description?.trim()||null,duration_minutes:body.durationMinutes,buffer_before_minutes:body.bufferBeforeMinutes??0,buffer_after_minutes:body.bufferAfterMinutes??0,price:body.price??0,material_cost:body.materialCost??0,deposit_amount:body.depositAmount??0}).select().single();if(error)throw error;if(body.professionalIds?.length){const {error:linkError}=await db.from('professional_services').insert(body.professionalIds.map(professional_id=>({professional_id,service_id:service.id})));if(linkError)throw linkError}return NextResponse.json({service},{status:201})}catch(error){return apiError(error)}
+}
+
+export async function PATCH(request:Request){
+  try{const {db,businessId}=await requireBusinessContext(['OWNER','ADMIN']);const body=await request.json() as {id?:string;changes?:Record<string,unknown>};if(!body.id||!body.changes)return NextResponse.json({error:'Datos incompletos'},{status:400});const allowed=['name','description','duration_minutes','buffer_before_minutes','buffer_after_minutes','price','material_cost','deposit_amount','active'];const changes=Object.fromEntries(Object.entries(body.changes).filter(([key])=>allowed.includes(key)));const {data,error}=await db.from('services').update(changes).eq('id',body.id).eq('business_id',businessId).select().single();if(error)throw error;return NextResponse.json({service:data})}catch(error){return apiError(error)}
+}

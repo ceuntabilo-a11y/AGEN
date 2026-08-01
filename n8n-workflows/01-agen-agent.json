@@ -1,0 +1,169 @@
+{
+  "name": "AGEN 01 - Agente de reservas",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "agen-agent", "responseMode": "responseNode", "options": {} },
+      "id": "webhook-in",
+      "name": "Entrada",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-900, 0],
+      "webhookId": "agen-agent"
+    },
+    {
+      "parameters": {
+        "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{$json.headers['x-agen-secret']}}", "rightValue": "={{$env.AGEN_WEBHOOK_SECRET}}", "operator": { "type": "string", "operation": "equals" } }], "combinator": "and" },
+        "options": {}
+      },
+      "id": "authorize-webhook",
+      "name": "Autorizar webhook",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-780, 0]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{JSON.stringify({error: 'No autorizado'})}}", "options": { "responseCode": 401 } },
+      "id": "reject-webhook",
+      "name": "Rechazar",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [-580, -260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/agent/memory'}}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, phone: $('Entrada').item.json.body.phone})}}",
+        "options": {}
+      },
+      "id": "load-memory",
+      "name": "Cargar memoria",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-680, -100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/agent/catalog'}}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId})}}",
+        "options": {}
+      },
+      "id": "load-catalog",
+      "name": "Cargar catálogo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-680, 100]
+    },
+    {
+      "parameters": { "mode": "combine", "combineBy": "combineByPosition", "options": {} },
+      "id": "merge-context",
+      "name": "Unir contexto",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [-440, 0]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{'MENSAJE: ' + $('Entrada').item.json.body.message + '\nCLIENTE/MEMORIA: ' + JSON.stringify($json) + '\nNEGOCIO: ' + $('Entrada').item.json.body.businessId}}",
+        "options": {
+          "systemMessage": "Eres Agen, recepcionista de un negocio de servicios. Responde en español, de forma natural y breve. REGLAS INVIOLABLES: 1) Nunca inventes servicios, profesionales u horarios. 2) Identifica primero el servicio exacto del catálogo. 3) Para hablar de disponibilidad debes usar buscar_horarios con el serviceId real; sus resultados ya excluyen profesionales de otras especialidades. 4) Para reservar debes tener clientId, serviceId, professionalId y fecha ISO elegidos explícitamente por el cliente, y usar crear_reserva. 5) Nunca afirmes que reservaste si crear_reserva no responde booked=true. Ante HTTP 409, vuelve a buscar alternativas. 6) Lee la memoria antes de preguntar. No repitas nombre, correo, profesional preferido o servicio si ya constan; confirma solo cuando pueda haber cambiado. 7) No confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Confirma al final servicio, profesional, fecha, hora y precio. 10) Transfiere a una persona si el cliente lo pide o existe una situación ambigua de pagos, quejas o seguridad."
+        }
+      },
+      "id": "ai-agent",
+      "name": "Agente Agen",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-160, 0]
+    },
+    {
+      "parameters": { "modelName": "gpt-4o-mini", "options": { "temperature": 0.2 } },
+      "id": "chat-model",
+      "name": "Modelo",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [-320, 260]
+    },
+    {
+      "parameters": { "sessionKey": "={{$('Entrada').item.json.body.businessId + ':' + $('Entrada').item.json.body.phone}}", "contextWindowLength": 12 },
+      "id": "window-memory",
+      "name": "Memoria reciente",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [-120, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/agent/slots'}}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, serviceId: $fromAI('serviceId','ID exacto del servicio del catálogo','string'), from: $fromAI('from','Inicio ISO de la ventana solicitada','string'), until: $fromAI('until','Fin ISO de la ventana, máximo 14 días','string')})}}",
+        "options": {}
+      },
+      "id": "find-slots-tool",
+      "name": "buscar_horarios",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [80, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/agent/book'}}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, branchId: $fromAI('branchId','ID de sucursal o null','string'), clientId: $fromAI('clientId','ID conocido del cliente','string'), professionalId: $fromAI('professionalId','ID devuelto por buscar_horarios','string'), serviceId: $fromAI('serviceId','ID exacto del servicio','string'), desiredStart: $fromAI('desiredStart','Fecha/hora ISO elegida por el cliente','string')})}}",
+        "options": {}
+      },
+      "id": "book-tool",
+      "name": "crear_reserva",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [280, 280]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{JSON.stringify({reply: $json.output, businessId: $('Entrada').item.json.body.businessId, phone: $('Entrada').item.json.body.phone})}}", "options": {} },
+      "id": "respond",
+      "name": "Responder",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [120, 0]
+    }
+  ],
+  "connections": {
+    "Entrada": { "main": [[{ "node": "Autorizar webhook", "type": "main", "index": 0 }]] },
+    "Autorizar webhook": { "main": [[{ "node": "Cargar memoria", "type": "main", "index": 0 }, { "node": "Cargar catálogo", "type": "main", "index": 0 }], [{ "node": "Rechazar", "type": "main", "index": 0 }]] },
+    "Cargar memoria": { "main": [[{ "node": "Unir contexto", "type": "main", "index": 0 }]] },
+    "Cargar catálogo": { "main": [[{ "node": "Unir contexto", "type": "main", "index": 1 }]] },
+    "Unir contexto": { "main": [[{ "node": "Agente Agen", "type": "main", "index": 0 }]] },
+    "Modelo": { "ai_languageModel": [[{ "node": "Agente Agen", "type": "ai_languageModel", "index": 0 }]] },
+    "Memoria reciente": { "ai_memory": [[{ "node": "Agente Agen", "type": "ai_memory", "index": 0 }]] },
+    "buscar_horarios": { "ai_tool": [[{ "node": "Agente Agen", "type": "ai_tool", "index": 0 }]] },
+    "crear_reserva": { "ai_tool": [[{ "node": "Agente Agen", "type": "ai_tool", "index": 0 }]] },
+    "Agente Agen": { "main": [[{ "node": "Responder", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true, "callerPolicy": "workflowsFromSameOwner" },
+  "active": false,
+  "versionId": "c503b502-1939-4dc2-9aef-a9e100000001",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

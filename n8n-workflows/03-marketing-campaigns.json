@@ -1,0 +1,149 @@
+{
+  "name": "AGEN 03 - Campañas consentidas",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "agen-campaign", "responseMode": "onReceived", "options": {} },
+      "id": "webhook",
+      "name": "Campaña inmediata",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-900, -100],
+      "webhookId": "agen-campaign"
+    },
+    {
+      "parameters": {
+        "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{$json.headers['x-agen-secret']}}", "rightValue": "={{$env.AGEN_WEBHOOK_SECRET}}", "operator": { "type": "string", "operation": "equals" } }], "combinator": "and" },
+        "options": {}
+      },
+      "id": "authorize",
+      "name": "Autorizar webhook",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-680, -100]
+    },
+    {
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 5 }] } },
+      "id": "schedule",
+      "name": "Cada 5 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-900, 140]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/automation/campaign/claim'}}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={}",
+        "options": {}
+      },
+      "id": "claim",
+      "name": "Reclamar programadas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-680, 140]
+    },
+    {
+      "parameters": { "fieldToSplitOut": "campaigns", "options": {} },
+      "id": "split-campaigns",
+      "name": "Separar campañas",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [-460, 140]
+    },
+    {
+      "parameters": {
+        "assignments": { "assignments": [{ "id": "business", "name": "businessId", "value": "={{$json.body?.businessId || $json.businessId}}", "type": "string" }, { "id": "campaign", "name": "campaignId", "value": "={{$json.body?.campaignId || $json.id}}", "type": "string" }] },
+        "options": {}
+      },
+      "id": "normalize",
+      "name": "Normalizar campaña",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-220, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/automation/campaign/prepare'}}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({businessId: $json.businessId, campaignId: $json.campaignId})}}",
+        "options": {}
+      },
+      "id": "prepare",
+      "name": "Preparar audiencia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [20, 0]
+    },
+    {
+      "parameters": { "fieldToSplitOut": "recipients", "include": "selectedOtherFields", "fieldsToInclude": "campaign", "options": {} },
+      "id": "split-recipients",
+      "name": "Separar destinatarios",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [260, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_MARKETING_GATEWAY_URL}}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "authorization", "value": "={{'Bearer ' + $env.AGEN_MARKETING_GATEWAY_TOKEN}}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({campaign: $json.campaign, recipient: {clientId: $json.clientId, name: $json.name, phone: $json.phone, email: $json.email}})}}",
+        "options": { "response": { "response": { "neverError": true, "responseFormat": "json" } } }
+      },
+      "id": "send",
+      "name": "Enviar por canal oficial",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/automation/campaign/result'}}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({campaignId: $('Separar destinatarios').item.json.campaign.id, clientId: $('Separar destinatarios').item.json.clientId, status: $json.success === true ? 'SENT' : 'FAILED', reason: $json.error || null})}}",
+        "options": {}
+      },
+      "id": "result",
+      "name": "Registrar entrega",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, 0]
+    }
+  ],
+  "connections": {
+    "Campaña inmediata": { "main": [[{ "node": "Autorizar webhook", "type": "main", "index": 0 }]] },
+    "Autorizar webhook": { "main": [[{ "node": "Normalizar campaña", "type": "main", "index": 0 }], []] },
+    "Cada 5 minutos": { "main": [[{ "node": "Reclamar programadas", "type": "main", "index": 0 }]] },
+    "Reclamar programadas": { "main": [[{ "node": "Separar campañas", "type": "main", "index": 0 }]] },
+    "Separar campañas": { "main": [[{ "node": "Normalizar campaña", "type": "main", "index": 0 }]] },
+    "Normalizar campaña": { "main": [[{ "node": "Preparar audiencia", "type": "main", "index": 0 }]] },
+    "Preparar audiencia": { "main": [[{ "node": "Separar destinatarios", "type": "main", "index": 0 }]] },
+    "Separar destinatarios": { "main": [[{ "node": "Enviar por canal oficial", "type": "main", "index": 0 }]] },
+    "Enviar por canal oficial": { "main": [[{ "node": "Registrar entrega", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "active": false,
+  "versionId": "c503b502-1939-4dc2-9aef-a9e100000003",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}
