@@ -101,7 +101,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{JSON.stringify({campaign: $json.campaign, recipient: {clientId: $json.clientId, name: $json.name, phone: $json.phone, email: $json.email}})}}",
+        "body": "={{JSON.stringify({campaign: $json.campaign, recipient: {clientId: $json.clientId, name: $json.name, phone: $json.phone, email: $json.email, unsubscribeUrl: $json.unsubscribeUrl || null}})}}",
         "options": { "response": { "response": { "neverError": true, "responseFormat": "json" } } }
       },
       "id": "send",

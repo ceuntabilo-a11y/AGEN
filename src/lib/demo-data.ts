@@ -24,4 +24,4 @@ export const appointments = [
   { id: 'a7', time: '15:00', end: '16:15', client: 'Paula Reyes', professionalId: 'p3', serviceId: 's3', status: 'Confirmada' },
 ]
 
-export const money = (value: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value)
+export const money = (value: number, currency = 'CLP') => new Intl.NumberFormat('es-CL', { style: 'currency', currency, maximumFractionDigits: currency === 'CLP' ? 0 : 2 }).format(value)

@@ -6,12 +6,14 @@ El agente se construye con el patrón `Webhook → contexto/memoria → agente I
 
 1. El modelo no consulta ni escribe SQL libre.
 2. Primero identifica una especialidad y un servicio existente.
-3. Solo consulta profesionales mediante `/api/agent/availability` usando el `serviceId` real.
-4. Solo reserva mediante `/api/agent/book`.
-5. Una respuesta HTTP 409 significa que otro cliente tomó el horario; se vuelve a consultar y se ofrecen alternativas.
-6. No se presenta una manicurista para un servicio de peluquería ni viceversa.
-7. Antes de preguntar un dato, se consulta `client_memory` y el resumen de conversación.
-8. Toda modificación se confirma al cliente con servicio, profesional, fecha y hora.
+3. Solo consulta profesionales mediante `/api/agent/slots` usando el `serviceId` real.
+4. Registra clientes nuevos mediante `/api/agent/clients` después de obtener su nombre real.
+5. Solo reserva mediante `/api/agent/book`.
+6. Una respuesta HTTP 409 significa que otro cliente tomó el horario; se vuelve a consultar y se ofrecen alternativas.
+7. No se presenta una manicurista para un servicio de peluquería ni viceversa.
+8. Antes de preguntar un dato, se consulta `client_memory`; después de reservar se actualiza con `/api/agent/memory`.
+9. Nunca se afirma que una reserva fue confirmada si la herramienta no devolvió `booked=true`.
+10. Toda modificación se confirma al cliente con servicio, profesional, fecha y hora.
 
 ## Credenciales
 
@@ -28,6 +30,6 @@ No guardar secretos dentro del JSON del workflow.
 - `02-notification-outbox.json`: reclama recordatorios sin duplicarlos y registra el resultado del proveedor.
 - `03-marketing-campaigns.json`: campañas inmediatas o programadas, segmentadas y limitadas a consentimientos vigentes.
 
-Los workflows 02 y 03 envían un JSON normalizado a un gateway del proveedor. Esto permite conectar WhatsApp Cloud API, correo, Instagram, Messenger o push sin acoplar Agen a una sola empresa. El gateway debe responder `{ "success": true }` o `{ "success": false, "error": "motivo" }`.
+Los workflows 02 y 03 envían un JSON normalizado a un gateway del proveedor. Esto permite conectar WhatsApp Cloud API oficial, correo, Instagram, Messenger o push sin acoplar Agen a una sola empresa. El gateway debe responder `{ "success": true }` o `{ "success": false, "error": "motivo" }`. En campañas de email debe incluir el `recipient.unsubscribeUrl` recibido como enlace visible para cancelar promociones.
 
 Configurar en n8n `AGEN_APP_URL`, `AGEN_WEBHOOK_SECRET`, `AGEN_NOTIFICATION_GATEWAY_URL`, `AGEN_NOTIFICATION_GATEWAY_TOKEN`, `AGEN_MARKETING_GATEWAY_URL` y `AGEN_MARKETING_GATEWAY_TOKEN`. Activar cada workflow únicamente después de probarlo manualmente con las credenciales reales.

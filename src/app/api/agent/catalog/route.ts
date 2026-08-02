@@ -7,10 +7,14 @@ export async function POST(request: Request) {
   const { businessId } = await request.json() as { businessId?: string }
   if (!businessId) return NextResponse.json({ error: 'businessId es obligatorio' }, { status: 400 })
   const db = createAdminClient()
-  const [{ data: specialties, error: specialtyError }, { data: services, error: serviceError }] = await Promise.all([
+  let businessResult = await db.from('businesses').select('id,name,timezone,currency,address,phone,maps_url,settings,agent_settings').eq('id',businessId).eq('active',true).maybeSingle()
+  if (businessResult.error) businessResult = await db.from('businesses').select('id,name,timezone,currency,address,phone,settings,agent_settings').eq('id',businessId).eq('active',true).maybeSingle() as typeof businessResult
+  const [{ data: specialties, error: specialtyError }, { data: services, error: serviceError }, { data: branches, error: branchError }] = await Promise.all([
     db.from('specialties').select('id,name,slug,description,color').eq('business_id', businessId).eq('active', true).order('name'),
     db.from('services').select('id,name,description,duration_minutes,price,deposit_amount,specialty:specialties(id,name,slug)').eq('business_id', businessId).eq('active', true).order('name'),
+    db.from('branches').select('id,name,address,phone,timezone').eq('business_id',businessId).eq('active',true).order('name'),
   ])
-  if (specialtyError || serviceError) return NextResponse.json({ error: 'No se pudo cargar el catálogo' }, { status: 500 })
-  return NextResponse.json({ specialties, services })
+  if (!businessResult.data) return NextResponse.json({ error: 'Negocio inexistente o inactivo' }, { status: 404 })
+  if (specialtyError || serviceError || branchError) return NextResponse.json({ error: 'No se pudo cargar el catálogo' }, { status: 500 })
+  return NextResponse.json({ business: { ...businessResult.data, maps_url: (businessResult.data as any).maps_url ?? null }, branches, specialties, services })
 }

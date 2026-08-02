@@ -76,9 +76,9 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "={{'MENSAJE: ' + $('Entrada').item.json.body.message + '\nCLIENTE/MEMORIA: ' + JSON.stringify($json) + '\nNEGOCIO: ' + $('Entrada').item.json.body.businessId}}",
+        "text": "={{'MENSAJE: ' + String($('Entrada').item.json.body.message || '').slice(0, 2000) + '\nCLIENTE/MEMORIA Y CATÁLOGO: ' + JSON.stringify($json) + '\nNEGOCIO: ' + $('Entrada').item.json.body.businessId}}",
         "options": {
-          "systemMessage": "Eres Agen, recepcionista de un negocio de servicios. Responde en español, de forma natural y breve. REGLAS INVIOLABLES: 1) Nunca inventes servicios, profesionales u horarios. 2) Identifica primero el servicio exacto del catálogo. 3) Para hablar de disponibilidad debes usar buscar_horarios con el serviceId real; sus resultados ya excluyen profesionales de otras especialidades. 4) Para reservar debes tener clientId, serviceId, professionalId y fecha ISO elegidos explícitamente por el cliente, y usar crear_reserva. 5) Nunca afirmes que reservaste si crear_reserva no responde booked=true. Ante HTTP 409, vuelve a buscar alternativas. 6) Lee la memoria antes de preguntar. No repitas nombre, correo, profesional preferido o servicio si ya constan; confirma solo cuando pueda haber cambiado. 7) No confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Confirma al final servicio, profesional, fecha, hora y precio. 10) Transfiere a una persona si el cliente lo pide o existe una situación ambigua de pagos, quejas o seguridad."
+          "systemMessage": "Eres Agen, recepcionista de un negocio de servicios. Responde en español, de forma natural y breve. REGLAS INVIOLABLES: 1) Nunca inventes servicios, profesionales, precios, direcciones ni horarios. 2) Identifica primero el servicio exacto del catálogo. No confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 3) Para hablar de disponibilidad debes usar buscar_horarios con el serviceId real; solo muestra los profesionales devueltos por esa herramienta. 4) Si el cliente no existe, pide su nombre real una sola vez y llama registrar_cliente. Nunca uses el nombre del perfil de WhatsApp como identidad confirmada. 5) Para reservar debes tener clientId, serviceId, professionalId y fecha ISO elegidos explícitamente por el cliente, y usar crear_reserva. 6) Nunca afirmes que reservaste o confirmaste si crear_reserva no responde booked=true. Ante HTTP 409, informa que el cupo se ocupó y vuelve a buscar alternativas. 7) Lee la memoria antes de preguntar. No repitas nombre, correo, profesional preferido o servicio si ya constan; confirma solo cuando pueda haber cambiado. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Después de una reserva exitosa llama guardar_memoria con un resumen breve y las preferencias aprendidas. Si el cliente no tiene correo, ofrece una sola vez recibir confirmaciones por email; no actives marketing sin consentimiento explícito. 10) Confirma al final servicio, profesional, fecha, hora y precio. 11) Para ubicación comparte maps_url exactamente como aparece; si está vacío, usa solo la dirección guardada. 12) Transfiere a una persona si el cliente lo pide o existe una situación ambigua de pagos, quejas o seguridad."
         }
       },
       "id": "ai-agent",
@@ -140,12 +140,66 @@
       "position": [280, 280]
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{JSON.stringify({reply: $json.output, businessId: $('Entrada').item.json.body.businessId, phone: $('Entrada').item.json.body.phone})}}", "options": {} },
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/agent/clients'}}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, phone: $('Entrada').item.json.body.phone, fullName: $fromAI('fullName','Nombre completo confirmado por el cliente. Obligatorio si es nuevo.','string'), email: $fromAI('email','Correo confirmado o cadena vacía si no lo dio','string'), marketingOptIn: $fromAI('marketingOptIn','true solo si autorizó promociones explícitamente','boolean')})}}",
+        "options": {}
+      },
+      "id": "register-client-tool",
+      "name": "registrar_cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 280]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{$env.AGEN_APP_URL + '/api/agent/memory'}}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, clientId: $fromAI('clientId','ID exacto del cliente registrado','string'), summary: $fromAI('summary','Resumen breve con datos ya confirmados, sin inventar','string'), lastIntent: $fromAI('lastIntent','Última intención del cliente','string'), knownFacts: {notes: $fromAI('knownFacts','Hechos confirmados útiles para no volver a preguntar','string')}, preferences: {notes: $fromAI('preferences','Servicio o profesional preferido confirmado','string')}})}}",
+        "options": {}
+      },
+      "id": "save-memory-tool",
+      "name": "guardar_memoria",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/agent/interactions'}}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, phone: $('Entrada').item.json.body.phone, message: $('Entrada').item.json.body.message, reply: $('Agente Agen').item.json.output})}}",
+        "options": { "response": { "response": { "neverError": true, "responseFormat": "json" } } }
+      },
+      "id": "persist-interaction",
+      "name": "Persistir interacción",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [80, 0]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{JSON.stringify({reply: $('Agente Agen').item.json.output, businessId: $('Entrada').item.json.body.businessId, phone: $('Entrada').item.json.body.phone})}}", "options": {} },
       "id": "respond",
       "name": "Responder",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
-      "position": [120, 0]
+      "position": [340, 0]
     }
   ],
   "connections": {
@@ -158,12 +212,15 @@
     "Memoria reciente": { "ai_memory": [[{ "node": "Agente Agen", "type": "ai_memory", "index": 0 }]] },
     "buscar_horarios": { "ai_tool": [[{ "node": "Agente Agen", "type": "ai_tool", "index": 0 }]] },
     "crear_reserva": { "ai_tool": [[{ "node": "Agente Agen", "type": "ai_tool", "index": 0 }]] },
-    "Agente Agen": { "main": [[{ "node": "Responder", "type": "main", "index": 0 }]] }
+    "registrar_cliente": { "ai_tool": [[{ "node": "Agente Agen", "type": "ai_tool", "index": 0 }]] },
+    "guardar_memoria": { "ai_tool": [[{ "node": "Agente Agen", "type": "ai_tool", "index": 0 }]] },
+    "Agente Agen": { "main": [[{ "node": "Persistir interacción", "type": "main", "index": 0 }]] },
+    "Persistir interacción": { "main": [[{ "node": "Responder", "type": "main", "index": 0 }]] }
   },
   "pinData": {},
   "settings": { "executionOrder": "v1", "saveManualExecutions": true, "callerPolicy": "workflowsFromSameOwner" },
   "active": false,
-  "versionId": "c503b502-1939-4dc2-9aef-a9e100000001",
+  "versionId": "c503b502-1939-4dc2-9aef-a9e100000011",
   "meta": { "templateCredsSetupCompleted": false },
   "tags": []
 }

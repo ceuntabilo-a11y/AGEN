@@ -23,3 +23,15 @@ Las credenciales se cargan como variables de entorno en EasyPanel. La base de da
 ## Regla de reservas
 
 El agente nunca inserta directamente en `appointments`. Primero resuelve especialidad y servicio; después consulta disponibilidad y finalmente llama a la función transaccional de reserva. PostgreSQL es la autoridad final ante conflictos.
+
+## Mejoras adaptadas de MediCore
+
+- Agenda administrativa navegable por día, semana y mes, con colores por profesional y gestión de estados.
+- Fechas, panel e intervalos calculados en la zona horaria del negocio, no en la del servidor.
+- Reagendamiento y cancelación seguros, con revalidación transaccional del horario.
+- Monitor visible de conexión con Supabase.
+- Campañas editables con confirmación, destinatarios y resultado real por entrega.
+- Baja pública de promociones por email, separada de avisos necesarios sobre reservas.
+- Agente n8n con registro seguro de clientes nuevos, memoria persistente, ubicación real y guardia contra confirmaciones fantasma.
+
+Aplicar `supabase/migrations/20260801000001_medicore_improvements.sql` antes de desplegar esta versión. Después se debe volver a importar `n8n-workflows/01-agen-agent.json` y `03-marketing-campaigns.json` en n8n.

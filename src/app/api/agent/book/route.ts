@@ -21,8 +21,8 @@ export async function POST(request: Request) {
   }
 
   const desiredStart = new Date(body.desiredStart)
-  if (Number.isNaN(desiredStart.getTime())) {
-    return NextResponse.json({ error: 'desiredStart debe ser una fecha ISO válida' }, { status: 400 })
+  if (Number.isNaN(desiredStart.getTime()) || desiredStart.getTime() <= Date.now()) {
+    return NextResponse.json({ error: 'desiredStart debe ser una fecha ISO futura válida' }, { status: 400 })
   }
 
   const supabase = createAdminClient()
