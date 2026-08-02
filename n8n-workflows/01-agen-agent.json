@@ -8,11 +8,12 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [-900, 0],
+      "onError": "continueRegularOutput",
       "webhookId": "agen-agent"
     },
     {
       "parameters": {
-        "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{$json.headers['x-agen-secret']}}", "rightValue": "={{$env.AGEN_WEBHOOK_SECRET}}", "operator": { "type": "string", "operation": "equals" } }], "combinator": "and" },
+        "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 }, "conditions": [{ "leftValue": "={{$json.headers['x-agen-secret']}}", "rightValue": "={{$env.AGEN_WEBHOOK_SECRET}}", "operator": { "type": "string", "operation": "equals" } }], "combinator": "and" },
         "options": {}
       },
       "id": "authorize-webhook",
@@ -105,6 +106,7 @@
     },
     {
       "parameters": {
+        "toolDescription": "Busca disponibilidad real únicamente para el servicio solicitado. Devuelve solo profesionales compatibles y horarios libres.",
         "method": "POST",
         "url": "={{$env.AGEN_APP_URL + '/api/agent/slots'}}",
         "sendHeaders": true,
@@ -117,12 +119,13 @@
       },
       "id": "find-slots-tool",
       "name": "buscar_horarios",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
       "position": [80, 280]
     },
     {
       "parameters": {
+        "toolDescription": "Crea una reserva solo después de que el cliente confirme servicio, profesional y horario. La API rechaza solapamientos y cupos ocupados.",
         "method": "POST",
         "url": "={{$env.AGEN_APP_URL + '/api/agent/book'}}",
         "sendHeaders": true,
@@ -135,12 +138,13 @@
       },
       "id": "book-tool",
       "name": "crear_reserva",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
       "position": [280, 280]
     },
     {
       "parameters": {
+        "toolDescription": "Registra o actualiza al cliente con datos confirmados, sin inventar información ni activar marketing sin consentimiento explícito.",
         "method": "POST",
         "url": "={{$env.AGEN_APP_URL + '/api/agent/clients'}}",
         "sendHeaders": true,
@@ -153,12 +157,13 @@
       },
       "id": "register-client-tool",
       "name": "registrar_cliente",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
       "position": [480, 280]
     },
     {
       "parameters": {
+        "toolDescription": "Guarda hechos confirmados y preferencias para evitar volver a preguntar lo mismo.",
         "method": "PUT",
         "url": "={{$env.AGEN_APP_URL + '/api/agent/memory'}}",
         "sendHeaders": true,
@@ -166,13 +171,13 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, clientId: $fromAI('clientId','ID exacto del cliente registrado','string'), summary: $fromAI('summary','Resumen breve con datos ya confirmados, sin inventar','string'), lastIntent: $fromAI('lastIntent','Última intención del cliente','string'), knownFacts: {notes: $fromAI('knownFacts','Hechos confirmados útiles para no volver a preguntar','string')}, preferences: {notes: $fromAI('preferences','Servicio o profesional preferido confirmado','string')}})}}",
+        "body": "={{JSON.stringify(Object.fromEntries([['businessId', $('Entrada').item.json.body.businessId], ['clientId', $fromAI('clientId','ID exacto del cliente registrado','string')], ['summary', $fromAI('summary','Resumen breve con datos ya confirmados, sin inventar','string')], ['lastIntent', $fromAI('lastIntent','Última intención del cliente','string')], ['knownFacts', Object.fromEntries([['notes', $fromAI('knownFacts','Hechos confirmados útiles para no volver a preguntar','string')]])], ['preferences', Object.fromEntries([['notes', $fromAI('preferences','Servicio o profesional preferido confirmado','string')]])]]))}}",
         "options": {}
       },
       "id": "save-memory-tool",
       "name": "guardar_memoria",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
       "position": [680, 280]
     },
     {
