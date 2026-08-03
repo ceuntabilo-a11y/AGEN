@@ -3,7 +3,7 @@
 import { PageHeader } from '@/components/PageHeader'
 import { StatCard } from '@/components/StatCard'
 import { NewQuoteModal } from '@/components/NewQuoteModal'
-import { money } from '@/lib/demo-data'
+import { money } from '@/lib/money'
 import { CircleDollarSign, HandCoins, PackageOpen, TrendingUp } from 'lucide-react'
 import { useEffect, useState } from 'react'
 

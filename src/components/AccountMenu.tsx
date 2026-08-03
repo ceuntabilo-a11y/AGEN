@@ -1,0 +1,11 @@
+'use client'
+import Link from 'next/link'
+import {LogOut,Settings,UserRound} from 'lucide-react'
+import {useEffect,useRef,useState} from 'react'
+
+export function AccountMenu({name,email,role,initials,onLogout}:{name:string;email?:string;role:'admin'|'professional'|'client';initials:string;onLogout:()=>void}){
+  const [open,setOpen]=useState(false),[confirming,setConfirming]=useState(false),box=useRef<HTMLDivElement>(null)
+  useEffect(()=>{if(!open)return;const close=(event:MouseEvent)=>{if(box.current&&!box.current.contains(event.target as Node))setOpen(false)};document.addEventListener('mousedown',close);return()=>document.removeEventListener('mousedown',close)},[open])
+  const href=role==='admin'?'/admin/configuracion':role==='client'?'/cliente/perfil':'/profesional/perfil'
+  return <div ref={box} className="relative"><button aria-label="Menú de usuario" aria-expanded={open} onClick={()=>{setOpen(value=>!value);setConfirming(false)}} className="grid h-10 w-10 place-items-center rounded-full bg-violet-100 text-sm font-bold text-[#5b3df5] ring-offset-2 focus:ring-2">{initials}</button>{open&&<div className="absolute right-0 top-12 z-50 w-72 overflow-hidden rounded-2xl border bg-white shadow-2xl"><div className="border-b p-4"><b className="block truncate text-sm">{name}</b><span className="block truncate text-xs text-[#736f83]">{email}</span></div>{!confirming?<div className="p-2"><Link href={href} onClick={()=>setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-[#f6f4ff]">{role==='client'?<UserRound size={17}/>:<Settings size={17}/>} {role==='admin'?'Configuración':'Mi perfil'}</Link><button onClick={()=>setConfirming(true)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-red-600 hover:bg-red-50"><LogOut size={17}/>Cerrar sesión</button></div>:<div className="p-4"><b className="text-sm">¿Cerrar sesión?</b><p className="mt-1 text-xs text-[#736f83]">Tendrás que escribir nuevamente tu contraseña.</p><div className="mt-4 flex gap-2"><button onClick={()=>setConfirming(false)} className="flex-1 rounded-xl border py-2 text-sm font-bold">Cancelar</button><button onClick={onLogout} className="flex-1 rounded-xl bg-red-600 py-2 text-sm font-bold text-white">Sí, salir</button></div></div>}</div>}</div>
+}

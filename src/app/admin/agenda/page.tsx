@@ -16,6 +16,7 @@ import {
 } from '@/lib/timezone'
 
 type Professional = { id: string; name: string; specialty: string; color: string; initials: string }
+type Hold={id:string;start:string;end:string;expiresAt:string;client:string;professionalId:string;serviceName:string}
 type View = 'day' | 'week' | 'month'
 type Catalog = {
   business: { timezone: string }
@@ -54,7 +55,9 @@ export default function AgendaPage() {
   const [selectedAppointment, setSelectedAppointment] = useState<AgendaAppointment | null>(null)
   const [revision, setRevision] = useState(0)
   const [professionals, setProfessionals] = useState<Professional[]>([])
+  const [professionalQuery,setProfessionalQuery]=useState('')
   const [appointments, setAppointments] = useState<AgendaAppointment[]>([])
+  const [holds,setHolds]=useState<Hold[]>([])
 
   const window = useMemo(() => {
     if (view === 'day') return { first: anchor, until: addDaysToDateKey(anchor, 1) }
@@ -109,11 +112,13 @@ export default function AgendaPage() {
           notes: appointment.notes,
         }
       }))
+      setHolds((agenda.holds??[]).map((hold:any)=>{const [occupiedStart,occupiedEnd]=rangeDates(hold.period);const start=new Date(occupiedStart.getTime()+Number(hold.service?.buffer_before_minutes??0)*60000),end=new Date(occupiedEnd.getTime()-Number(hold.service?.buffer_after_minutes??0)*60000);return{id:hold.id,start:start.toISOString(),end:end.toISOString(),expiresAt:hold.expires_at,client:hold.client?.full_name??hold.contact_key??'Cliente',professionalId:hold.professional?.id,serviceName:hold.service?.name??'Servicio'}}))
       setError('')
     }).catch((caught) => setError(caught instanceof Error ? caught.message : 'No se pudo cargar la agenda')).finally(() => setLoading(false))
   }, [revision, timezone, window.first, window.until])
 
-  const shownProfessionals = selected === 'all' ? professionals : professionals.filter((professional) => professional.id === selected)
+  const matchingProfessionals=professionals.filter(professional=>`${professional.name} ${professional.specialty}`.toLowerCase().includes(professionalQuery.toLowerCase()))
+  const shownProfessionals = selected === 'all' ? matchingProfessionals : matchingProfessionals.filter((professional) => professional.id === selected)
   const shownAppointments = selected === 'all' ? appointments : appointments.filter((appointment) => appointment.professionalId === selected)
 
   function move(direction: number) {
@@ -139,10 +144,24 @@ export default function AgendaPage() {
 
   function appointmentCard(appointment: AgendaAppointment, compact = false) {
     const tone = cardTone(appointment)
-    return <button key={appointment.id} onClick={() => setSelectedAppointment(appointment)} className={`w-full rounded-lg p-2 text-left text-xs shadow-sm ${compact ? 'mb-1' : ''}`} style={tone}>
+    const movable=['PENDING','CONFIRMED'].includes(appointment.status)
+    return <button key={appointment.id} draggable={movable} onDragStart={event=>event.dataTransfer.setData('text/agen-appointment',appointment.id)} title={movable?'Arrastra para cambiar la hora o el profesional':''} onClick={() => setSelectedAppointment(appointment)} className={`w-full rounded-lg p-2 text-left text-xs shadow-sm ${compact ? 'mb-1' : ''} ${movable?'cursor-grab active:cursor-grabbing':''}`} style={tone}>
       <b className="block truncate">{formatTimeInZone(appointment.start, timezone)} · {appointment.client}</b>
       {!compact && <span className="block truncate opacity-85">{appointment.serviceName}</span>}
     </button>
+  }
+
+  function holdCard(hold:Hold){return <div key={hold.id} className="w-full rounded-lg border border-amber-300 bg-amber-100 p-2 text-left text-xs text-amber-950 shadow-sm"><b className="block truncate">{formatTimeInZone(hold.start,timezone)} · Apartado</b><span className="block truncate">{hold.client} · {hold.serviceName}</span><small>Vence {formatTimeInZone(hold.expiresAt,timezone)}</small></div>}
+
+  async function moveAppointment(id:string,professionalId:string,hour:string){
+    const appointment=appointments.find(item=>item.id===id);if(!appointment)return
+    const newStart=zonedDateTimeToUtc(anchor,`${hour}:00`,timezone).toISOString()
+    const professional=professionals.find(item=>item.id===professionalId)
+    if(!globalThis.confirm(`Mover la reserva a ${hour} con ${professional?.name??'el profesional seleccionado'}?`))return
+    const response=await fetch('/api/admin/agenda',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({appointmentId:id,action:'move',newStart,professionalId})})
+    const result=await response.json().catch(()=>({}))
+    if(!response.ok){setError(result.error??'No se pudo mover: el horario puede estar ocupado');return}
+    setRevision(value=>value+1)
   }
 
   return <>
@@ -153,12 +172,12 @@ export default function AgendaPage() {
 
     <div className="mb-4 flex flex-col justify-between gap-3 rounded-2xl border bg-white p-3 lg:flex-row lg:items-center">
       <div className="flex flex-wrap items-center gap-2"><button aria-label="Anterior" onClick={() => move(-1)} className="rounded-lg border p-2"><ChevronLeft size={18}/></button><button onClick={() => setAnchor(todayKey)} className="rounded-lg border px-4 py-2 text-sm font-bold">Hoy</button><button aria-label="Siguiente" onClick={() => move(1)} className="rounded-lg border p-2"><ChevronRight size={18}/></button><b className="ml-1 capitalize">{title()}</b></div>
-      <div className="flex flex-wrap gap-2"><div className="flex rounded-xl bg-[#f1eff7] p-1">{(['day','week','month'] as View[]).map((option) => <button key={option} onClick={() => setView(option)} className={`rounded-lg px-3 py-1.5 text-sm font-bold ${view === option ? 'bg-white shadow-sm' : 'text-[#736f83]'}`}>{option === 'day' ? 'Día' : option === 'week' ? 'Semana' : 'Mes'}</button>)}</div><select value={selected} onChange={(event) => setSelected(event.target.value)} className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm"><option value="all">Todo el equipo</option>{professionals.map((professional) => <option value={professional.id} key={professional.id}>{professional.name} · {professional.specialty}</option>)}</select></div>
+      <div className="flex flex-wrap gap-2"><div className="flex rounded-xl bg-[#f1eff7] p-1">{(['day','week','month'] as View[]).map((option) => <button key={option} onClick={() => setView(option)} className={`rounded-lg px-3 py-1.5 text-sm font-bold ${view === option ? 'bg-white shadow-sm' : 'text-[#736f83]'}`}>{option === 'day' ? 'Día' : option === 'week' ? 'Semana' : 'Mes'}</button>)}</div><input value={professionalQuery} onChange={event=>setProfessionalQuery(event.target.value)} placeholder="Buscar profesional" className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm"/><select value={selected} onChange={(event) => setSelected(event.target.value)} className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm"><option value="all">Todo el equipo</option>{professionals.map((professional) => <option value={professional.id} key={professional.id}>{professional.name} · {professional.specialty}</option>)}</select></div>
     </div>
 
     {loading && <p className="rounded-2xl border bg-white p-8 text-center text-sm text-[#736f83]">Cargando agenda…</p>}
 
-    {!loading && view === 'day' && <div className="overflow-x-auto rounded-2xl border border-black/5 bg-white shadow-sm"><div className="min-w-[850px]" style={{ display: 'grid', gridTemplateColumns: `72px repeat(${Math.max(shownProfessionals.length,1)}, minmax(150px, 1fr))` }}><div className="border-b border-r p-3"/>{shownProfessionals.map((professional) => <div key={professional.id} className="border-b border-r p-3 text-center"><span className="mx-auto mb-1 block h-2 w-10 rounded-full" style={{ background: professional.color }}/><b className="block text-sm">{professional.name}</b><small className="text-[#736f83]">{professional.specialty}</small></div>)}{hours.map((hour) => <div key={hour} className="contents"><div className="min-h-20 border-b border-r p-3 text-xs font-semibold text-[#736f83]">{hour}</div>{shownProfessionals.map((professional) => <div key={`${hour}-${professional.id}`} className="min-h-20 space-y-1 border-b border-r p-1">{shownAppointments.filter((appointment) => dateKeyInZone(appointment.start,timezone) === anchor && formatTimeInZone(appointment.start,timezone).slice(0,2) === hour.slice(0,2) && appointment.professionalId === professional.id).map((appointment) => appointmentCard(appointment))}</div>)}</div>)}</div>{shownProfessionals.length === 0 && <p className="p-8 text-center text-sm text-[#736f83]">Agrega profesionales y configura sus horarios para comenzar.</p>}</div>}
+    {!loading && view === 'day' && <div className="overflow-x-auto rounded-2xl border border-black/5 bg-white shadow-sm"><div className="min-w-[850px]" style={{ display: 'grid', gridTemplateColumns: `72px repeat(${Math.max(shownProfessionals.length,1)}, minmax(150px, 1fr))` }}><div className="border-b border-r p-3"/>{shownProfessionals.map((professional) => <div key={professional.id} className="border-b border-r p-3 text-center"><span className="mx-auto mb-1 block h-2 w-10 rounded-full" style={{ background: professional.color }}/><b className="block text-sm">{professional.name}</b><small className="text-[#736f83]">{professional.specialty}</small></div>)}{hours.map((hour) => <div key={hour} className="contents"><div className="min-h-20 border-b border-r p-3 text-xs font-semibold text-[#736f83]">{hour}</div>{shownProfessionals.map((professional) => <div key={`${hour}-${professional.id}`} onDragOver={event=>{event.preventDefault();event.currentTarget.classList.add('bg-violet-50')}} onDragLeave={event=>event.currentTarget.classList.remove('bg-violet-50')} onDrop={event=>{event.preventDefault();event.currentTarget.classList.remove('bg-violet-50');void moveAppointment(event.dataTransfer.getData('text/agen-appointment'),professional.id,hour)}} className="min-h-20 space-y-1 border-b border-r p-1 transition-colors">{shownAppointments.filter((appointment) => dateKeyInZone(appointment.start,timezone) === anchor && formatTimeInZone(appointment.start,timezone).slice(0,2) === hour.slice(0,2) && appointment.professionalId === professional.id).map((appointment) => appointmentCard(appointment))}{holds.filter(hold=>dateKeyInZone(hold.start,timezone)===anchor&&formatTimeInZone(hold.start,timezone).slice(0,2)===hour.slice(0,2)&&hold.professionalId===professional.id).map(holdCard)}</div>)}</div>)}</div>{shownProfessionals.length === 0 && <p className="p-8 text-center text-sm text-[#736f83]">Agrega profesionales y configura sus horarios para comenzar.</p>}</div>}
 
     {!loading && view === 'week' && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">{weekDays.map((day) => <section key={day} className={`min-h-40 rounded-2xl border bg-white p-3 ${day === todayKey ? 'ring-2 ring-[#5b3df5]/25' : ''}`}><button onClick={() => { setAnchor(day); setView('day') }} className="mb-3 w-full text-left"><b className="block capitalize">{formatInZone(zonedDateTimeToUtc(day,'12:00:00',timezone),timezone,{weekday:'long'})}</b><span className="text-xs text-[#736f83]">{formatInZone(zonedDateTimeToUtc(day,'12:00:00',timezone),timezone,{day:'numeric',month:'short'})}</span></button><div className="space-y-2">{shownAppointments.filter((appointment) => dateKeyInZone(appointment.start,timezone) === day).map((appointment) => appointmentCard(appointment))}</div></section>)}</div>}
 

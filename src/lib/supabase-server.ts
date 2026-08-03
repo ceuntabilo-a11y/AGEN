@@ -2,11 +2,11 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
 
-export function createServerSupabase() {
+export async function createServerSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !key) throw new Error('Supabase no está configurado')
-  const store = cookies()
+  const store = await cookies()
   return createServerClient(url, key, {
     cookies: {
       getAll: () => store.getAll(),
@@ -18,7 +18,7 @@ export function createServerSupabase() {
 }
 
 export async function requireBusinessContext(roles?: string[]) {
-  const session = createServerSupabase()
+  const session = await createServerSupabase()
   const { data: { user } } = await session.auth.getUser()
   if (!user) throw new Error('UNAUTHORIZED')
   const db = createAdminClient()

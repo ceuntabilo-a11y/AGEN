@@ -19,7 +19,7 @@ export async function GET(){
 export async function PATCH(request: Request) {
   try {
     const { db, clientId, businessId } = await requireClientContext()
-    const body = await request.json() as { appointmentId?: string; action?: 'cancel'|'reschedule'; newStart?: string }
+    const body = await request.json() as { appointmentId?: string; action?: 'confirm'|'cancel'|'reschedule'; newStart?: string }
     if (!body.appointmentId || !body.action) return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 })
 
     const [{ data: appointment, error: appointmentError }, { data: business, error: businessError }] = await Promise.all([
@@ -29,6 +29,15 @@ export async function PATCH(request: Request) {
     if (appointmentError || businessError) throw appointmentError || businessError
     if (!appointment) return NextResponse.json({ error: 'Reserva inexistente' }, { status: 404 })
     if (['COMPLETED','CANCELLED','NO_SHOW','IN_PROGRESS'].includes(appointment.status)) return NextResponse.json({ error: 'Esta reserva ya no admite cambios' }, { status: 409 })
+
+    if(body.action==='confirm'){
+      if(appointment.status==='CONFIRMED')return NextResponse.json({appointment})
+      if(appointment.status!=='PENDING')return NextResponse.json({error:'Esta reserva no se puede confirmar'},{status:409})
+      const {data,error}=await db.from('appointments').update({status:'CONFIRMED',updated_at:new Date().toISOString()}).eq('id',body.appointmentId).eq('client_id',clientId).eq('business_id',businessId).eq('status','PENDING').select().maybeSingle()
+      if(error)throw error
+      if(!data)return NextResponse.json({error:'La reserva cambió; actualiza la pantalla'},{status:409})
+      return NextResponse.json({appointment:data})
+    }
 
     const settings = (business.settings ?? {}) as Record<string,unknown>
     if (body.action === 'cancel' && settings.allow_client_cancel === false) return NextResponse.json({ error: 'El negocio no permite cancelar desde el portal' }, { status: 403 })

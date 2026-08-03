@@ -2,7 +2,7 @@ import { createServerSupabase } from '@/lib/supabase-server'
 import { createAdminClient } from '@/lib/supabase-admin'
 
 export async function requireClientContext() {
-  const session = createServerSupabase()
+  const session = await createServerSupabase()
   const { data: { user } } = await session.auth.getUser()
   if (!user) throw new Error('UNAUTHORIZED')
   const db = createAdminClient()

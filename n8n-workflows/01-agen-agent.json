@@ -6,7 +6,7 @@
       "id": "webhook-in",
       "name": "Entrada",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
+      "typeVersion": 2.1,
       "position": [-900, 0],
       "onError": "continueRegularOutput",
       "webhookId": "agen-agent"
@@ -19,7 +19,7 @@
       "id": "authorize-webhook",
       "name": "Autorizar webhook",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
+      "typeVersion": 2.3,
       "position": [-780, 0]
     },
     {
@@ -27,7 +27,7 @@
       "id": "reject-webhook",
       "name": "Rechazar",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "typeVersion": 1.5,
       "position": [-580, -260]
     },
     {
@@ -45,7 +45,11 @@
       "id": "load-memory",
       "name": "Cargar memoria",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "typeVersion": 4.4,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput",
       "position": [-680, -100]
     },
     {
@@ -63,7 +67,11 @@
       "id": "load-catalog",
       "name": "Cargar catálogo",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "typeVersion": 4.4,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput",
       "position": [-680, 100]
     },
     {
@@ -71,7 +79,7 @@
       "id": "merge-context",
       "name": "Unir contexto",
       "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
+      "typeVersion": 3.2,
       "position": [-440, 0]
     },
     {
@@ -79,13 +87,13 @@
         "promptType": "define",
         "text": "={{'MENSAJE: ' + String($('Entrada').item.json.body.message || '').slice(0, 2000) + '\nCLIENTE/MEMORIA Y CATÁLOGO: ' + JSON.stringify($json) + '\nNEGOCIO: ' + $('Entrada').item.json.body.businessId}}",
         "options": {
-          "systemMessage": "Eres Agen, recepcionista de un negocio de servicios. Responde en español, de forma natural y breve. REGLAS INVIOLABLES: 1) Nunca inventes servicios, profesionales, precios, direcciones ni horarios. 2) Identifica primero el servicio exacto del catálogo. No confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 3) Para hablar de disponibilidad debes usar buscar_horarios con el serviceId real; solo muestra los profesionales devueltos por esa herramienta. 4) Si el cliente no existe, pide su nombre real una sola vez y llama registrar_cliente. Nunca uses el nombre del perfil de WhatsApp como identidad confirmada. 5) Para reservar debes tener clientId, serviceId, professionalId y fecha ISO elegidos explícitamente por el cliente, y usar crear_reserva. 6) Nunca afirmes que reservaste o confirmaste si crear_reserva no responde booked=true. Ante HTTP 409, informa que el cupo se ocupó y vuelve a buscar alternativas. 7) Lee la memoria antes de preguntar. No repitas nombre, correo, profesional preferido o servicio si ya constan; confirma solo cuando pueda haber cambiado. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Después de una reserva exitosa llama guardar_memoria con un resumen breve y las preferencias aprendidas. Si el cliente no tiene correo, ofrece una sola vez recibir confirmaciones por email; no actives marketing sin consentimiento explícito. 10) Confirma al final servicio, profesional, fecha, hora y precio. 11) Para ubicación comparte maps_url exactamente como aparece; si está vacío, usa solo la dirección guardada. 12) Transfiere a una persona si el cliente lo pide o existe una situación ambigua de pagos, quejas o seguridad."
+          "systemMessage": "Eres Agen, recepcionista de un negocio de servicios. Responde en español, de forma natural y breve. PRIMERO REVISA actorType. Si actorType=TEAM, estás hablando con alguien del equipo: responde con confianza usando la agenda, lista de espera y seguimientos incluidos en el contexto. Da nombres y horas concretas; si un dato no aparece, indícale que lo consulte en el panel. El modo TEAM es solo lectura: no ofrezcas horarios ni intentes registrar clientes, crear, mover o cancelar reservas. Las API también bloquean esas acciones. Si actorType=CLIENT: 1) Identifica el servicio exacto del catálogo. No confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 2) Nunca inventes servicios, profesionales, precios, direcciones ni horarios. 3) Para hablar de disponibilidad usa buscar_horarios con el serviceId real y muestra solo los profesionales devueltos. Cada horario queda apartado 15 minutos e incluye holdId. 4) Si el cliente no existe, pide su nombre real una sola vez y llama registrar_cliente; el nombre del perfil de WhatsApp no confirma identidad. 5) Para reservar necesitas clientId, serviceId, professionalId, fecha ISO y el holdId elegido explícitamente. 6) Nunca afirmes que reservaste si crear_reserva no devuelve booked=true. Ante HTTP 409 vuelve a buscar. 7) Lee la memoria y no repitas nombre, correo, profesional preferido o servicio ya conocidos. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Después de reservar llama guardar_memoria. No actives marketing sin consentimiento explícito. 10) Confirma servicio, profesional, fecha, hora y precio. 11) Para ubicación usa maps_url exacto o la dirección guardada. 12) Transfiere a una persona ante pagos, quejas, seguridad o cuando el cliente lo solicite."
         }
       },
       "id": "ai-agent",
       "name": "Agente Agen",
       "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 1.7,
+      "typeVersion": 3.1,
       "position": [-160, 0]
     },
     {
@@ -93,7 +101,7 @@
       "id": "chat-model",
       "name": "Modelo",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.2,
+      "typeVersion": 1.3,
       "position": [-320, 260]
     },
     {
@@ -101,7 +109,7 @@
       "id": "window-memory",
       "name": "Memoria reciente",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
-      "typeVersion": 1.2,
+      "typeVersion": 1.3,
       "position": [-120, 260]
     },
     {
@@ -114,13 +122,16 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, serviceId: $fromAI('serviceId','ID exacto del servicio del catálogo','string'), from: $fromAI('from','Inicio ISO de la ventana solicitada','string'), until: $fromAI('until','Fin ISO de la ventana, máximo 14 días','string')})}}",
+        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, serviceId: $fromAI('serviceId','ID exacto del servicio del catálogo','string'), from: $fromAI('from','Inicio ISO de la ventana solicitada','string'), until: $fromAI('until','Fin ISO de la ventana, máximo 14 días','string'), clientId: $fromAI('clientId','ID del cliente si ya existe','string'), contactKey: $('Entrada').item.json.body.phone || $('Entrada').item.json.body.sender || null})}}",
         "options": {}
       },
       "id": "find-slots-tool",
       "name": "buscar_horarios",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
       "position": [80, 280]
     },
     {
@@ -133,13 +144,16 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, branchId: $fromAI('branchId','ID de sucursal o null','string'), clientId: $fromAI('clientId','ID conocido del cliente','string'), professionalId: $fromAI('professionalId','ID devuelto por buscar_horarios','string'), serviceId: $fromAI('serviceId','ID exacto del servicio','string'), desiredStart: $fromAI('desiredStart','Fecha/hora ISO elegida por el cliente','string')})}}",
+        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, actorPhone: $('Entrada').item.json.body.phone || $('Entrada').item.json.body.sender, branchId: $fromAI('branchId','ID de sucursal o null','string'), clientId: $fromAI('clientId','ID conocido del cliente','string'), professionalId: $fromAI('professionalId','ID devuelto por buscar_horarios','string'), serviceId: $fromAI('serviceId','ID exacto del servicio','string'), desiredStart: $fromAI('desiredStart','Fecha/hora ISO elegida por el cliente','string'), holdId: $fromAI('holdId','ID del apartado devuelto por buscar_horarios','string')})}}",
         "options": {}
       },
       "id": "book-tool",
       "name": "crear_reserva",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
       "position": [280, 280]
     },
     {
@@ -159,6 +173,9 @@
       "name": "registrar_cliente",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
       "position": [480, 280]
     },
     {
@@ -171,13 +188,16 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{JSON.stringify(Object.fromEntries([['businessId', $('Entrada').item.json.body.businessId], ['clientId', $fromAI('clientId','ID exacto del cliente registrado','string')], ['summary', $fromAI('summary','Resumen breve con datos ya confirmados, sin inventar','string')], ['lastIntent', $fromAI('lastIntent','Última intención del cliente','string')], ['knownFacts', Object.fromEntries([['notes', $fromAI('knownFacts','Hechos confirmados útiles para no volver a preguntar','string')]])], ['preferences', Object.fromEntries([['notes', $fromAI('preferences','Servicio o profesional preferido confirmado','string')]])]]))}}",
+        "body": "={{JSON.stringify(Object.fromEntries([['businessId', $('Entrada').item.json.body.businessId], ['actorPhone', $('Entrada').item.json.body.phone || $('Entrada').item.json.body.sender], ['clientId', $fromAI('clientId','ID exacto del cliente registrado','string')], ['summary', $fromAI('summary','Resumen breve con datos ya confirmados, sin inventar','string')], ['lastIntent', $fromAI('lastIntent','Última intención del cliente','string')], ['knownFacts', Object.fromEntries([['notes', $fromAI('knownFacts','Hechos confirmados útiles para no volver a preguntar','string')]])], ['preferences', Object.fromEntries([['notes', $fromAI('preferences','Servicio o profesional preferido confirmado','string')]])]]))}}",
         "options": {}
       },
       "id": "save-memory-tool",
       "name": "guardar_memoria",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
       "position": [680, 280]
     },
     {
@@ -195,7 +215,8 @@
       "id": "persist-interaction",
       "name": "Persistir interacción",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "typeVersion": 4.4,
+      "onError": "continueRegularOutput",
       "position": [80, 0]
     },
     {
@@ -203,7 +224,7 @@
       "id": "respond",
       "name": "Responder",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "typeVersion": 1.5,
       "position": [340, 0]
     }
   ],

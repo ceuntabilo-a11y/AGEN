@@ -9,11 +9,11 @@ import {
   ContactRound,
   Image,
   LayoutDashboard,
-  LogOut,
   Megaphone,
   Menu,
   Scissors,
   Settings,
+  ListChecks,
   UsersRound,
   X,
 } from 'lucide-react'
@@ -21,6 +21,11 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { DatabaseStatusBanner } from '@/components/DatabaseStatusBanner'
 import { formatInZone } from '@/lib/timezone'
+import { NotificationBell } from '@/components/NotificationBell'
+import { SessionTimeout } from '@/components/SessionTimeout'
+import { InstallApp } from '@/components/InstallApp'
+import { AccountMenu } from '@/components/AccountMenu'
+import {Copilot} from '@/components/Copilot'
 
 const adminItems = [
   ['/admin', 'Resumen', LayoutDashboard],
@@ -28,6 +33,7 @@ const adminItems = [
   ['/admin/equipo', 'Equipo', UsersRound],
   ['/admin/servicios', 'Servicios', Scissors],
   ['/admin/clientes', 'Clientes', ContactRound],
+  ['/admin/seguimiento', 'Seguimiento', ListChecks],
   ['/admin/finanzas', 'Finanzas', CircleDollarSign],
   ['/admin/marketing', 'Marketing', Megaphone],
   ['/admin/galeria', 'Galería', Image],
@@ -41,6 +47,7 @@ const professionalItems = [
   ['/profesional/clientes', 'Mis clientes', ContactRound],
   ['/profesional/galeria', 'Mis trabajos', Image],
   ['/profesional/ingresos', 'Ingresos', CircleDollarSign],
+  ['/profesional/perfil', 'Mi perfil', Settings],
 ] as const
 
 const clientItems = [
@@ -52,6 +59,7 @@ const clientItems = [
 
 type Session = {
   name: string
+  email?: string
   businessName: string
   timezone: string
 }
@@ -68,6 +76,8 @@ export function DashboardShell({ children, role = 'admin' }: { children: React.R
   }, [])
 
   async function logout() {
+    sessionStorage.removeItem('agen_session_started')
+    sessionStorage.removeItem('agen_session_closed')
     try { await createClient().auth.signOut() } catch {}
     router.replace('/login')
     router.refresh()
@@ -92,7 +102,7 @@ export function DashboardShell({ children, role = 'admin' }: { children: React.R
       <nav className="flex-1 space-y-1 overflow-y-auto">
         {items.map(([href, label, Icon]) => <Link key={href} href={href} onClick={() => setOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${pathname === href ? 'bg-[#6c4cff] text-white' : 'text-white/65 hover:bg-white/10 hover:text-white'}`}><Icon size={19}/>{label}</Link>)}
       </nav>
-      <div className="border-t border-white/10 pt-3"><button onClick={logout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/60 hover:bg-white/10"><LogOut size={18}/>Cerrar sesión</button></div>
+      <div className="border-t border-white/10 px-3 pt-3 text-xs leading-5 text-white/45">La sesión se protege automáticamente cuando el equipo queda sin uso.</div>
     </aside>
     <div className="lg:pl-64">
       <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-black/5 bg-white/80 px-5 pl-16 backdrop-blur lg:px-8">
@@ -102,11 +112,15 @@ export function DashboardShell({ children, role = 'admin' }: { children: React.R
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right"><p className="text-sm font-bold">{session?.name ?? (role === 'client' ? 'Cliente' : role === 'professional' ? 'Profesional' : 'Administrador')}</p><p className="text-xs text-[#736f83]">{session?.businessName ?? 'Agen'}</p></div>
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-violet-100 text-sm font-bold text-[#5b3df5]">{initials}</span>
+          {role!=='client'&&<NotificationBell/>}
+          <AccountMenu name={session?.name??'Usuario'} email={session?.email} role={role} initials={initials} onLogout={logout}/>
         </div>
       </header>
       <DatabaseStatusBanner/>
       <main className="p-5 lg:p-8">{children}</main>
     </div>
+    <SessionTimeout/>
+    <InstallApp/>
+    {role==='admin'&&<Copilot/>}
   </div>
 }

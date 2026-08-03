@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 
 export async function POST(request: Request) {
-  const db = createServerSupabase()
+  const db = await createServerSupabase()
   const { data: { user } } = await db.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Debes iniciar sesión' }, { status: 401 })
 

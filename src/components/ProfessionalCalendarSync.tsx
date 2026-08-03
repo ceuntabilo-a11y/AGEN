@@ -1,0 +1,13 @@
+'use client'
+import {CalendarSync,Copy,RefreshCw} from 'lucide-react'
+import {useEffect,useState} from 'react'
+
+export function ProfessionalCalendarSync(){
+  const [token,setToken]=useState<string|null>(null),[hide,setHide]=useState(false),[loading,setLoading]=useState(true),[copied,setCopied]=useState(false)
+  const load=()=>fetch('/api/professional/calendar',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(data=>{if(data){setToken(data.calendarToken);setHide(!!data.hideClientNames)}}).finally(()=>setLoading(false))
+  useEffect(()=>{load()},[])
+  const url=token&&typeof window!=='undefined'?`${window.location.origin}/api/calendar/${token}`:''
+  async function update(body:unknown){setLoading(true);const response=await fetch('/api/professional/calendar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});if(response.ok){const data=await response.json();setToken(data.calendarToken);setHide(!!data.hideClientNames)}setLoading(false)}
+  async function copy(){await navigator.clipboard.writeText(url);setCopied(true);setTimeout(()=>setCopied(false),1800)}
+  return <section className="mb-5 rounded-2xl border bg-white p-5"><div className="flex items-start gap-3"><CalendarSync className="shrink-0 text-[#5b3df5]"/><div><h2 className="font-extrabold">Mi agenda en Google, iPhone o reloj</h2><p className="mt-1 text-sm leading-6 text-[#736f83]">Es un calendario privado de solo lectura que se actualiza automáticamente.</p></div></div>{!token?<button disabled={loading} onClick={()=>void update({action:'generate'})} className="mt-4 rounded-xl bg-[#5b3df5] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">Generar enlace privado</button>:<><div className="mt-4 flex gap-2"><input readOnly value={url} onFocus={event=>event.currentTarget.select()} className="min-w-0 flex-1 rounded-xl border bg-[#f7f6fb] px-3 py-2 text-xs"/><button onClick={()=>void copy()} className="inline-flex items-center gap-2 rounded-xl bg-[#5b3df5] px-4 text-sm font-bold text-white"><Copy size={15}/>{copied?'Copiado':'Copiar'}</button></div><label className="mt-4 flex items-start gap-3 rounded-xl border p-3 text-sm"><input type="checkbox" checked={hide} onChange={event=>void update({action:'privacy',hideClientNames:event.target.checked})} className="mt-1"/><span><b className="block">Ocultar nombres de clientes</b><span className="text-xs text-[#736f83]">Recomendado si otras personas pueden ver tu pantalla o reloj.</span></span></label><button disabled={loading} onClick={()=>{if(confirm('El enlace anterior dejará de funcionar. ¿Continuar?'))void update({action:'generate'})}} className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-red-600"><RefreshCw size={14}/>Generar enlace nuevo</button></>}</section>
+}

@@ -6,7 +6,7 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3010 -H 0.0.0.0",
-    "lint": "next lint",
+    "lint": "eslint . --ext .js,.mjs,.ts,.tsx --max-warnings=0",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -14,9 +14,10 @@
     "@supabase/supabase-js": "^2.111.0",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.468.0",
-    "next": "14.2.35",
+    "next": "15.5.22",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "sharp": "0.35.3",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
@@ -25,12 +26,16 @@
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.1",
-    "eslint-config-next": "14.2.35",
+    "eslint-config-next": "15.5.22",
     "postcss": "^8.5.25",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2"
   },
   "engines": {
-    "node": ">=20 <25"
+    "node": ">=20.9 <25"
+  },
+  "overrides": {
+    "postcss": "$postcss",
+    "sharp": "$sharp"
   }
 }

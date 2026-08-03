@@ -2,7 +2,7 @@
 
 import { PageHeader } from '@/components/PageHeader'
 import { StatCard } from '@/components/StatCard'
-import { money } from '@/lib/demo-data'
+import { money } from '@/lib/money'
 import { formatTimeInZone } from '@/lib/timezone'
 import { CalendarCheck2, CircleDollarSign, Clock3 } from 'lucide-react'
 import { useEffect, useState } from 'react'

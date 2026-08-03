@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { isAuthorizedAgent } from '@/lib/agent-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { normalizePhone } from '@/lib/phone'
+import {rejectTeamActor} from '@/lib/agent-actor'
 
 export async function POST(request: Request) {
   if (!isAuthorizedAgent(request)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -10,6 +11,7 @@ export async function POST(request: Request) {
   if (!body.businessId || phone.length < 7) return NextResponse.json({ error: 'Negocio o teléfono inválido' }, { status: 400 })
 
   const db = createAdminClient()
+  if(await rejectTeamActor(db,body.businessId,phone))return NextResponse.json({error:'El equipo no puede registrarse como cliente desde el agente'},{status:403})
   const { data: business } = await db.from('businesses').select('id').eq('id',body.businessId).eq('active',true).maybeSingle()
   if (!business) return NextResponse.json({ error: 'Negocio inexistente' }, { status: 404 })
 

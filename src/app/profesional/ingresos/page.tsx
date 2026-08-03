@@ -1,7 +1,7 @@
 'use client'
 
 import { PageHeader } from '@/components/PageHeader'
-import { money } from '@/lib/demo-data'
+import { money } from '@/lib/money'
 import { formatInZone } from '@/lib/timezone'
 import { useEffect, useState } from 'react'
 

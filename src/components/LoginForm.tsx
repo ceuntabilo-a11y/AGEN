@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
 
 export function LoginForm() {
   const [email, setEmail] = useState('')
@@ -14,14 +13,16 @@ export function LoginForm() {
   async function submit(event: FormEvent) {
     event.preventDefault(); setLoading(true); setError('')
     try {
-      const db = createClient()
-      const { data, error: authError } = await db.auth.signInWithPassword({ email, password })
-      if (authError) throw authError
+      const login=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,password})})
+      const loginResult=await login.json()
+      if(!login.ok)throw new Error(loginResult.error??'No se pudo iniciar sesión')
+      sessionStorage.setItem('agen_session_started',String(Date.now()))
+      sessionStorage.removeItem('agen_session_closed')
       const response = await fetch('/api/session', { cache: 'no-store' })
       if (response.ok) {
         const session = await response.json() as { role?: string }
         router.replace(session.role === 'PROFESSIONAL' ? '/profesional' : session.role === 'CLIENT' ? '/cliente' : '/admin')
-      } else router.replace(data.user.user_metadata?.account_type === 'BUSINESS' ? '/configurar-negocio' : '/cliente/onboarding')
+      } else router.replace('/configurar-negocio')
       router.refresh()
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'No se pudo iniciar sesión') }
     finally { setLoading(false) }

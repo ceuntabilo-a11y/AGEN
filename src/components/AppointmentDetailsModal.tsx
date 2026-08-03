@@ -1,6 +1,6 @@
 'use client'
 
-import { CalendarClock, X } from 'lucide-react'
+import { CalendarClock, TimerReset, X } from 'lucide-react'
 import { useState } from 'react'
 import { dateKeyInZone, formatInZone, formatTimeInZone, zonedDayRange } from '@/lib/timezone'
 
@@ -55,6 +55,7 @@ export function AppointmentDetailsModal({ appointment, timezone, onClose, onUpda
   const [slots, setSlots] = useState<Slot[]>([])
   const [selectedStart, setSelectedStart] = useState('')
   const [reason, setReason] = useState('')
+  const [duration,setDuration]=useState(Math.max(5,Math.round((new Date(appointment.end).getTime()-new Date(appointment.start).getTime())/60000)))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -115,6 +116,8 @@ export function AppointmentDetailsModal({ appointment, timezone, onClose, onUpda
         {slots.length > 0 && <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">{slots.map((slot) => <button key={slot.service_start} onClick={() => setSelectedStart(slot.service_start)} className={`rounded-lg border px-3 py-2 text-sm font-semibold ${selectedStart === slot.service_start ? 'border-[#5b3df5] bg-[#5b3df5] text-white' : 'bg-white'}`}>{formatTimeInZone(slot.service_start, timezone)}</button>)}</div>}
         {selectedStart && <button disabled={loading} onClick={() => update({ action: 'reschedule', newStart: selectedStart })} className="mt-4 w-full rounded-xl bg-[#5b3df5] py-3 font-bold text-white disabled:opacity-50">Confirmar nueva hora</button>}
       </section>}
+
+      {canModify && <section className="mt-4 rounded-2xl border bg-white p-5"><div className="flex items-center gap-2"><TimerReset size={18} className="text-[#5b3df5]"/><h3 className="font-extrabold">Ajustar duración</h3></div><p className="mt-1 text-xs text-[#736f83]">Agen comprueba nuevamente el horario, los bloqueos y los recursos.</p><div className="mt-4 flex items-center gap-3"><button type="button" onClick={()=>setDuration(value=>Math.max(5,value-15))} className="rounded-xl border px-4 py-2 font-bold">−15</button><b className="min-w-20 text-center">{duration} min</b><button type="button" onClick={()=>setDuration(value=>Math.min(1440,value+15))} className="rounded-xl border px-4 py-2 font-bold">+15</button><button disabled={loading} onClick={()=>update({action:'resize',durationMinutes:duration})} className="ml-auto rounded-xl bg-[#5b3df5] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Guardar</button></div></section>}
 
       {canModify && <section className="mt-4 rounded-2xl border border-red-100 bg-white p-5"><h3 className="font-extrabold text-red-800">Cancelar reserva</h3><textarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={300} rows={2} placeholder="Motivo opcional" className="mt-3 w-full rounded-xl border p-3 text-sm"/><button disabled={loading} onClick={cancel} className="mt-3 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">Cancelar y avisar</button></section>}
       {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
