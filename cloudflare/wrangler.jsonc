@@ -1,0 +1,13 @@
+{
+  "name": "agen-web-router",
+  "main": "agen-web-router.js",
+  "compatibility_date": "2026-08-03",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "agen.synetia.site/*",
+      "zone_name": "synetia.site"
+    }
+  ]
+}
