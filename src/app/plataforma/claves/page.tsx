@@ -2,7 +2,7 @@
 import { PageHeader } from '@/components/PageHeader'
 import { FormEvent, useEffect, useState } from 'react'
 
-type Settings = { openai_fallback_key: string | null; dashscope_fallback_key: string | null; dashscope_fallback_endpoint: string | null; evolution_api_url: string | null; evolution_api_key: string | null }
+type Settings = { openai_fallback_key: string | null; dashscope_fallback_key: string | null; dashscope_fallback_endpoint: string | null; evolution_api_url: string | null; evolution_api_key: string | null; resend_api_key: string | null; resend_from: string | null }
 
 export default function PlatformKeysPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -12,7 +12,7 @@ export default function PlatformKeysPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaved(false); setError('')
     const form = new FormData(event.currentTarget)
-    const response = await fetch('/api/platform/settings', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ openai_fallback_key: form.get('openai') || null, dashscope_fallback_key: form.get('dashscope') || null, dashscope_fallback_endpoint: form.get('dashscopeEndpoint') || null, evolution_api_url: form.get('evolutionUrl') || null, evolution_api_key: form.get('evolutionKey') || null }) })
+    const response = await fetch('/api/platform/settings', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ openai_fallback_key: form.get('openai') || null, dashscope_fallback_key: form.get('dashscope') || null, dashscope_fallback_endpoint: form.get('dashscopeEndpoint') || null, evolution_api_url: form.get('evolutionUrl') || null, evolution_api_key: form.get('evolutionKey') || null, resend_api_key: form.get('resendKey') || null, resend_from: form.get('resendFrom') || null }) })
     if (response.ok) setSaved(true); else setError('No se pudo guardar')
   }
   return <>
@@ -24,6 +24,9 @@ export default function PlatformKeysPage() {
       <label className="block text-sm font-semibold">Endpoint dedicado (solo si tu clave es de un workspace, ej. sk-ws-…)<input name="dashscopeEndpoint" type="text" defaultValue={settings.dashscope_fallback_endpoint ?? ''} className="mt-2 w-full rounded-xl border p-3 font-mono text-sm" /></label>
       <label className="block text-sm font-semibold">URL de Evolution API (solo si vas a usar WhatsApp por QR)<input name="evolutionUrl" type="text" defaultValue={settings.evolution_api_url ?? ''} placeholder="https://tu-evolution-api.com" className="mt-2 w-full rounded-xl border p-3 font-mono text-sm" /></label>
       <label className="block text-sm font-semibold">Clave de Evolution API<input name="evolutionKey" type="text" defaultValue={settings.evolution_api_key ?? ''} className="mt-2 w-full rounded-xl border p-3 font-mono text-sm" /></label>
+      <label className="block text-sm font-semibold">Clave de Resend (correo de marketing)<input name="resendKey" type="text" defaultValue={settings.resend_api_key ?? ''} placeholder="re_…" className="mt-2 w-full rounded-xl border p-3 font-mono text-sm" /></label>
+      <label className="block text-sm font-semibold">Remitente de Resend (dominio ya verificado en Resend)<input name="resendFrom" type="text" defaultValue={settings.resend_from ?? ''} placeholder="Agen <notificaciones@tu-dominio.com>" className="mt-2 w-full rounded-xl border p-3 font-mono text-sm" /></label>
+      <p className="text-xs text-[#736f83]">Una sola clave de Resend sirve para el correo de marketing de todos los negocios — cada campaña sale con el nombre del negocio, pero respondiendo al correo de contacto de ese negocio.</p>
       <button className="rounded-xl bg-[#5b3df5] px-5 py-3 font-bold text-white">Guardar</button>
       {saved && <p className="text-sm font-bold text-emerald-600">Guardado.</p>}
     </form>}

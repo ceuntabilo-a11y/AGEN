@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { WhatsAppConnect } from '@/components/WhatsAppConnect'
 import { FormEvent, useEffect, useState } from 'react'
 
-type Integrations = { whatsapp_provider: string | null; whatsapp_instance: string | null; whatsapp_phone_id: string | null; whatsapp_token: string | null; whatsapp_360_api_key: string | null; openai_api_key: string | null; dashscope_api_key: string | null; dashscope_endpoint: string | null; feature_image: boolean; feature_voice: boolean }
+type Integrations = { whatsapp_provider: string | null; whatsapp_instance: string | null; whatsapp_phone_id: string | null; whatsapp_token: string | null; whatsapp_360_api_key: string | null; openai_api_key: string | null; dashscope_api_key: string | null; dashscope_endpoint: string | null; feature_image: boolean; feature_voice: boolean; resend_configured: boolean }
 
 export default function IntegrationsPage() {
   const [data, setData] = useState<Integrations | null>(null)
@@ -46,6 +46,13 @@ export default function IntegrationsPage() {
         <h2 className="font-extrabold">Tu IA (OpenAI)</h2>
         <label className="mt-4 block text-sm font-semibold">Clave de API<input name="openaiKey" type="password" autoComplete="off" data-lpignore="true" data-1p-ignore="true" placeholder={data.openai_api_key ? '••••••••' : 'sk-...'} className="mt-2 w-full rounded-xl border p-3 font-mono text-sm" /></label>
         <p className="mt-2 text-xs text-[#736f83]">Sin clave propia, el copiloto y el agente usan la clave de respaldo de la plataforma si está configurada.</p>
+      </section>
+      <section className="rounded-2xl border bg-white p-5">
+        <h2 className="font-extrabold">Correo de marketing (Resend)</h2>
+        {data.resend_configured
+          ? <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Activo — tus campañas por email ya pueden enviarse.</p>
+          : <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-amber-700"><span className="h-2 w-2 rounded-full bg-amber-500" />Sin configurar — el dueño de la plataforma debe cargar la clave de Resend en Plataforma → Claves antes de que puedas enviar campañas por email.</p>}
+        <p className="mt-2 text-xs text-[#736f83]">Es una clave compartida por toda la plataforma, no se configura por negocio. Tus campañas salen con el nombre de tu negocio y responden a tu correo de contacto.</p>
       </section>
       <section className="rounded-2xl border bg-white p-5">
         <h2 className="font-extrabold">Capacidades del agente</h2>

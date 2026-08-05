@@ -211,11 +211,36 @@ Añadido en `20260805000001_platform_saas_layer.sql` (aplicar después de la 14)
   con la clave OpenAI del negocio; `campaigns.image_url` permite adjuntar una imagen (URL) que
   se envía junto al texto cuando el proveedor de WhatsApp lo soporta.
 
+## 6.2 Correo de marketing (Resend), cambio de cuenta y voz con texto libre
+
+Añadido el 2026-08-05, investigado en MediCore y adaptado a Agen (ver
+[[feedback-medicore-feature-parity]] en memoria).
+
+- **Resend:** `src/lib/resend.ts` (`sendMarketingEmail`, `resendConfigured`). Clave única de
+  plataforma (`platform_settings.resend_api_key`/`resend_from`, editable en
+  `/plataforma/claves`; no hay clave por negocio, a propósito, igual que en MediCore). Usada
+  por la rama `channel === 'EMAIL'` de `POST /api/admin/campaigns/send`: audiencia vía
+  `resolveCampaignAudience` (ya filtra por `communication_consents` granted=true), un correo
+  HTML simple por destinatario con link de baja (`marketing_unsubscribe_token` → `/unsubscribe`
+  ya existente), log en `campaign_recipients` igual que la rama de WhatsApp. Sin clave
+  configurada, `POST send` responde 503 con mensaje claro (no falla silencioso). Estado visible
+  para el dueño del negocio (solo lectura) en `/admin/integraciones`.
+- **Cambiar cuenta (varios profesionales en una sola PC):** `src/lib/accounts.ts` — patrón de
+  MediCore: `localStorage` (`agen_cuentas`, máx. 6) guarda solo `{email,name,role,lastUsed}`,
+  **nunca** contraseñas ni tokens. `LoginForm` llama `recordarCuenta()` tras un login exitoso y
+  precarga el email si llega `?email=` en la URL. `AccountMenu` tiene "Cambiar cuenta": cierra
+  la sesión actual y redirige a `/login?email=...` — siempre pide la contraseña de nuevo, no
+  hay sesiones concurrentes reales (una sola sesión Supabase por navegador, como siempre).
+- **Voz con texto libre:** `/admin/agente` → Voz ahora tiene un `<textarea>` (`previewText`,
+  máx. 500 car.) en vez de una frase fija; `POST /api/admin/agent/voice-preview` recibe
+  `{text}` en el body.
+
 ## 7. Entorno y despliegue
 
 Variables nuevas: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` (Evolution API compartida por la
 plataforma para instancias por negocio), `OPENAI_API_KEY` (respaldo de plataforma opcional,
-además del que se guarda en `platform_settings` desde `/plataforma/claves`).
+además del que se guarda en `platform_settings` desde `/plataforma/claves`), `RESEND_API_KEY`/
+`RESEND_FROM` (respaldo — usar `/plataforma/claves` en vez de esto).
 
 Variables: copiar `.env.example` → `.env.local` (comentarios indican las del servicio n8n:
 `AGEN_APP_URL`, `AGEN_WEBHOOK_SECRET`, gateways de notificación y marketing).

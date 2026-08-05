@@ -19,6 +19,7 @@ export default function AgentPage() {
   const [saved, setSaved] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState('')
+  const [previewText, setPreviewText] = useState('Hola, soy el asistente virtual. ¿En qué puedo ayudarte hoy?')
 
   useEffect(() => { fetch('/api/admin/settings').then(r => r.ok ? r.json() : Promise.reject()).then(d => setBusiness(d.business)).catch(() => setError('Conecta Supabase para configurar el agente.')) }, [])
 
@@ -52,8 +53,9 @@ export default function AgentPage() {
   }
 
   async function testVoice() {
+    if (!previewText.trim()) return
     setPreviewLoading(true); setPreviewError('')
-    const response = await fetch('/api/admin/agent/voice-preview', { method: 'POST' })
+    const response = await fetch('/api/admin/agent/voice-preview', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: previewText.trim() }) })
     if (!response.ok) { const data = await response.json().catch(() => ({})); setPreviewError(data.error ?? 'No se pudo generar la voz'); setPreviewLoading(false); return }
     const data = await response.json() as { audio: string; mime: string }
     if (!data.audio) { setPreviewError('El proveedor de voz no devolvió audio'); setPreviewLoading(false); return }
@@ -87,7 +89,8 @@ export default function AgentPage() {
         <label className="text-sm font-semibold">Acento<input name="accent" defaultValue={voice.accent ?? 'neutral'} className="mt-2 w-full rounded-xl border p-3" /></label>
         <label className="text-sm font-semibold">Emoción<input name="emotion" defaultValue={voice.emotion ?? 'neutral'} className="mt-2 w-full rounded-xl border p-3" /></label>
         <label className="text-sm font-semibold">Idioma<input name="language" defaultValue={voice.language ?? 'es'} className="mt-2 w-full rounded-xl border p-3" /></label>
-        <div className="sm:col-span-2"><button type="button" onClick={testVoice} disabled={previewLoading} className="rounded-xl border px-4 py-2.5 text-sm font-bold disabled:opacity-50">{previewLoading ? 'Generando…' : 'Probar voz'}</button>{previewError && <p className="mt-2 text-sm text-red-600">{previewError}</p>}<p className="mt-2 text-xs text-[#736f83]">Guarda cambios antes de probar — usa la configuración ya guardada.</p></div>
+        <label className="sm:col-span-2 text-sm font-semibold">Texto de prueba<textarea value={previewText} onChange={(event) => setPreviewText(event.target.value)} maxLength={500} rows={3} className="mt-2 w-full rounded-xl border p-3 text-sm" placeholder="Escribe lo que quieres escuchar…" /></label>
+        <div className="sm:col-span-2"><button type="button" onClick={testVoice} disabled={previewLoading || !previewText.trim()} className="rounded-xl border px-4 py-2.5 text-sm font-bold disabled:opacity-50">{previewLoading ? 'Generando…' : 'Probar voz'}</button>{previewError && <p className="mt-2 text-sm text-red-600">{previewError}</p>}<p className="mt-2 text-xs text-[#736f83]">Guarda cambios antes de probar — usa la configuración ya guardada.</p></div>
       </div>}
       {tab === 'Comportamiento' && <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex items-center gap-2 text-sm font-semibold"><input name="respondVoice" type="checkbox" defaultChecked={behavior.respond_voice} />Responder con voz</label>

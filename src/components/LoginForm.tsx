@@ -1,15 +1,19 @@
 'use client'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
-import { FormEvent, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { FormEvent, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { recordarCuenta } from '@/lib/accounts'
 
 export function LoginForm() {
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
+
+  useEffect(() => { const preset = searchParams.get('email'); if (preset) setEmail(preset) }, [searchParams])
   async function submit(event: FormEvent) {
     event.preventDefault(); setLoading(true); setError('')
     try {
@@ -20,7 +24,8 @@ export function LoginForm() {
       sessionStorage.removeItem('agen_session_closed')
       const response = await fetch('/api/session', { cache: 'no-store' })
       if (response.ok) {
-        const session = await response.json() as { role?: string }
+        const session = await response.json() as { role?: string; name?: string }
+        if (session.role && session.name) recordarCuenta({ email, name: session.name, role: session.role })
         router.replace(session.role === 'PROFESSIONAL' ? '/profesional' : session.role === 'CLIENT' ? '/cliente' : '/admin')
       } else router.replace('/configurar-negocio')
       router.refresh()

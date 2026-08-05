@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireBusinessContext } from '@/lib/supabase-server'
 import { apiError } from '@/lib/http-errors'
+import { resendConfigured } from '@/lib/resend'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +10,7 @@ export async function GET() {
     const { db, businessId } = await requireBusinessContext(['OWNER', 'ADMIN'])
     const { data, error } = await db.from('businesses').select('whatsapp_provider,whatsapp_instance,whatsapp_phone_id,whatsapp_token,whatsapp_360_api_key,openai_api_key,dashscope_api_key,dashscope_endpoint,feature_image,feature_voice').eq('id', businessId).single()
     if (error) throw error
-    return NextResponse.json({ integrations: { ...data, whatsapp_token: data.whatsapp_token ? '••••••••' : null, whatsapp_360_api_key: data.whatsapp_360_api_key ? '••••••••' : null, openai_api_key: data.openai_api_key ? '••••••••' : null, dashscope_api_key: data.dashscope_api_key ? '••••••••' : null } })
+    return NextResponse.json({ integrations: { ...data, whatsapp_token: data.whatsapp_token ? '••••••••' : null, whatsapp_360_api_key: data.whatsapp_360_api_key ? '••••••••' : null, openai_api_key: data.openai_api_key ? '••••••••' : null, dashscope_api_key: data.dashscope_api_key ? '••••••••' : null, resend_configured: await resendConfigured() } })
   } catch (error) { return apiError(error) }
 }
 
