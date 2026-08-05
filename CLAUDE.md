@@ -252,12 +252,61 @@ holds, confirmación de hold y move con validación de compatibilidad.
   verificado.
 - Antes de entregar, usar las herramientas MCP disponibles (n8n, Supabase, etc.) para validar
   workflows, configuraciones y SQL cuando aplique.
-- Para pasos técnicos que el usuario debe ejecutar él mismo (SQL, credenciales de un panel
-  externo), dar la secuencia completa: qué archivo tocar, qué comando correr, qué configurar
-  y en qué panel/botón exacto — nunca un comando suelto sin contexto de navegación. Si hay
-  SQL, va completo en un bloque de código listo para copiar, con el orden de ejecución
-  indicado (o la ruta exacta del archivo de migración si ya vive en el repo).
+- **Investigar antes de improvisar.** Si la tarea toca algo con una forma correcta conocida de
+  hacerse (un patrón de n8n, una integración, una API externa, una config de infraestructura),
+  no adivinar: revisar primero si existe una skill para eso (`n8n`, `n8n-mcp-tools-expert`,
+  `n8n-workflow-patterns`, etc.) y seguirla, o investigar la documentación oficial antes de
+  escribir código. Si la tarea necesita una skill que no existe en este entorno, decirlo
+  explícitamente ("esto necesitaría la skill X, no está instalada") en vez de improvisar una
+  solución peor — así se puede instalar.
+- **Guía para el usuario = nivel principiante total.** Cualquier paso que el usuario deba
+  ejecutar él mismo (clic en un panel, pegar una clave, ejecutar SQL) se explica como si nunca
+  hubiera usado esa herramienta: nombre exacto del botón/menú, en qué pantalla está, qué
+  escribir literalmente, y qué debería ver después si funcionó. Nunca un comando o instrucción
+  suelta sin ese contexto ("andá a Settings" no alcanza; hay que decir en qué URL/panel, qué
+  clic exacto, y qué aparece en pantalla). Si hay SQL, va completo en un bloque de código listo
+  para copiar y pegar, con el orden de ejecución indicado (o la ruta exacta del archivo de
+  migración si ya vive en el repo). Objetivo: que la instrucción se pueda seguir sin entender
+  nada técnico de fondo.
+- **Minimizar lo que el usuario tiene que tocar.** Por defecto, Claude hace todo lo que se
+  pueda hacer por API/CLI/MCP (código, git, Supabase, n8n — ver regla de n8n abajo) y solo pide
+  al usuario los pasos que de verdad requieren su cuenta/su clic (crear una clave, aprobar un
+  pago, confirmar algo irreversible). Nunca pedirle que haga a mano algo que Claude puede hacer
+  con las herramientas que tiene.
 - No dejar nada a medias ni con pasos implícitos.
+
+## 9.1 n8n: Claude administra, el usuario nunca entra a tocar nada
+
+El usuario no debe abrir n8n para importar, editar ni configurar workflows — eso es trabajo de
+Claude, hecho por la API REST de n8n (`PUT/POST /api/v1/workflows/...`), disponible en cuanto
+existan estas dos variables:
+
+- `N8N_API_URL` (ej. `https://n8n-agen.synetia.site`)
+- `N8N_API_KEY` (se genera una sola vez, ver abajo)
+
+**Guardarlas en `.env.local`** (nunca commitear, ya está en `.gitignore`) para que Claude las
+lea de ahí con `Bash` y llame la API de n8n directamente — no requiere pegarlas en el chat cada
+vez. Si el usuario prefiere pegarlas una vez en el chat, Claude las guarda igual en
+`.env.local` y no las vuelve a pedir.
+
+**Cómo generar la API key la primera vez (5 minutos, una sola vez):**
+1. Abrir `https://n8n-agen.synetia.site` en el navegador y entrar con su usuario/contraseña de
+   n8n (si nunca configuró una cuenta ahí, la primera vez n8n pide crear el usuario admin:
+   nombre, correo y contraseña — cualquiera sirve, es solo para este panel).
+2. Arriba a la izquierda, hacer clic en el círculo/ícono con su nombre o inicial (esquina
+   inferior izquierda del menú lateral).
+3. En el menú que aparece, hacer clic en **"Settings"**.
+4. En el menú de la izquierda de Settings, hacer clic en **"n8n API"**.
+5. Hacer clic en el botón **"Create an API key"** (o "Crear una clave API").
+6. n8n muestra una clave larga que empieza con letras/números — hacer clic en el botón de
+   copiar al lado de la clave (⚠️ solo se muestra una vez, si se cierra la pantalla sin
+   copiarla hay que crear otra).
+7. Pegar esa clave en el chat con Claude, junto con la URL (`https://n8n-agen.synetia.site`).
+   Claude la guarda en `.env.local` y desde ahí administra los workflows sin volver a pedir
+   nada.
+
+Después de esto, cualquier cambio a `n8n-workflows/*.json` lo sube Claude directo al n8n real
+por API, lo prueba, y recién ahí lo activa — el usuario solo se entera por el resumen final.
 
 ## 10. Push a este repositorio
 
