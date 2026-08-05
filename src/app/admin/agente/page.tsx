@@ -56,8 +56,9 @@ export default function AgentPage() {
     const response = await fetch('/api/admin/agent/voice-preview', { method: 'POST' })
     if (!response.ok) { const data = await response.json().catch(() => ({})); setPreviewError(data.error ?? 'No se pudo generar la voz'); setPreviewLoading(false); return }
     const data = await response.json() as { audio: string; mime: string }
-    const audio = new Audio(`data:${data.mime};base64,${data.audio}`)
-    audio.play().catch(() => setPreviewError('No se pudo reproducir el audio'))
+    if (!data.audio) { setPreviewError('El proveedor de voz no devolvió audio'); setPreviewLoading(false); return }
+    const audio = new Audio(`data:${data.mime || 'audio/wav'};base64,${data.audio}`)
+    audio.play().catch((playError) => setPreviewError(`No se pudo reproducir el audio: ${playError instanceof Error ? `${playError.name} — ${playError.message}` : String(playError)}`))
     setPreviewLoading(false)
   }
 
