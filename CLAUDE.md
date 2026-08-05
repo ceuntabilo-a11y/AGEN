@@ -10,6 +10,14 @@ Multi-tenant: cada negocio gestiona profesionales, servicios, agenda, clientes, 
 campañas y seguimiento. Un agente IA (n8n + OpenAI) atiende clientes por WhatsApp u otros
 canales y reserva vía la API de la app — nunca toca la base de datos directamente.
 
+**Límite de alcance (no negociable):** este proyecto se originó como fork del roadmap de
+MediCore, pero es un repo, una base de datos, un servidor y un n8n totalmente aparte y
+propios de Agen (repo `ceuntabilo-a11y/AGEN`; n8n en `https://n8n-agen.synetia.site`, proyecto
+EasyPanel `agen-prod`). MediCore (`dorian500-rgb/medicore`, otra cuenta de GitHub) solo se
+puede **leer** como referencia si hace falta — nunca modificarlo, ni hacerle push, ni tocar su
+n8n ni su base de datos. Ningún comando de este repo debe apuntar a infraestructura de
+MediCore.
+
 **Stack:** Next.js 15.5 App Router · React 18 · TypeScript estricto · Tailwind ·
 Supabase (PostgreSQL + Auth + Storage) · n8n · PWA. Node 22 (engines >=20.9 <25).
 

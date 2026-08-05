@@ -46,6 +46,9 @@ como probado si no lo está).
 6. **Honestidad de estado:** ✅ solo si funciona de punta a punta y se probó. Si algo falla o
    no se pudo probar, decirlo con evidencia, sin adornar.
 7. No agregar comentarios, abstracciones ni manejo de errores innecesarios.
+8. **MediCore es ajeno:** repo, base de datos, servidor y n8n de Agen son propios y separados.
+   MediCore (`dorian500-rgb/medicore`) solo se lee como referencia — nunca se modifica, nunca
+   se le hace push, nunca se toca su n8n ni su base de datos.
 
 ## Estructura del proyecto (resumen — detalle completo en CLAUDE.md)
 - `src/app/plataforma`: panel del dueño de la plataforma (negocios, planes, monitor, claves).
