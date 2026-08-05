@@ -19,7 +19,8 @@ export async function GET() {
     let supabaseHealthy = true
     try { const ping = await db.from('businesses').select('id', { count: 'exact', head: true }).limit(1); supabaseHealthy = !ping.error } catch { supabaseHealthy = false }
     let n8nHealthy: boolean | null = null
-    if (process.env.N8N_WEBHOOK_URL) { try { const response = await fetch(process.env.N8N_WEBHOOK_URL.replace(/\/webhook.*$/, '/healthz'), { signal: AbortSignal.timeout(4000) }); n8nHealthy = response.ok } catch { n8nHealthy = false } }
+    const n8nBase = (process.env.N8N_API_URL || process.env.N8N_WEBHOOK_URL || '').replace(/\/webhook.*$/, '').replace(/\/+$/, '')
+    if (n8nBase) { try { const response = await fetch(`${n8nBase}/healthz`, { signal: AbortSignal.timeout(4000) }); n8nHealthy = response.ok } catch { n8nHealthy = false } }
     return NextResponse.json({
       businesses: { total: rows.length, active: active.length, suspended: rows.filter(row => row.suspended_at).length },
       professionals: professionals.count ?? 0,
