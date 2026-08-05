@@ -19,8 +19,8 @@ encuentras lo que no funciona, lo arreglas en el código y lo vuelves a probar h
   contexto de navegación.
 
 ## Paso 0 — SIEMPRE antes de tocar nada
-1. Lee [QWEN.md](../../../QWEN.md) (arquitectura, convenciones, reglas de negocio) y
-   [CLAUDE.md](../../../CLAUDE.md) (modo de trabajo específico de Claude Code en este repo).
+1. Lee [CLAUDE.md](../../../CLAUDE.md) (arquitectura, convenciones, reglas de negocio y modo
+   de trabajo — única guía de este repo).
 2. Consulta la memoria del proyecto si existe contexto previo relevante.
 3. No rehagas lo que ya está hecho. No asumas que algo sirve si no se probó.
 
@@ -47,7 +47,7 @@ como probado si no lo está).
    no se pudo probar, decirlo con evidencia, sin adornar.
 7. No agregar comentarios, abstracciones ni manejo de errores innecesarios.
 
-## Estructura del proyecto (resumen — detalle completo en QWEN.md)
+## Estructura del proyecto (resumen — detalle completo en CLAUDE.md)
 - `src/app/plataforma`: panel del dueño de la plataforma (negocios, planes, monitor, claves).
 - `src/app/admin`, `/profesional`, `/cliente`: los tres portales por negocio.
 - `src/app/api/**`: toda la lógica de negocio vive aquí (nunca en el frontend ni en n8n).
