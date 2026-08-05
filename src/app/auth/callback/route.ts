@@ -7,5 +7,6 @@ export async function GET(request:Request){
   const db=await createServerSupabase();const {error}=await db.auth.exchangeCodeForSession(code)
   if(error)return NextResponse.redirect(new URL('/login?error=callback_failed',request.url))
   const next=url.searchParams.get('next')
-  return NextResponse.redirect(new URL(next?.startsWith('/')?next:'/auth/set-password',request.url))
+  const safeNext=next&&next.startsWith('/')&&!next.startsWith('//')?next:'/auth/set-password'
+  return NextResponse.redirect(new URL(safeNext,request.url))
 }

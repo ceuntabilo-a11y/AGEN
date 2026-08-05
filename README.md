@@ -24,7 +24,7 @@ Las credenciales se cargan como variables de entorno en EasyPanel. La base de da
 
 El agente nunca inserta directamente en `appointments`. Primero resuelve especialidad y servicio; después consulta disponibilidad y finalmente llama a la función transaccional de reserva. PostgreSQL es la autoridad final ante conflictos.
 
-## Mejoras adaptadas de MediCore
+## Mejoras del roadmap Agen
 
 - Agenda administrativa navegable por día, semana y mes, con colores por profesional y gestión de estados.
 - Fechas, panel e intervalos calculados en la zona horaria del negocio, no en la del servidor.
@@ -36,4 +36,4 @@ El agente nunca inserta directamente en `appointments`. Primero resuelve especia
 - Apartados de 15 minutos, avisos internos, seguimiento, lista de espera, calendario externo, PWA y seguridad de sesión.
 - Modo equipo de solo lectura protegido también por las API: ningún mensaje del personal puede crear clientes, ofrecer cupos ni reservar aunque el modelo intente usar una herramienta.
 
-Aplicar, en orden, `supabase/migrations/20260801000001_medicore_improvements.sql` y `supabase/migrations/20260803000001_medicore_latest_updates.sql` antes de desplegar esta versión. Después se deben actualizar/importar los workflows `01-agen-agent.json` y `04-followups-daily.json` en n8n.
+Aplicar, en orden, `supabase/migrations/20260801000001_agen_improvements.sql` y `supabase/migrations/20260803000001_agen_latest_updates.sql` antes de desplegar esta versión. Después se deben actualizar/importar los workflows `01-agen-agent.json` y `04-followups-daily.json` en n8n.

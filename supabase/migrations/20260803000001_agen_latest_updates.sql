@@ -1,4 +1,4 @@
--- Mejoras generales adaptadas del roadmap final de MediCore.
+-- Mejoras generales del roadmap de Agen.
 -- Este archivo es idempotente y conserva el dominio de AGEN: negocios de servicios.
 
 alter table public.professionals

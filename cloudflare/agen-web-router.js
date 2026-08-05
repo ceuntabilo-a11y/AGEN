@@ -1,6 +1,6 @@
 const ORIGIN = "https://agen-prod-web.8kpnr1.easypanel.host";
 
-export default {
+const worker = {
   async fetch(request) {
     const incoming = new URL(request.url);
     const target = new URL(incoming.pathname + incoming.search, ORIGIN);
@@ -41,3 +41,5 @@ export default {
     });
   },
 };
+
+export default worker;

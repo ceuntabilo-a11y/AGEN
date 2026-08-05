@@ -1,4 +1,4 @@
-# Mejoras de MediCore adaptadas a Agen
+# Mejoras del roadmap Agen
 
 Esta actualización conserva el dominio de Agen: negocios de servicios, profesionales, especialidades y agendas independientes. No incorpora expedientes médicos, recetas ni módulos clínicos.
 
@@ -35,4 +35,4 @@ Se copiaron todas las mejoras generales del roadmap final de MediCore que aplica
 
 ## Puesta en servicio
 
-Ejecutar `supabase/migrations/20260803000001_medicore_latest_updates.sql` después de las migraciones anteriores, desplegar la aplicación y mantener los workflows inactivos hasta configurar sus credenciales y gateways oficiales.
+Ejecutar `supabase/migrations/20260803000001_agen_latest_updates.sql` después de las migraciones anteriores, desplegar la aplicación y mantener los workflows inactivos hasta configurar sus credenciales y gateways oficiales.
