@@ -19,9 +19,10 @@ export async function POST(request:Request){
     let inviteLink:string|null=null
     const link=await admin.auth.admin.generateLink({type:'invite',email,options:{redirectTo:`${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`}})
     if(link.error){
+      if(link.error.code!=='email_exists'&&!/already/i.test(link.error.message))throw link.error
       const existing=await admin.auth.admin.listUsers({page:1,perPage:200})
-      const match=existing.data.users.find(user=>user.email?.toLowerCase()===email)
-      if(existing.error||!match)throw link.error
+      const match=(existing.data.users??[]).find(user=>user.email?.toLowerCase()===email)
+      if(existing.error||!match)return NextResponse.json({error:'Ese correo ya está registrado y no se pudo vincular automáticamente. Inicia sesión con ese usuario o usa otro correo.'},{status:409})
       userId=match.id
     }else{
       userId=link.data.user.id
