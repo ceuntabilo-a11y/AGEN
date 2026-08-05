@@ -162,7 +162,48 @@ UNAUTHORIZED→401, FORBIDDEN→403, resto→500), `timezone.ts`, `phone.ts` (`n
 - Activar workflows n8n sin credenciales y gateways probados (se exportan inactivos).
 - Romper el contrato de gateways: `{success, error}` + `unsubscribeUrl` en email.
 
+## 6.1 Capa SaaS de plataforma (super admin), canales, voz y copiloto real
+
+Añadido en `20260805000001_platform_saas_layer.sql` (aplicar después de la 14).
+
+- **Plataforma (`/plataforma`, rol `platform_admins`):** no es un rol de `business_members`
+  (es dueño de la plataforma, no de un negocio). `requirePlatformAdmin()` en
+  `src/lib/platform-context.ts`. Panel: negocios (crear con invitación por correo, suspender,
+  eliminar en cascada con confirmación escrita), planes (`membership_plans`) y complementos
+  (`plan_addons`: `IMAGE_ANALYSIS`, `VOICE_NOTES`, `VOICE_CALLS`) con precio editable, monitor
+  de salud (Supabase/n8n), claves de plataforma de respaldo (`platform_settings`: OpenAI,
+  DashScope). APIs en `src/app/api/platform/**`.
+- **Canales de WhatsApp por negocio** (`businesses.whatsapp_provider`: `EVOLUTION` | `META` |
+  `DIALOG360`, más `whatsapp_instance`/`whatsapp_phone_id`/`whatsapp_token`/
+  `whatsapp_360_api_key`). UI en `/admin/integraciones`. Evolution se conecta por QR
+  autoservicio (`src/lib/whatsapp.ts`, `/api/admin/integrations/whatsapp/*`, requiere
+  `EVOLUTION_API_URL`/`EVOLUTION_API_KEY`). El envío de marketing por WhatsApp rutea por
+  proveedor (`sendWhatsApp()`); si el negocio no tiene proveedor configurado, cae al flujo
+  histórico por gateway n8n. **DIALOG360 no está verificado con envío real** (tampoco lo
+  estaba en el origen MediCore) — probarlo con una cuenta real antes de depender de él.
+- **Capacidades multimedia del agente:** `businesses.feature_image` / `feature_voice`
+  (apagadas por defecto). El workflow `01-agen-agent.json` llama a `/api/agent/media` (nuevo)
+  para transcribir audio (Whisper) o describir imágenes (Vision) solo si el negocio activó la
+  capacidad; si no, el agente sigue como si fuera solo texto.
+- **Voz de salida:** `agent_settings.voice`/`agent_settings.behavior` (5ª pestaña de
+  `/admin/agente`). `src/lib/voice.ts` implementa Qwen3-TTS/DashScope (clave
+  `businesses.dashscope_api_key`, con respaldo de plataforma). `POST /api/agent/voice/reply`
+  (llamado por el nodo "Responder con voz" de n8n) nunca deja al agente mudo: cualquier
+  fallo devuelve `speak:false,sendText:true`. Nunca responde con voz en modo equipo
+  (`actorType==='TEAM'`). Botón "Probar voz" → `/api/admin/agent/voice-preview`.
+- **Copiloto real:** `/api/admin/copilot` ahora llama a OpenAI (`gpt-4o-mini`) con los mismos
+  datos ya calculados por el servidor — el modelo nunca toca la base de datos ni inventa
+  cifras. Límite 30/min por negocio (`src/lib/rate-limit.ts`). Si OpenAI falla, cae al texto
+  determinista anterior (nunca deja al usuario sin respuesta).
+- **Marketing con IA:** `POST /api/admin/campaigns/generate` redacta el texto de la campaña
+  con la clave OpenAI del negocio; `campaigns.image_url` permite adjuntar una imagen (URL) que
+  se envía junto al texto cuando el proveedor de WhatsApp lo soporta.
+
 ## 7. Entorno y despliegue
+
+Variables nuevas: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` (Evolution API compartida por la
+plataforma para instancias por negocio), `OPENAI_API_KEY` (respaldo de plataforma opcional,
+además del que se guarda en `platform_settings` desde `/plataforma/claves`).
 
 Variables: copiar `.env.example` → `.env.local` (comentarios indican las del servicio n8n:
 `AGEN_APP_URL`, `AGEN_WEBHOOK_SECRET`, gateways de notificación y marketing).

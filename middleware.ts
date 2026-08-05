@@ -28,9 +28,14 @@ export async function middleware(request: NextRequest) {
     : supabase
   const { data: member } = await membershipDb.from('business_members').select('role').eq('user_id', user.id).eq('active', true).limit(1).maybeSingle()
   const path = request.nextUrl.pathname
+  if (path.startsWith('/plataforma')) {
+    const { data: platformAdmin } = await membershipDb.from('platform_admins').select('id').eq('user_id', user.id).eq('active', true).maybeSingle()
+    if (!platformAdmin) return NextResponse.redirect(new URL(member?.role === 'PROFESSIONAL' ? '/profesional' : member ? '/admin' : '/cliente', request.url))
+    return response
+  }
   if (path.startsWith('/admin') && !member?.role?.match(/OWNER|ADMIN|RECEPTIONIST/)) return NextResponse.redirect(new URL(member?.role === 'PROFESSIONAL' ? '/profesional' : '/cliente', request.url))
   if (path.startsWith('/profesional') && member?.role !== 'PROFESSIONAL') return NextResponse.redirect(new URL(member ? '/admin' : '/cliente', request.url))
   return response
 }
 
-export const config = { matcher: ['/admin/:path*', '/profesional/:path*', '/cliente/:path*'] }
+export const config = { matcher: ['/admin/:path*', '/profesional/:path*', '/cliente/:path*', '/plataforma/:path*'] }

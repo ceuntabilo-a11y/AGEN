@@ -35,3 +35,9 @@ No guardar secretos dentro del JSON del workflow.
 Los workflows 02 y 03 envían un JSON normalizado a un gateway del proveedor. Esto permite conectar WhatsApp Cloud API oficial, correo, Instagram, Messenger o push sin acoplar Agen a una sola empresa. El gateway debe responder `{ "success": true }` o `{ "success": false, "error": "motivo" }`. En campañas de email debe incluir el `recipient.unsubscribeUrl` recibido como enlace visible para cancelar promociones.
 
 Configurar en n8n `AGEN_APP_URL`, `AGEN_WEBHOOK_SECRET`, `AGEN_NOTIFICATION_GATEWAY_URL`, `AGEN_NOTIFICATION_GATEWAY_TOKEN`, `AGEN_MARKETING_GATEWAY_URL` y `AGEN_MARKETING_GATEWAY_TOKEN`. Activar cada workflow únicamente después de probarlo manualmente con las credenciales reales.
+
+## Multimedia y voz (01-agen-agent.json)
+
+- El webhook de entrada acepta opcionalmente `mediaType` (`image`|`audio`) y `mediaUrl`. El nodo "Procesar multimedia" llama a `/api/agent/media`, que transcribe (Whisper) o describe (Vision) SOLO si el negocio activó esa capacidad en `/admin/integraciones`; si no, el agente sigue funcionando solo con texto.
+- El nodo "Responder con voz" llama a `/api/agent/voice/reply` después de que el agente responde. Nunca deja al agente mudo: cualquier fallo (sin clave, TTS caído, modo equipo) devuelve `speak:false,sendText:true` y el flujo sigue exactamente como antes.
+- El campo `speak`/`sendText`/`audio`/`audioMime` de la respuesta final del webhook debe conectarse al gateway de WhatsApp para que envíe la nota de voz cuando `speak:true`.

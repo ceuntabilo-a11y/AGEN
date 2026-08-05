@@ -75,7 +75,26 @@
       "position": [-680, 100]
     },
     {
-      "parameters": { "mode": "combine", "combineBy": "combineByPosition", "options": {} },
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/agent/media'}}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, mediaType: $('Entrada').item.json.body.mediaType || null, mediaUrl: $('Entrada').item.json.body.mediaUrl || null})}}",
+        "options": { "response": { "response": { "neverError": true, "responseFormat": "json" } } }
+      },
+      "id": "process-media",
+      "name": "Procesar multimedia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "onError": "continueRegularOutput",
+      "position": [-680, 300]
+    },
+    {
+      "parameters": { "mode": "combine", "combineBy": "combineByPosition", "numberInputs": 3, "options": {} },
       "id": "merge-context",
       "name": "Unir contexto",
       "type": "n8n-nodes-base.merge",
@@ -85,9 +104,9 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "={{'MENSAJE: ' + String($('Entrada').item.json.body.message || '').slice(0, 2000) + '\nCLIENTE/MEMORIA Y CATÁLOGO: ' + JSON.stringify($json) + '\nNEGOCIO: ' + $('Entrada').item.json.body.businessId}}",
+        "text": "={{'MENSAJE: ' + String($('Entrada').item.json.body.message || '').slice(0, 2000) + (($('Procesar multimedia').item.json.text) ? ('\nCONTENIDO MULTIMEDIA DEL CLIENTE (transcrito o descrito por el servidor, trátalo como si el cliente lo hubiera escrito): ' + String($('Procesar multimedia').item.json.text).slice(0, 1500)) : '') + '\nCLIENTE/MEMORIA Y CATÁLOGO: ' + JSON.stringify($json) + '\nNEGOCIO: ' + $('Entrada').item.json.body.businessId}}",
         "options": {
-          "systemMessage": "Eres Agen, recepcionista de un negocio de servicios. Responde en español, de forma natural y breve. PRIMERO REVISA actorType. Si actorType=TEAM, estás hablando con alguien del equipo: responde con confianza usando la agenda, lista de espera y seguimientos incluidos en el contexto. Da nombres y horas concretas; si un dato no aparece, indícale que lo consulte en el panel. El modo TEAM es solo lectura: no ofrezcas horarios ni intentes registrar clientes, crear, mover o cancelar reservas. Las API también bloquean esas acciones. Si actorType=CLIENT: 1) Identifica el servicio exacto del catálogo. No confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 2) Nunca inventes servicios, profesionales, precios, direcciones ni horarios. 3) Para hablar de disponibilidad usa buscar_horarios con el serviceId real y muestra solo los profesionales devueltos. Cada horario queda apartado 15 minutos e incluye holdId. 4) Si el cliente no existe, pide su nombre real una sola vez y llama registrar_cliente; el nombre del perfil de WhatsApp no confirma identidad. 5) Para reservar necesitas clientId, serviceId, professionalId, fecha ISO y el holdId elegido explícitamente. 6) Nunca afirmes que reservaste si crear_reserva no devuelve booked=true. Ante HTTP 409 vuelve a buscar. 7) Lee la memoria y no repitas nombre, correo, profesional preferido o servicio ya conocidos. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Después de reservar llama guardar_memoria. No actives marketing sin consentimiento explícito. 10) Confirma servicio, profesional, fecha, hora y precio. 11) Para ubicación usa maps_url exacto o la dirección guardada. 12) Transfiere a una persona ante pagos, quejas, seguridad o cuando el cliente lo solicite."
+          "systemMessage": "Eres Agen, recepcionista de un negocio de servicios. Responde en español, de forma natural y breve. PRIMERO REVISA actorType. Si actorType=TEAM, estás hablando con alguien del equipo: responde con confianza usando la agenda, lista de espera y seguimientos incluidos en el contexto. Da nombres y horas concretas; si un dato no aparece, indícale que lo consulte en el panel. El modo TEAM es solo lectura: no ofrezcas horarios ni intentes registrar clientes, crear, mover o cancelar reservas. Las API también bloquean esas acciones. Si actorType=CLIENT: 1) Identifica el servicio exacto del catálogo. No confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 2) Nunca inventes servicios, profesionales, precios, direcciones ni horarios. 3) Para hablar de disponibilidad usa buscar_horarios con el serviceId real y muestra solo los profesionales devueltos. Cada horario queda apartado 15 minutos e incluye holdId. 4) Si el cliente no existe, pide su nombre real una sola vez y llama registrar_cliente; el nombre del perfil de WhatsApp no confirma identidad. 5) Para reservar necesitas clientId, serviceId, professionalId, fecha ISO y el holdId elegido explícitamente. 6) Nunca afirmes que reservaste si crear_reserva no devuelve booked=true. Ante HTTP 409 vuelve a buscar. 7) Lee la memoria y no repitas nombre, correo, profesional preferido o servicio ya conocidos. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Después de reservar llama guardar_memoria. No actives marketing sin consentimiento explícito. 10) Confirma servicio, profesional, fecha, hora y precio. 11) Para ubicación usa maps_url exacto o la dirección guardada. 12) Transfiere a una persona ante pagos, quejas, seguridad o cuando el cliente lo solicite. 13) Si CONTENIDO MULTIMEDIA indica que la función está desactivada, dile amablemente al cliente que por ahora solo puedes leer texto."
         }
       },
       "id": "ai-agent",
@@ -220,7 +239,26 @@
       "position": [80, 0]
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{JSON.stringify({reply: $('Agente Agen').item.json.output, businessId: $('Entrada').item.json.body.businessId, phone: $('Entrada').item.json.body.phone})}}", "options": {} },
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/agent/voice/reply'}}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, text: $('Agente Agen').item.json.output, wasAudio: $('Entrada').item.json.body.mediaType === 'audio', actorType: $('Unir contexto').item.json.actorType || null})}}",
+        "options": { "response": { "response": { "neverError": true, "responseFormat": "json" } } }
+      },
+      "id": "voice-reply",
+      "name": "Responder con voz",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "onError": "continueRegularOutput",
+      "position": [200, 0]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{JSON.stringify({reply: $('Agente Agen').item.json.output, businessId: $('Entrada').item.json.body.businessId, phone: $('Entrada').item.json.body.phone, speak: $('Responder con voz').item.json.speak === true, sendText: $('Responder con voz').item.json.sendText !== false, audio: $('Responder con voz').item.json.audio || null, audioMime: $('Responder con voz').item.json.mime || null})}}", "options": {} },
       "id": "respond",
       "name": "Responder",
       "type": "n8n-nodes-base.respondToWebhook",
@@ -230,9 +268,10 @@
   ],
   "connections": {
     "Entrada": { "main": [[{ "node": "Autorizar webhook", "type": "main", "index": 0 }]] },
-    "Autorizar webhook": { "main": [[{ "node": "Cargar memoria", "type": "main", "index": 0 }, { "node": "Cargar catálogo", "type": "main", "index": 0 }], [{ "node": "Rechazar", "type": "main", "index": 0 }]] },
+    "Autorizar webhook": { "main": [[{ "node": "Cargar memoria", "type": "main", "index": 0 }, { "node": "Cargar catálogo", "type": "main", "index": 0 }, { "node": "Procesar multimedia", "type": "main", "index": 0 }], [{ "node": "Rechazar", "type": "main", "index": 0 }]] },
     "Cargar memoria": { "main": [[{ "node": "Unir contexto", "type": "main", "index": 0 }]] },
     "Cargar catálogo": { "main": [[{ "node": "Unir contexto", "type": "main", "index": 1 }]] },
+    "Procesar multimedia": { "main": [[{ "node": "Unir contexto", "type": "main", "index": 2 }]] },
     "Unir contexto": { "main": [[{ "node": "Agente Agen", "type": "main", "index": 0 }]] },
     "Modelo": { "ai_languageModel": [[{ "node": "Agente Agen", "type": "ai_languageModel", "index": 0 }]] },
     "Memoria reciente": { "ai_memory": [[{ "node": "Agente Agen", "type": "ai_memory", "index": 0 }]] },
@@ -241,7 +280,8 @@
     "registrar_cliente": { "ai_tool": [[{ "node": "Agente Agen", "type": "ai_tool", "index": 0 }]] },
     "guardar_memoria": { "ai_tool": [[{ "node": "Agente Agen", "type": "ai_tool", "index": 0 }]] },
     "Agente Agen": { "main": [[{ "node": "Persistir interacción", "type": "main", "index": 0 }]] },
-    "Persistir interacción": { "main": [[{ "node": "Responder", "type": "main", "index": 0 }]] }
+    "Persistir interacción": { "main": [[{ "node": "Responder con voz", "type": "main", "index": 0 }]] },
+    "Responder con voz": { "main": [[{ "node": "Responder", "type": "main", "index": 0 }]] }
   },
   "pinData": {},
   "settings": { "executionOrder": "v1", "saveManualExecutions": true, "callerPolicy": "workflowsFromSameOwner" },

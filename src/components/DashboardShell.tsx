@@ -3,14 +3,18 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
+  Activity,
   Bot,
+  Building2,
   CalendarDays,
   CircleDollarSign,
   ContactRound,
   Image,
+  KeyRound,
   LayoutDashboard,
   Megaphone,
   Menu,
+  Plug,
   Scissors,
   Settings,
   ListChecks,
@@ -38,6 +42,7 @@ const adminItems = [
   ['/admin/marketing', 'Marketing', Megaphone],
   ['/admin/galeria', 'Galería', Image],
   ['/admin/agente', 'Agente IA', Bot],
+  ['/admin/integraciones', 'Integraciones', Plug],
   ['/admin/configuracion', 'Configuración', Settings],
 ] as const
 
@@ -57,6 +62,14 @@ const clientItems = [
   ['/cliente/perfil', 'Mi perfil', Settings],
 ] as const
 
+const platformItems = [
+  ['/plataforma', 'Resumen', LayoutDashboard],
+  ['/plataforma/negocios', 'Negocios', Building2],
+  ['/plataforma/planes', 'Planes y complementos', CircleDollarSign],
+  ['/plataforma/monitor', 'Monitor', Activity],
+  ['/plataforma/claves', 'Claves de plataforma', KeyRound],
+] as const
+
 type Session = {
   name: string
   email?: string
@@ -64,12 +77,12 @@ type Session = {
   timezone: string
 }
 
-export function DashboardShell({ children, role = 'admin' }: { children: React.ReactNode; role?: 'admin' | 'professional' | 'client' }) {
+export function DashboardShell({ children, role = 'admin' }: { children: React.ReactNode; role?: 'admin' | 'professional' | 'client' | 'platform' }) {
   const [open, setOpen] = useState(false)
   const [session, setSession] = useState<Session | null>(null)
   const pathname = usePathname()
   const router = useRouter()
-  const items = role === 'admin' ? adminItems : role === 'professional' ? professionalItems : clientItems
+  const items = role === 'admin' ? adminItems : role === 'professional' ? professionalItems : role === 'platform' ? platformItems : clientItems
 
   useEffect(() => {
     fetch('/api/session').then((response) => response.ok ? response.json() : null).then(setSession).catch(() => {})
@@ -107,12 +120,12 @@ export function DashboardShell({ children, role = 'admin' }: { children: React.R
     <div className="lg:pl-64">
       <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-black/5 bg-white/80 px-5 pl-16 backdrop-blur lg:px-8">
         <div>
-          <p className="text-sm text-[#736f83]">{role === 'admin' ? 'Panel administrador' : role === 'professional' ? 'Panel profesional' : 'Mi cuenta'}</p>
+          <p className="text-sm text-[#736f83]">{role === 'admin' ? 'Panel administrador' : role === 'professional' ? 'Panel profesional' : role === 'platform' ? 'Panel de plataforma' : 'Mi cuenta'}</p>
           {today && <p className="hidden text-xs capitalize text-[#9a96a5] sm:block">{today}</p>}
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right"><p className="text-sm font-bold">{session?.name ?? (role === 'client' ? 'Cliente' : role === 'professional' ? 'Profesional' : 'Administrador')}</p><p className="text-xs text-[#736f83]">{session?.businessName ?? 'Agen'}</p></div>
-          {role!=='client'&&<NotificationBell/>}
+          {role!=='client'&&role!=='platform'&&<NotificationBell/>}
           <AccountMenu name={session?.name??'Usuario'} email={session?.email} role={role} initials={initials} onLogout={logout}/>
         </div>
       </header>
