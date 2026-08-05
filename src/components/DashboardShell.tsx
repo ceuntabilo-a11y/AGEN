@@ -30,6 +30,9 @@ import { SessionTimeout } from '@/components/SessionTimeout'
 import { InstallApp } from '@/components/InstallApp'
 import { AccountMenu } from '@/components/AccountMenu'
 import {Copilot} from '@/components/Copilot'
+import dynamic from 'next/dynamic'
+
+const AgenSplash = dynamic(() => import('@/components/AgenSplash'), { ssr: false })
 
 const adminItems = [
   ['/admin', 'Resumen', LayoutDashboard],
@@ -80,12 +83,19 @@ type Session = {
 export function DashboardShell({ children, role = 'admin' }: { children: React.ReactNode; role?: 'admin' | 'professional' | 'client' | 'platform' }) {
   const [open, setOpen] = useState(false)
   const [session, setSession] = useState<Session | null>(null)
+  const [showSplash, setShowSplash] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const items = role === 'admin' ? adminItems : role === 'professional' ? professionalItems : role === 'platform' ? platformItems : clientItems
 
   useEffect(() => {
     fetch('/api/session').then((response) => response.ok ? response.json() : null).then(setSession).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (sessionStorage.getItem('agen_splash_shown')) return
+    sessionStorage.setItem('agen_splash_shown', '1')
+    setShowSplash(true)
   }, [])
 
   async function logout() {
@@ -102,6 +112,7 @@ export function DashboardShell({ children, role = 'admin' }: { children: React.R
     : ''
 
   return <div className="min-h-screen bg-[#f5f4f9]">
+    {showSplash && <AgenSplash onFinish={() => setShowSplash(false)} />}
     <button aria-label="Abrir menú" onClick={() => setOpen(true)} className="fixed left-4 top-4 z-30 rounded-xl bg-white p-2 shadow lg:hidden"><Menu size={22}/></button>
     {open && <button aria-label="Cerrar menú" onClick={() => setOpen(false)} className="fixed inset-0 z-30 bg-black/30 lg:hidden"/>}
     <aside className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-[#19162b] p-4 text-white transition-transform lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
