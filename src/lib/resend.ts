@@ -7,7 +7,7 @@ async function resolveResendCredentials() {
   const from = data?.find(row => row.key === 'resend_from')?.value
   return {
     key: (typeof key === 'string' && key) || process.env.RESEND_API_KEY || '',
-    from: (typeof from === 'string' && from) || process.env.RESEND_FROM || 'Agen <notificaciones@agen.synetia.site>',
+    from: (typeof from === 'string' && from) || process.env.RESEND_FROM || 'Agen <notificaciones@synetia.site>',
   }
 }
 
