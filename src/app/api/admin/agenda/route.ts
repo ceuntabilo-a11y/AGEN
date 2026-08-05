@@ -55,6 +55,7 @@ export async function PATCH(request: Request) {
       professionalId?: string
       durationMinutes?: number
       reason?: string
+      notify?: boolean
     }
     if (!body.appointmentId || !body.action) return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 })
 
@@ -92,14 +93,17 @@ export async function PATCH(request: Request) {
     }
 
     const transitions: Record<string, string[]> = {
-      PENDING: ['CONFIRMED','CHECKED_IN','CANCELLED','NO_SHOW'],
-      CONFIRMED: ['CHECKED_IN','CANCELLED','NO_SHOW'],
+      PENDING: ['CONFIRMED','CHECKED_IN','CANCELLED','NO_SHOW','COMPLETED'],
+      CONFIRMED: ['CHECKED_IN','CANCELLED','NO_SHOW','COMPLETED'],
       CHECKED_IN: ['IN_PROGRESS','CANCELLED'],
       IN_PROGRESS: ['COMPLETED'],
     }
     if (!body.status || !(transitions[current.status] ?? []).includes(body.status)) return NextResponse.json({ error: 'Cambio de estado no permitido' }, { status: 400 })
     const { data, error } = await db.from('appointments').update({ status: body.status, updated_at: new Date().toISOString() }).eq('id',body.appointmentId).eq('business_id',businessId).select().single()
     if (error) throw error
+    if (body.status === 'NO_SHOW' && body.notify) {
+      await db.rpc('enqueue_appointment_event', { p_appointment_id: body.appointmentId, p_event_type: 'FOLLOW_UP' })
+    }
     return NextResponse.json({ appointment: data })
   } catch (error) { return apiError(error) }
 }
