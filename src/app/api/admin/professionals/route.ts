@@ -3,6 +3,7 @@ import { requireBusinessContext } from '@/lib/supabase-server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { apiError } from '@/lib/http-errors'
 import { normalizePhone } from '@/lib/phone'
+import { DEFAULT_AVAILABILITY, replaceAvailability } from '@/lib/availability'
 
 export async function POST(request:Request){
   let createdUserId:string|undefined
@@ -42,6 +43,8 @@ export async function POST(request:Request){
     }
     if(body.specialtyIds?.length){const {error:specialtyError}=await admin.from('professional_specialties').insert(body.specialtyIds.map(specialty_id=>({professional_id:professional.id,specialty_id})));if(specialtyError)throw specialtyError}
     if(body.serviceIds?.length){const {error:serviceError}=await admin.from('professional_services').insert(body.serviceIds.map(service_id=>({professional_id:professional.id,service_id})));if(serviceError)throw serviceError}
+    // Sin horario no se generan cupos: todo profesional nuevo nace con lunes a viernes de 09:00 a 18:00, editable desde Equipo.
+    await replaceAvailability(admin,professional.id,DEFAULT_AVAILABILITY)
     return NextResponse.json({professional,inviteLink},{status:201})
   }catch(error){
     if(createdUserId){try{await createAdminClient().auth.admin.deleteUser(createdUserId)}catch{}}

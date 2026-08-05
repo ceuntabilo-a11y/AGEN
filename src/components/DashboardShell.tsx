@@ -8,6 +8,7 @@ import {
   Building2,
   CalendarDays,
   CircleDollarSign,
+  Clock3,
   ContactRound,
   Image,
   KeyRound,
@@ -52,6 +53,7 @@ const adminItems = [
 const professionalItems = [
   ['/profesional', 'Mi día', LayoutDashboard],
   ['/profesional/agenda', 'Mi agenda', CalendarDays],
+  ['/profesional/horario', 'Mi horario', Clock3],
   ['/profesional/clientes', 'Mis clientes', ContactRound],
   ['/profesional/galeria', 'Mis trabajos', Image],
   ['/profesional/ingresos', 'Ingresos', CircleDollarSign],
