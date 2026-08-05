@@ -14,10 +14,13 @@ export default function RecoverPasswordPage() {
     event.preventDefault()
     setLoading(true)
     setError('')
-    const redirectTo = `${window.location.origin}/auth/callback?next=/auth/set-password`
+    const redirectTo = `${window.location.origin}/auth/confirm?type=recovery&next=/auth/set-password`
     const { error: resetError } = await createClient().auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo })
-    if (resetError) setError('No se pudo enviar el enlace. Verifica la configuración de correo de Supabase.')
-    else setMessage('Si la cuenta existe, recibirás un enlace para crear una contraseña nueva.')
+    if (resetError) {
+      const waitMatch = resetError.message.match(/after (\d+) seconds/)
+      if (waitMatch) setError(`Ya pediste un enlace hace muy poco. Por seguridad, esperá ${waitMatch[1]} segundos y probá de nuevo.`)
+      else setError(`No se pudo enviar el enlace: ${resetError.message}`)
+    } else setMessage('Si la cuenta existe, recibirás un enlace para crear una contraseña nueva.')
     setLoading(false)
   }
 
