@@ -26,3 +26,15 @@ export async function PATCH(request:Request){
     return NextResponse.json({member:data})
   }catch(error){return apiError(error)}
 }
+
+export async function DELETE(request:Request){
+  try{
+    const {db,businessId}=await requireBusinessContext(['OWNER','ADMIN'])
+    const body=await request.json() as {memberId?:string}
+    if(!body.memberId)return NextResponse.json({error:'Miembro obligatorio'},{status:400})
+    const {data,error}=await db.from('business_members').update({agent_phone:null,agent_display_name:null}).eq('id',body.memberId).eq('business_id',businessId).select('id,role,agent_phone,agent_display_name').maybeSingle()
+    if(error)throw error
+    if(!data)return NextResponse.json({error:'Miembro inexistente'},{status:404})
+    return NextResponse.json({member:data})
+  }catch(error){return apiError(error)}
+}
