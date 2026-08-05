@@ -258,6 +258,13 @@ holds, confirmación de hold y move con validación de compatibilidad.
   `npm run typecheck` (y `booking_invariants.sql` si se tocó SQL de reservas) antes de
   entregar. Si algo no se pudo probar, decirlo explícitamente — nunca presentarlo como
   verificado.
+- **Orden obligatorio: local → probado 100% → commit → push.** Nunca subir a GitHub un cambio
+  sin antes probarlo en el propio entorno: si toca UI/flujo de usuario, levantar
+  `npm run dev` y usar la función de verdad en el navegador (no solo lint/typecheck, que no
+  detectan bugs funcionales); si toca SQL/n8n, probarlo contra Supabase/n8n reales antes de
+  darlo por bueno. Recién cuando quedó verificado al 100% se hace commit local, y recién
+  después `git push`. El deploy a producción en EasyPanel (botón "Implementar") sigue siendo
+  un paso manual del usuario, separado y posterior al push — nunca asumir que push = deploy.
 - Antes de entregar, usar las herramientas MCP disponibles (n8n, Supabase, etc.) para validar
   workflows, configuraciones y SQL cuando aplique.
 - **Investigar antes de improvisar.** Si la tarea toca algo con una forma correcta conocida de

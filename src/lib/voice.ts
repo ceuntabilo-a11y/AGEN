@@ -33,6 +33,25 @@ function buildInstruction(cfg: VoiceConfig) {
   return `${parts.join(', ')}.`
 }
 
+function fixWavHeader(buffer: Buffer): Buffer {
+  if (buffer.length < 44 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WAVE') return buffer
+  const fixed = Buffer.from(buffer)
+  fixed.writeUInt32LE(fixed.length - 8, 4)
+  let offset = 12
+  while (offset + 8 <= fixed.length) {
+    const id = fixed.toString('ascii', offset, offset + 4)
+    const declared = fixed.readUInt32LE(offset + 4)
+    if (id === 'data') {
+      fixed.writeUInt32LE(fixed.length - offset - 8, offset + 4)
+      break
+    }
+    const advance = 8 + declared + (declared % 2)
+    if (!Number.isFinite(advance) || advance <= 0 || offset + advance > fixed.length) break
+    offset += advance
+  }
+  return fixed
+}
+
 export async function generateSpeech(text: string, cfg: VoiceConfig, apiKey: string, endpoint?: string | null) {
   const clean = text.trim()
   if (!clean) throw new Error('Sin texto para convertir a voz')
@@ -72,5 +91,7 @@ export async function generateSpeech(text: string, cfg: VoiceConfig, apiKey: str
     if (contentType?.startsWith('audio/')) mime = contentType
   }
   if (!audioBase64) throw new Error('qwen_sin_audio')
-  return { audioBase64, mime, chars: clean.length }
+  const fixed = fixWavHeader(Buffer.from(audioBase64, 'base64'))
+  if (fixed.toString('ascii', 0, 4) === 'RIFF') mime = 'audio/wav'
+  return { audioBase64: fixed.toString('base64'), mime, chars: clean.length }
 }
