@@ -26,7 +26,8 @@ export function LoginForm() {
       if (response.ok) {
         const session = await response.json() as { role?: string; name?: string }
         if (session.role && session.name) recordarCuenta({ email, name: session.name, role: session.role })
-        router.replace(session.role === 'PROFESSIONAL' ? '/profesional' : session.role === 'CLIENT' ? '/cliente' : '/admin')
+        const destination = session.role === 'PROFESSIONAL' ? '/profesional' : session.role === 'CLIENT' ? '/cliente' : session.role === 'PLATFORM_ADMIN' ? '/plataforma' : '/admin'
+        router.replace(destination)
       } else router.replace('/configurar-negocio')
       router.refresh()
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'No se pudo iniciar sesión') }
