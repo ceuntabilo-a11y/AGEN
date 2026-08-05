@@ -1,14 +1,24 @@
+import { createAdminClient } from '@/lib/supabase-admin'
+
 type Business = { id: string; whatsapp_provider: string | null; whatsapp_instance: string | null; whatsapp_phone_id: string | null; whatsapp_token: string | null; whatsapp_360_api_key: string | null }
 
-function evolutionUrl() { return process.env.EVOLUTION_API_URL }
-function evolutionKey() { return process.env.EVOLUTION_API_KEY || '' }
+async function resolveEvolutionCredentials() {
+  const db = createAdminClient()
+  const { data } = await db.from('platform_settings').select('key,value').in('key', ['evolution_api_url', 'evolution_api_key'])
+  const url = data?.find(row => row.key === 'evolution_api_url')?.value
+  const key = data?.find(row => row.key === 'evolution_api_key')?.value
+  return {
+    url: (typeof url === 'string' && url) || process.env.EVOLUTION_API_URL || '',
+    key: (typeof key === 'string' && key) || process.env.EVOLUTION_API_KEY || '',
+  }
+}
 
 async function evolutionFetch(path: string, options?: { method?: string; body?: unknown }) {
-  const base = evolutionUrl()
-  if (!base) throw new Error('EVOLUTION_API_URL no configurado')
+  const { url: base, key } = await resolveEvolutionCredentials()
+  if (!base) throw new Error('Evolution API no está configurada (falta la URL en Plataforma → Claves)')
   const response = await fetch(`${base}${path}`, {
     method: options?.method ?? 'GET',
-    headers: { apikey: evolutionKey(), 'content-type': 'application/json' },
+    headers: { apikey: key, 'content-type': 'application/json' },
     body: options?.body ? JSON.stringify(options.body) : undefined,
     signal: AbortSignal.timeout(15000),
   })

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requirePlatformAdmin } from '@/lib/platform-context'
 import { apiError } from '@/lib/http-errors'
 
-const KEYS = ['openai_fallback_key', 'dashscope_fallback_key', 'dashscope_fallback_endpoint']
+const KEYS = ['openai_fallback_key', 'dashscope_fallback_key', 'dashscope_fallback_endpoint', 'evolution_api_url', 'evolution_api_key']
 
 export const dynamic = 'force-dynamic'
 
