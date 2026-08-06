@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireBusinessContext } from '@/lib/supabase-server'
 import { apiError } from '@/lib/http-errors'
+import { PORTFOLIO_BUCKET, portfolioPublicUrl } from '@/lib/storage'
 
 const BUCKETS: Record<string, { bucket: string; maxBytes: number }> = {
   logo: { bucket: 'business-assets', maxBytes: 5 * 1024 * 1024 },
@@ -27,6 +28,11 @@ export async function POST(request: Request) {
     const path = `${businessId}/${kind}-${Date.now()}-${Math.round(Math.random() * 1e6)}.${extension}`
     const { error } = await db.storage.from(target.bucket).upload(path, await file.arrayBuffer(), { contentType: file.type, upsert: false })
     if (error) throw error
+    // La galería es privada: se guarda la URL canónica y se devuelve además un enlace firmado para la vista previa.
+    if (target.bucket === PORTFOLIO_BUCKET) {
+      const signed = await db.storage.from(PORTFOLIO_BUCKET).createSignedUrl(path, 3600)
+      return NextResponse.json({ url: portfolioPublicUrl(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '', path), previewUrl: signed.data?.signedUrl ?? null, path }, { status: 201 })
+    }
     const { data } = db.storage.from(target.bucket).getPublicUrl(path)
     return NextResponse.json({ url: data.publicUrl, path }, { status: 201 })
   } catch (error) { return apiError(error) }
