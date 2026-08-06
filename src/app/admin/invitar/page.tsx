@@ -3,6 +3,7 @@
 import { PageHeader } from '@/components/PageHeader'
 import { Check, Copy, Gift, Send, Trash2, Users } from 'lucide-react'
 import { FormEvent, useCallback, useEffect, useState } from 'react'
+import QRCode from 'qrcode'
 
 type Referral = { id: string; referred_name: string | null; referred_email: string | null; status: string; reward_percent: number | null; rewarded_at: string | null; created_at: string; referred: { name: string } | null }
 type Data = { pendingMigration?: boolean; code: string | null; promo: { headline: string; percent: number; terms: string }; businessLink: string | null; clientLink: string | null; referrals: Referral[] }
@@ -31,6 +32,7 @@ export default function InvitePage() {
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [qr, setQr] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -43,6 +45,14 @@ export default function InvitePage() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+
+  // QR para imprimir y dejar en el mesón: se dibuja en el navegador, no sale a ningún servicio externo.
+  useEffect(() => {
+    if (!data?.clientLink) return
+    QRCode.toDataURL(data.clientLink, { width: 480, margin: 1, color: { dark: '#19162b', light: '#ffffff' } })
+      .then(setQr)
+      .catch(() => setQr(''))
+  }, [data?.clientLink])
 
   async function addReferral(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -120,6 +130,15 @@ export default function InvitePage() {
           </div>
         </div>
         {data.clientLink && <div className="mt-5"><CopyBox label="Tu enlace para clientes" value={data.clientLink} message="Reserva tu hora en línea con nosotros:"/></div>}
+        {qr && <div className="mt-5 flex flex-wrap items-center gap-4 rounded-2xl border border-black/5 bg-[#f7f6fa] p-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={qr} alt="Código QR del enlace para clientes" className="h-32 w-32 rounded-xl bg-white p-2"/>
+          <div className="min-w-0">
+            <b className="text-sm">Código QR</b>
+            <p className="mt-1 text-sm text-[#736f83]">Imprímelo y déjalo en el mesón: quien lo escanea llega directo a crear su cuenta.</p>
+            <a href={qr} download="agen-invitacion-clientes.png" className="mt-3 inline-block rounded-xl border bg-white px-4 py-2 text-sm font-bold">Descargar QR</a>
+          </div>
+        </div>}
         <ul className="mt-5 space-y-2 text-sm text-[#4b4761]">
           <li>· Pégalo en tu estado de WhatsApp, en Instagram o en tu ficha de Google.</li>
           <li>· Para invitar a un cliente que ya tienes en la agenda, abre su ficha y usa el botón <b>Invitar</b>: el mensaje sale con su nombre y su teléfono ya cargados.</li>

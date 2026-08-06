@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { readPromo } from '@/lib/referrals'
+import { sendMarketingEmail } from '@/lib/resend'
 
 export async function POST(request: Request) {
   const db = await createServerSupabase()
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
   if (code) {
     try {
       const admin = createAdminClient()
-      const { data: referrer } = await admin.from('businesses').select('id').eq('referral_code', code).maybeSingle()
+      const { data: referrer } = await admin.from('businesses').select('id,name,email').eq('referral_code', code).maybeSingle()
       if (referrer && referrer.id !== data) {
         const promo = await readPromo(admin)
         await admin.from('business_referrals').insert({
@@ -49,6 +50,20 @@ export async function POST(request: Request) {
           status: 'REGISTERED',
           reward_percent: promo.percent,
         })
+        // Aviso a quien invitó, para que no tenga que estar mirando el panel.
+        if (referrer.email) {
+          await sendMarketingEmail({
+            to: referrer.email,
+            subject: `${body.name!.trim()} se registró con tu invitación`,
+            businessName: 'Agen',
+            html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px">
+              <p style="font-weight:800;font-size:18px;margin:0 0 16px">Tu invitación funcionó</p>
+              <p style="margin:0 0 12px"><b>${body.name!.trim()}</b> acaba de crear su cuenta en Agen con tu enlace.</p>
+              <p style="margin:0 0 12px">Tu ${promo.percent}% de descuento queda registrado y el equipo de Agen lo aplica en tu próxima facturación.</p>
+              <p style="margin:0;color:#888;font-size:12px">Puedes ver el estado de tus invitaciones en Agen, en la sección Invitar.</p>
+            </div>`,
+          })
+        }
       }
     } catch { /* el negocio ya quedó creado: una invitación no registrada nunca bloquea el alta */ }
   }

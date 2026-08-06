@@ -3,7 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
 import { ImagePlus, Sparkles, X } from 'lucide-react'
 
-type CampaignDraft = { id:string; name:string; channel:string; content:string; audience?:{segment?:string}; scheduled_at?:string|null; image_url?:string|null }
+type CampaignDraft = { id:string; name:string; channel:string; content:string; subject?:string|null; email_html?:string|null; audience?:{segment?:string}; scheduled_at?:string|null; image_url?:string|null }
 
 export function NewCampaignModal({ onClose, onCreated, campaign }: { onClose: () => void; onCreated: () => void; campaign?: CampaignDraft | null }) {
   const [loading,setLoading] = useState(false)
@@ -16,6 +16,9 @@ export function NewCampaignModal({ onClose, onCreated, campaign }: { onClose: ()
   const [imageUrl,setImageUrl] = useState(campaign?.image_url??'')
   const [uploading,setUploading] = useState(false)
   const [audience,setAudience] = useState<number|null>(null)
+  const [subject,setSubject] = useState(campaign?.subject??'')
+  const [emailHtml,setEmailHtml] = useState(campaign?.email_html??'')
+  const [designing,setDesigning] = useState(false)
 
   // Cuánta gente recibiría esto ahora mismo, contando solo consentimientos vigentes.
   useEffect(() => {
@@ -35,6 +38,17 @@ export function NewCampaignModal({ onClose, onCreated, campaign }: { onClose: ()
     const data = await response.json()
     if (response.ok) setContent(data.content); else setError(data.error??'No se pudo generar el texto')
     setGenerating(false)
+  }
+
+  async function designEmail() {
+    if (!content.trim()) { setError('Escribe primero el mensaje'); return }
+    setDesigning(true); setError('')
+    const response = await fetch('/api/admin/campaigns/generate', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ mode:'email-design', content, description: content }) })
+    const data = await response.json().catch(() => ({}))
+    setDesigning(false)
+    if (!response.ok) { setError(data.error ?? 'No se pudo diseñar el correo'); return }
+    setEmailHtml(data.html ?? '')
+    if (data.subject && !subject.trim()) setSubject(data.subject)
   }
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
@@ -59,7 +73,7 @@ export function NewCampaignModal({ onClose, onCreated, campaign }: { onClose: ()
     const response = await fetch('/api/admin/campaigns', {
       method: campaign ? 'PATCH' : 'POST',
       headers: { 'content-type':'application/json' },
-      body: JSON.stringify({ campaignId:campaign?.id, name:form.get('name'), channel, content:form.get('content'), imageUrl:imageUrl||null, audience:{segment}, scheduledAt:form.get('scheduledAt')||null }),
+      body: JSON.stringify({ campaignId:campaign?.id, name:form.get('name'), channel, content:form.get('content'), subject:channel==='EMAIL'?(subject||null):null, emailHtml:channel==='EMAIL'?(emailHtml||null):null, imageUrl:imageUrl||null, audience:{segment}, scheduledAt:form.get('scheduledAt')||null }),
     })
     const data = await response.json()
     if (!response.ok) {
@@ -97,6 +111,16 @@ export function NewCampaignModal({ onClose, onCreated, campaign }: { onClose: ()
 
       <label className="mt-4 block text-sm font-semibold">Mensaje<textarea name="content" required maxLength={1500} rows={5} value={content} onChange={e=>setContent(e.target.value)} className="mt-2 w-full rounded-xl border p-3"/></label>
 
+      {channel === 'EMAIL' && <div className="mt-4 rounded-xl border p-3">
+        <label className="block text-sm font-semibold">Asunto del correo<input value={subject} onChange={e=>setSubject(e.target.value)} maxLength={120} placeholder="Lo primero que ve el cliente en su bandeja" className="mt-2 w-full rounded-xl border p-3"/></label>
+        <p className="mt-1 text-xs text-[#736f83]">Si lo dejas vacío se usa el nombre de la campaña.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={designEmail} disabled={designing||!content.trim()} className="rounded-lg bg-violet-100 px-3 py-1.5 text-xs font-bold text-[#5b3df5] disabled:opacity-40">{designing?'Diseñando…':'Diseñar correo con IA'}</button>
+          {emailHtml && <button type="button" onClick={()=>setEmailHtml('')} className="rounded-lg border px-3 py-1.5 text-xs font-bold">Volver al correo simple</button>}
+        </div>
+        {emailHtml && <p className="mt-2 text-xs text-emerald-700">Diseño listo: se enviará este correo en vez de la plantilla simple.</p>}
+      </div>}
+
       <div className="mt-4">
         <p className="text-sm font-semibold">Imagen (opcional)</p>
         <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -111,8 +135,10 @@ export function NewCampaignModal({ onClose, onCreated, campaign }: { onClose: ()
         <p className="text-xs font-bold uppercase text-[#736f83]">Vista previa</p>
         <div className="mt-2 rounded-2xl bg-white p-3 shadow-sm">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          {imageUrl && <img src={imageUrl} alt="Imagen de la campaña" className="mb-2 max-h-40 w-full rounded-xl object-cover"/>}
-          <p className="whitespace-pre-line text-sm leading-6">{content || 'Aquí se verá el mensaje tal como le llega al cliente.'}</p>
+          {imageUrl && !emailHtml && <img src={imageUrl} alt="Imagen de la campaña" className="mb-2 max-h-40 w-full rounded-xl object-cover"/>}
+          {emailHtml
+            ? <iframe title="Vista previa del correo" srcDoc={emailHtml} sandbox="" className="h-72 w-full rounded-xl border-0 bg-white"/>
+            : <p className="whitespace-pre-line text-sm leading-6">{content || 'Aquí se verá el mensaje tal como le llega al cliente.'}</p>}
           {channel === 'EMAIL' && <p className="mt-3 border-t border-black/5 pt-2 text-[11px] text-[#9a96a5]">Se agrega automáticamente el enlace para dejar de recibir promociones.</p>}
         </div>
       </div>

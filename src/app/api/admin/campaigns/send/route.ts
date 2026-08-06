@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       await db.from('campaign_recipients').upsert(eligible.map((client) => ({ campaign_id: campaignId, client_id: client.id, status: 'PENDING', reason: null, sent_at: null })), { onConflict: 'campaign_id,client_id' })
       for (const client of eligible) {
         const unsubscribeUrl = `${process.env.NEXT_PUBLIC_APP_URL}/unsubscribe?token=${client.marketing_unsubscribe_token ?? ''}`
-        const result = await sendMarketingEmail({ to: client.email!, subject: campaign.name, html: emailHtml(businessName, campaign.content, unsubscribeUrl), businessName, replyTo: business?.email })
+        const result = await sendMarketingEmail({ to: client.email!, subject: (campaign.subject?.trim() || campaign.name), html: campaign.email_html ? campaign.email_html.replace(/{{unsubscribeUrl}}/g, unsubscribeUrl) : emailHtml(businessName, campaign.content, unsubscribeUrl), businessName, replyTo: business?.email })
         await db.from('campaign_recipients').update({ status: result.success ? 'SENT' : 'FAILED', reason: result.error ?? null, sent_at: result.success ? new Date().toISOString() : null }).eq('campaign_id', campaignId).eq('client_id', client.id)
       }
       await db.from('campaigns').update({ status: 'SENT', sent_at: new Date().toISOString() }).eq('id', campaignId)
