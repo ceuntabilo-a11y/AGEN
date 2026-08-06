@@ -12,6 +12,7 @@ const start = (value:string) => new Date(value.replace(/[\[\]()"]/g,'').split(',
 export default function ClientHome() {
   const [next,setNext] = useState<Appointment|null>(null)
   const [timezone,setTimezone] = useState('America/Santiago')
+  const [settings,setSettings] = useState<Record<string,any>>({})
   const [error,setError] = useState(false)
 
   useEffect(() => {
@@ -22,13 +23,17 @@ export default function ClientHome() {
       const upcoming = (data.appointments ?? []).filter((appointment:Appointment) => !['CANCELLED','COMPLETED','NO_SHOW'].includes(appointment.status) && start(appointment.service_period) > new Date()).sort((a:Appointment,b:Appointment) => start(a.service_period).getTime() - start(b.service_period).getTime())
       setNext(upcoming[0] ?? null)
       setTimezone(data.timezone ?? 'America/Santiago')
+      setSettings(data.settings ?? {})
     }).catch(() => setError(true))
   },[])
 
+  const brand = typeof settings.brand_color === 'string' ? settings.brand_color : '#5b3df5'
+  const welcome = typeof settings.portal?.welcome === 'string' ? settings.portal.welcome.trim() : ''
+
   return <>
-    <PageHeader title="Mi espacio" description="Reservas y servicios en un solo lugar."/>
+    <PageHeader title="Mi espacio" description={welcome || 'Reservas y servicios en un solo lugar.'}/>
     {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Conecta Supabase para cargar tus datos.</p>}
-    {next ? <section className="rounded-3xl bg-gradient-to-br from-[#5b3df5] to-[#8b5cf6] p-6 text-white">
+    {next ? <section className="rounded-3xl p-6 text-white" style={{background:`linear-gradient(135deg, ${brand}, ${brand}cc)`}}>
       <p className="text-sm text-white/70">Próxima reserva</p><h2 className="mt-2 text-2xl font-black">{next.service?.name}</h2><p className="mt-1">con {next.professional?.display_name}</p>
       <div className="mt-6 flex flex-wrap gap-4 text-sm">
         <span className="flex gap-2"><CalendarDays size={18}/>{formatInZone(start(next.service_period),timezone,{dateStyle:'long'})}</span>

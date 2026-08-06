@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   Activity,
+  BarChart3,
   Bot,
   Building2,
   CalendarDays,
@@ -13,11 +14,14 @@ import {
   Image,
   KeyRound,
   LayoutDashboard,
+  LifeBuoy,
   Megaphone,
   Menu,
+  MessageSquare,
   Plug,
   Scissors,
   Settings,
+  Star,
   ListChecks,
   UsersRound,
   X,
@@ -41,13 +45,16 @@ const adminItems = [
   ['/admin/equipo', 'Equipo', UsersRound],
   ['/admin/servicios', 'Servicios', Scissors],
   ['/admin/clientes', 'Clientes', ContactRound],
+  ['/admin/conversaciones', 'Conversaciones', MessageSquare],
   ['/admin/seguimiento', 'Seguimiento', ListChecks],
   ['/admin/finanzas', 'Finanzas', CircleDollarSign],
   ['/admin/marketing', 'Marketing', Megaphone],
   ['/admin/galeria', 'Galería', Image],
+  ['/admin/encuestas', 'Encuestas', Star],
   ['/admin/agente', 'Agente IA', Bot],
   ['/admin/integraciones', 'Integraciones', Plug],
   ['/admin/configuracion', 'Configuración', Settings],
+  ['/admin/ayuda', 'Ayuda', LifeBuoy],
 ] as const
 
 const professionalItems = [
@@ -57,6 +64,7 @@ const professionalItems = [
   ['/profesional/clientes', 'Mis clientes', ContactRound],
   ['/profesional/galeria', 'Mis trabajos', Image],
   ['/profesional/ingresos', 'Ingresos', CircleDollarSign],
+  ['/profesional/estadisticas', 'Mis estadísticas', BarChart3],
   ['/profesional/perfil', 'Mi perfil', Settings],
 ] as const
 
