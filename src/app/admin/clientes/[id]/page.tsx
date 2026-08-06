@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { NewAppointmentModal } from '@/components/NewAppointmentModal'
+import { ConfirmDeleteModal } from '@/components/ConfirmDeleteModal'
 
 type Detail = {
   client: any
@@ -32,6 +33,7 @@ export default function ClientDetailPage() {
   const [editing, setEditing] = useState(false)
   const [message, setMessage] = useState('')
   const [booking, setBooking] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -68,9 +70,9 @@ export default function ClientDetailPage() {
   }
 
   async function remove() {
-    if (!window.confirm('¿Eliminar este cliente? Solo se puede si no tiene reservas registradas.')) return
     const response = await fetch(`/api/admin/clients?id=${params.id}`, { method: 'DELETE' })
     const body = await response.json().catch(() => ({}))
+    setConfirmingDelete(false)
     if (!response.ok) { setMessage(body.error ?? 'No se pudo eliminar'); return }
     router.push('/admin/clientes')
   }
@@ -83,6 +85,13 @@ export default function ClientDetailPage() {
   const granted = (channel: string) => data.consents.some((consent) => consent.channel === channel && consent.purpose === 'MARKETING' && consent.granted)
 
   return <>
+    {confirmingDelete && <ConfirmDeleteModal
+      title="Eliminar cliente"
+      description="Se borra la ficha completa con sus notas y permisos. Solo es posible si no tiene reservas ni pagos registrados."
+      detail={client.full_name}
+      onCancel={() => setConfirmingDelete(false)}
+      onConfirm={remove}
+    />}
     {booking && <NewAppointmentModal initialClientId={client.id} timezone={data.timezone} onClose={() => setBooking(false)} onCreated={() => { setBooking(false); setMessage('Reserva creada.'); void load() }}/>}
     <Link href="/admin/clientes" className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[#5b3df5]"><ArrowLeft size={16}/>Volver a clientes</Link>
     <PageHeader title={client.full_name} description={[client.phone, client.email].filter(Boolean).join(' · ') || 'Sin datos de contacto'} action={<div className="flex flex-wrap gap-2">
@@ -111,7 +120,7 @@ export default function ClientDetailPage() {
       <label className="mt-4 flex items-center gap-3 text-sm font-semibold"><input name="marketing" type="checkbox" defaultChecked={client.marketing_opt_in}/>Acepta promociones</label>
       <div className="mt-5 flex flex-wrap gap-2">
         <button className="rounded-xl bg-[#5b3df5] px-5 py-3 font-bold text-white">Guardar cambios</button>
-        <button type="button" onClick={() => void remove()} className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-5 py-3 font-bold text-red-700"><Trash2 size={16}/>Eliminar cliente</button>
+        <button type="button" onClick={() => setConfirmingDelete(true)} className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-5 py-3 font-bold text-red-700"><Trash2 size={16}/>Eliminar cliente</button>
       </div>
     </form>}
 

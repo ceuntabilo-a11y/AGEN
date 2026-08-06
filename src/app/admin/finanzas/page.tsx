@@ -27,7 +27,7 @@ export default function FinancePage() {
   const [tab, setTab] = useState('cobros')
   const [modal, setModal] = useState<'quote' | 'payment' | 'expense' | null>(null)
   const [message, setMessage] = useState('')
-  const [pendingDelete, setPendingDelete] = useState<{ kind: 'payment' | 'expense'; id: string; detail: string } | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{ kind: 'payment' | 'expense' | 'quote'; id: string; detail: string } | null>(null)
 
   const load = useCallback(() => fetch('/api/admin/finance', { cache: 'no-store' }).then(async (response) => {
     if (!response.ok) throw new Error()
@@ -47,8 +47,9 @@ export default function FinancePage() {
   const markPaid = (id: string) => act('/api/admin/payments', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, status: 'PAID' }) }, 'No se pudo marcar como cobrado')
   async function confirmDelete() {
     if (!pendingDelete) return
-    const url = pendingDelete.kind === 'payment' ? `/api/admin/payments?id=${pendingDelete.id}` : `/api/admin/expenses?id=${pendingDelete.id}`
-    await act(url, { method: 'DELETE' }, pendingDelete.kind === 'payment' ? 'No se pudo eliminar el cobro' : 'No se pudo eliminar el gasto')
+    const urls = { payment: `/api/admin/payments?id=${pendingDelete.id}`, expense: `/api/admin/expenses?id=${pendingDelete.id}`, quote: `/api/admin/quotes?id=${pendingDelete.id}` }
+    const fallbacks = { payment: 'No se pudo eliminar el cobro', expense: 'No se pudo eliminar el gasto', quote: 'No se pudo eliminar el presupuesto' }
+    await act(urls[pendingDelete.kind], { method: 'DELETE' }, fallbacks[pendingDelete.kind])
     setPendingDelete(null)
   }
   const setQuoteStatus = (id: string, status: string) => act('/api/admin/quotes', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, status }) }, 'No se pudo actualizar el presupuesto')
@@ -60,8 +61,8 @@ export default function FinancePage() {
     {modal === 'payment' && <NewPaymentModal onClose={() => setModal(null)} onCreated={load}/>}
     {modal === 'expense' && <NewExpenseModal onClose={() => setModal(null)} onCreated={load}/>}
     {pendingDelete && <ConfirmDeleteModal
-      title={pendingDelete.kind === 'payment' ? 'Eliminar cobro' : 'Eliminar gasto'}
-      description={pendingDelete.kind === 'payment' ? 'El cobro desaparece del registro y deja de contar en las ventas del mes.' : 'El gasto desaparece del registro y deja de descontarse del resultado.'}
+      title={pendingDelete.kind === 'payment' ? 'Eliminar cobro' : pendingDelete.kind === 'expense' ? 'Eliminar gasto' : 'Eliminar presupuesto'}
+      description={pendingDelete.kind === 'payment' ? 'El cobro desaparece del registro y deja de contar en las ventas del mes.' : pendingDelete.kind === 'expense' ? 'El gasto desaparece del registro y deja de descontarse del resultado.' : 'El presupuesto y sus ítems se borran. Si ya tiene un cobro asociado, no se podrá eliminar.'}
       detail={pendingDelete.detail}
       onCancel={() => setPendingDelete(null)}
       onConfirm={confirmDelete}
@@ -130,11 +131,14 @@ export default function FinancePage() {
             <div><b className="block text-sm">{quote.client?.full_name ?? 'Cliente'}</b><small className="text-[#736f83]">{quote.quote_items?.map((item: any) => item.description).join(', ')}</small></div>
             <div className="text-right"><b className="block text-sm">{money(Number(quote.total), data.currency)}</b><small className="text-[#5b3df5]">{QUOTE_STATUS[quote.status] ?? quote.status}</small></div>
           </div>
-          {!['ACCEPTED', 'REJECTED', 'CONVERTED'].includes(quote.status) && <div className="mt-3 flex flex-wrap justify-end gap-2">
-            <button onClick={() => void setQuoteStatus(quote.id, 'SENT')} className="rounded-lg border bg-white px-3 py-1.5 text-xs font-bold">Marcar enviado</button>
-            <button onClick={() => void setQuoteStatus(quote.id, 'ACCEPTED')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">Aceptado</button>
-            <button onClick={() => void setQuoteStatus(quote.id, 'REJECTED')} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700">Rechazado</button>
-          </div>}
+          <div className="mt-3 flex flex-wrap justify-end gap-2">
+            {!['ACCEPTED', 'REJECTED', 'CONVERTED'].includes(quote.status) && <>
+              <button onClick={() => void setQuoteStatus(quote.id, 'SENT')} className="rounded-lg border bg-white px-3 py-1.5 text-xs font-bold">Marcar enviado</button>
+              <button onClick={() => void setQuoteStatus(quote.id, 'ACCEPTED')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">Aceptado</button>
+              <button onClick={() => void setQuoteStatus(quote.id, 'REJECTED')} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700">Rechazado</button>
+            </>}
+            <button aria-label="Eliminar presupuesto" onClick={() => setPendingDelete({ kind: 'quote', id: quote.id, detail: `${quote.client?.full_name ?? 'Cliente'} · ${money(Number(quote.total), data.currency)}` })} className="rounded-lg border border-red-200 bg-white p-1.5 text-red-700"><Trash2 size={14}/></button>
+          </div>
         </div>)}
         {!error && data.quotes.length === 0 && <p className="py-6 text-center text-sm text-[#736f83]">Aún no hay presupuestos.</p>}
       </div>
