@@ -8,11 +8,14 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   try {
     const { db, businessId } = await requireBusinessContext(['OWNER','ADMIN'])
+    // El plan vive en la capa de plataforma: si esa migración todavía no se aplicó, la página igual funciona.
+    const plan = await db.from('businesses').select('plan:membership_plans(name,price,max_professionals)').eq('id',businessId).maybeSingle()
+    const planData = plan.error ? null : (Array.isArray((plan.data as any)?.plan) ? (plan.data as any).plan[0] : (plan.data as any)?.plan) ?? null
     const current = await db.from('businesses').select('id,name,slug,timezone,currency,phone,email,address,maps_url,logo_url,settings,agent_settings').eq('id',businessId).single()
-    if (!current.error) return NextResponse.json({ business: current.data })
+    if (!current.error) return NextResponse.json({ business: current.data, plan: planData })
     const fallback = await db.from('businesses').select('id,name,slug,timezone,currency,phone,email,address,logo_url,settings,agent_settings').eq('id',businessId).single()
     if (fallback.error) throw fallback.error
-    return NextResponse.json({ business: { ...fallback.data, maps_url: null } })
+    return NextResponse.json({ business: { ...fallback.data, maps_url: null }, plan: planData })
   } catch (error) { return apiError(error) }
 }
 
