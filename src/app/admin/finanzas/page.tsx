@@ -5,6 +5,7 @@ import { StatCard } from '@/components/StatCard'
 import { NewQuoteModal } from '@/components/NewQuoteModal'
 import { NewPaymentModal } from '@/components/NewPaymentModal'
 import { NewExpenseModal } from '@/components/NewExpenseModal'
+import { ConfirmDeleteModal } from '@/components/ConfirmDeleteModal'
 import { money } from '@/lib/money'
 import { formatInZone } from '@/lib/timezone'
 import { CircleDollarSign, HandCoins, PackageOpen, Plus, Trash2, TrendingUp } from 'lucide-react'
@@ -26,6 +27,7 @@ export default function FinancePage() {
   const [tab, setTab] = useState('cobros')
   const [modal, setModal] = useState<'quote' | 'payment' | 'expense' | null>(null)
   const [message, setMessage] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<{ kind: 'payment' | 'expense'; id: string; detail: string } | null>(null)
 
   const load = useCallback(() => fetch('/api/admin/finance', { cache: 'no-store' }).then(async (response) => {
     if (!response.ok) throw new Error()
@@ -43,8 +45,12 @@ export default function FinancePage() {
   }
 
   const markPaid = (id: string) => act('/api/admin/payments', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, status: 'PAID' }) }, 'No se pudo marcar como cobrado')
-  const removePayment = (id: string) => { if (window.confirm('¿Eliminar este cobro del registro?')) void act(`/api/admin/payments?id=${id}`, { method: 'DELETE' }, 'No se pudo eliminar el cobro') }
-  const removeExpense = (id: string) => { if (window.confirm('¿Eliminar este gasto del registro?')) void act(`/api/admin/expenses?id=${id}`, { method: 'DELETE' }, 'No se pudo eliminar el gasto') }
+  async function confirmDelete() {
+    if (!pendingDelete) return
+    const url = pendingDelete.kind === 'payment' ? `/api/admin/payments?id=${pendingDelete.id}` : `/api/admin/expenses?id=${pendingDelete.id}`
+    await act(url, { method: 'DELETE' }, pendingDelete.kind === 'payment' ? 'No se pudo eliminar el cobro' : 'No se pudo eliminar el gasto')
+    setPendingDelete(null)
+  }
   const setQuoteStatus = (id: string, status: string) => act('/api/admin/quotes', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, status }) }, 'No se pudo actualizar el presupuesto')
 
   const day = (value: string) => formatInZone(new Date(value), data.timezone, { day: 'numeric', month: 'short' })
@@ -53,6 +59,13 @@ export default function FinancePage() {
     {modal === 'quote' && <NewQuoteModal onClose={() => setModal(null)} onCreated={load}/>}
     {modal === 'payment' && <NewPaymentModal onClose={() => setModal(null)} onCreated={load}/>}
     {modal === 'expense' && <NewExpenseModal onClose={() => setModal(null)} onCreated={load}/>}
+    {pendingDelete && <ConfirmDeleteModal
+      title={pendingDelete.kind === 'payment' ? 'Eliminar cobro' : 'Eliminar gasto'}
+      description={pendingDelete.kind === 'payment' ? 'El cobro desaparece del registro y deja de contar en las ventas del mes.' : 'El gasto desaparece del registro y deja de descontarse del resultado.'}
+      detail={pendingDelete.detail}
+      onCancel={() => setPendingDelete(null)}
+      onConfirm={confirmDelete}
+    />}
 
     <PageHeader title="Finanzas" description="Ventas, costos, anticipos, comisiones y rentabilidad real." action={<div className="flex flex-wrap gap-2">
       <button onClick={() => setModal('payment')} className="inline-flex items-center gap-2 rounded-xl bg-[#5b3df5] px-4 py-2.5 text-sm font-bold text-white"><Plus size={16}/>Registrar cobro</button>
@@ -82,7 +95,7 @@ export default function FinancePage() {
           <div className="flex items-center gap-3">
             <b className="text-sm">{money(Number(payment.amount), data.currency)}</b>
             <button onClick={() => void markPaid(payment.id)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">Marcar cobrado</button>
-            <button aria-label="Eliminar" onClick={() => removePayment(payment.id)} className="rounded-lg border border-red-200 p-1.5 text-red-700"><Trash2 size={14}/></button>
+            <button aria-label="Eliminar" onClick={() => setPendingDelete({ kind: 'payment', id: payment.id, detail: `${payment.client?.full_name ?? 'Cliente'} · ${money(Number(payment.amount), data.currency)}` })} className="rounded-lg border border-red-200 p-1.5 text-red-700"><Trash2 size={14}/></button>
           </div>
         </div>)}</div>
       </article>}
@@ -91,7 +104,7 @@ export default function FinancePage() {
         <div className="mt-4 space-y-2">
           {data.recentPayments.map((payment) => <div key={payment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#f7f6fa] p-3">
             <div><b className="text-sm">{payment.client?.full_name ?? 'Cliente'}</b><p className="text-xs text-[#736f83]">{payment.paid_at ? day(payment.paid_at) : day(payment.created_at)} · {payment.method ?? 'Efectivo'}</p></div>
-            <div className="flex items-center gap-3"><b className="text-sm">{money(Number(payment.amount), data.currency)}</b><button aria-label="Eliminar" onClick={() => removePayment(payment.id)} className="rounded-lg border border-red-200 p-1.5 text-red-700"><Trash2 size={14}/></button></div>
+            <div className="flex items-center gap-3"><b className="text-sm">{money(Number(payment.amount), data.currency)}</b><button aria-label="Eliminar" onClick={() => setPendingDelete({ kind: 'payment', id: payment.id, detail: `${payment.client?.full_name ?? 'Cliente'} · ${money(Number(payment.amount), data.currency)}` })} className="rounded-lg border border-red-200 p-1.5 text-red-700"><Trash2 size={14}/></button></div>
           </div>)}
           {!error && data.recentPayments.length === 0 && <p className="py-6 text-center text-sm text-[#736f83]">Todavía no hay cobros registrados este mes.</p>}
         </div>
@@ -103,7 +116,7 @@ export default function FinancePage() {
       <div className="mt-4 space-y-2">
         {data.recentExpenses.map((expense) => <div key={expense.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#f7f6fa] p-3">
           <div><b className="text-sm">{expense.description}</b><p className="text-xs text-[#736f83]">{expense.category} · {formatInZone(new Date(`${expense.incurred_on}T12:00:00Z`), data.timezone, { day: 'numeric', month: 'short' })}</p></div>
-          <div className="flex items-center gap-3"><b className="text-sm">{money(Number(expense.amount), data.currency)}</b><button aria-label="Eliminar" onClick={() => removeExpense(expense.id)} className="rounded-lg border border-red-200 p-1.5 text-red-700"><Trash2 size={14}/></button></div>
+          <div className="flex items-center gap-3"><b className="text-sm">{money(Number(expense.amount), data.currency)}</b><button aria-label="Eliminar" onClick={() => setPendingDelete({ kind: 'expense', id: expense.id, detail: `${expense.description} · ${money(Number(expense.amount), data.currency)}` })} className="rounded-lg border border-red-200 p-1.5 text-red-700"><Trash2 size={14}/></button></div>
         </div>)}
         {!error && data.recentExpenses.length === 0 && <p className="py-6 text-center text-sm text-[#736f83]">Todavía no hay gastos registrados.</p>}
       </div>
