@@ -32,7 +32,8 @@ export async function POST(request:Request){
     }
     const {data:member,error:memberError}=await admin.from('business_members').insert({business_id:businessId,user_id:userId,role:'PROFESSIONAL'}).select().single()
     if(memberError){
-      if(memberError.code==='23505'){await cleanup();return NextResponse.json({error:'Ese usuario ya pertenece al negocio'},{status:409})}
+      // Sin cleanup: si ya es miembro, el usuario es anterior a esta llamada y borrarlo dejaría al profesional existente sin acceso.
+      if(memberError.code==='23505')return NextResponse.json({error:'Ese usuario ya pertenece al negocio'},{status:409})
       throw memberError
     }
     const {data:professional,error:professionalError}=await admin.from('professionals').insert({business_id:businessId,branch_id:body.branchId??null,member_id:member.id,display_name:body.displayName.trim(),phone,color:body.color??'#5b3df5',commission_percent:body.commissionPercent??0}).select().single()
@@ -50,4 +51,45 @@ export async function POST(request:Request){
     if(createdUserId){try{await createAdminClient().auth.admin.deleteUser(createdUserId)}catch{}}
     return apiError(error)
   }
+}
+
+export async function PATCH(request:Request){
+  try{
+    const {db,businessId}=await requireBusinessContext(['OWNER','ADMIN'])
+    const body=await request.json() as {id?:string;changes?:Record<string,unknown>;specialtyIds?:string[];serviceIds?:string[]}
+    if(!body.id)return NextResponse.json({error:'Falta el profesional'},{status:400})
+    const {data:current,error:currentError}=await db.from('professionals').select('id').eq('business_id',businessId).eq('id',body.id).maybeSingle()
+    if(currentError)throw currentError
+    if(!current)return NextResponse.json({error:'Ese profesional no pertenece al negocio'},{status:404})
+    const allowed=['display_name','bio','color','commission_percent','branch_id','active','calendar_hide_client_names']
+    const changes=Object.fromEntries(Object.entries(body.changes??{}).filter(([key])=>allowed.includes(key)))
+    if(typeof changes.display_name==='string'){const name=changes.display_name.trim();if(!name)return NextResponse.json({error:'El nombre no puede quedar vacío'},{status:400});changes.display_name=name.slice(0,120)}
+    if(changes.commission_percent!==undefined){const value=Number(changes.commission_percent);if(!Number.isFinite(value)||value<0||value>100)return NextResponse.json({error:'La comisión debe estar entre 0 y 100'},{status:400});changes.commission_percent=value}
+    if(body.changes&&'phone' in body.changes){const raw=String(body.changes.phone??'').trim();if(!raw)changes.phone=null;else{const phone=normalizePhone(raw);if(!phone)return NextResponse.json({error:'Teléfono inválido'},{status:400});changes.phone=phone}}
+    if(Object.keys(changes).length){const {error}=await db.from('professionals').update(changes).eq('id',body.id).eq('business_id',businessId);if(error)throw error}
+    if(body.specialtyIds){
+      const {error:deleteError}=await db.from('professional_specialties').delete().eq('professional_id',body.id);if(deleteError)throw deleteError
+      if(body.specialtyIds.length){const {error}=await db.from('professional_specialties').insert(body.specialtyIds.map(specialty_id=>({professional_id:body.id,specialty_id})));if(error)throw error}
+    }
+    if(body.serviceIds){
+      const {error:deleteError}=await db.from('professional_services').delete().eq('professional_id',body.id);if(deleteError)throw deleteError
+      if(body.serviceIds.length){const {error}=await db.from('professional_services').insert(body.serviceIds.map(service_id=>({professional_id:body.id,service_id})));if(error)throw error}
+    }
+    const {data,error}=await db.from('professionals').select('*,professional_services(service_id,active),professional_specialties(specialty_id)').eq('id',body.id).single()
+    if(error)throw error
+    return NextResponse.json({professional:data})
+  }catch(error){return apiError(error)}
+}
+
+/** Desactiva al profesional: deja de aparecer en cupos y en el agente, pero conserva su historial de reservas. */
+export async function DELETE(request:Request){
+  try{
+    const {db,businessId}=await requireBusinessContext(['OWNER','ADMIN'])
+    const id=new URL(request.url).searchParams.get('id')
+    if(!id)return NextResponse.json({error:'Falta el profesional'},{status:400})
+    const {data,error}=await db.from('professionals').update({active:false}).eq('id',id).eq('business_id',businessId).select('id').maybeSingle()
+    if(error)throw error
+    if(!data)return NextResponse.json({error:'Ese profesional no pertenece al negocio'},{status:404})
+    return NextResponse.json({ok:true})
+  }catch(error){return apiError(error)}
 }

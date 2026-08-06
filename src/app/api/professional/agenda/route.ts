@@ -11,12 +11,13 @@ export async function GET(request:Request){
     const url=new URL(request.url)
     const from=url.searchParams.get('from')??new Date().toISOString()
     const until=url.searchParams.get('until')??new Date(Date.now()+7*86400000).toISOString()
-    const [appointments,business]=await Promise.all([
+    const [appointments,business,blocks]=await Promise.all([
       db.from('appointments').select('id,status,service_period,quoted_price,deposit_paid,notes,client:clients(id,full_name,phone,notes),service:services(id,name,duration_minutes)').eq('business_id',businessId).eq('professional_id',professional.id).overlaps('service_period',`[${from},${until})`).order('service_period'),
       db.from('businesses').select('timezone').eq('id',businessId).single(),
+      db.from('schedule_blocks').select('id,period,reason').eq('business_id',businessId).eq('professional_id',professional.id).overlaps('period',`[${from},${until})`).order('period').limit(100),
     ])
-    if(appointments.error||business.error)throw appointments.error||business.error
-    return NextResponse.json({professional,appointments:appointments.data,timezone:business.data.timezone})
+    if(appointments.error||business.error||blocks.error)throw appointments.error||business.error||blocks.error
+    return NextResponse.json({professional,appointments:appointments.data,blocks:blocks.data,timezone:business.data.timezone})
   }catch(error){return apiError(error)}
 }
 
