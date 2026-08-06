@@ -3,74 +3,75 @@
 import { useEffect, useRef, useState } from 'react'
 import styles from './AgenSplash.module.css'
 
-type AgenSplashProps = {
-  duration?: number
-  onFinish?: () => void
-  playSound?: boolean
-}
+const SRC = '/brand/agen-intro.mp4'
+const FADE_SECONDS = 0.7
 
-function playAgenStartupSound() {
-  const AudioContextClass = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-  if (!AudioContextClass) return
-  try {
-    const ctx = new AudioContextClass()
-    const start = () => {
-      const now = ctx.currentTime
-      const master = ctx.createGain()
-      master.gain.setValueAtTime(0.0001, now)
-      master.gain.exponentialRampToValueAtTime(0.18, now + 0.035)
-      master.gain.exponentialRampToValueAtTime(0.0001, now + 1.25)
-      master.connect(ctx.destination)
-
-      const notes = [220, 329.63, 493.88]
-      notes.forEach((frequency, index) => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        const noteStart = now + index * 0.11
-        osc.type = index === 2 ? 'sine' : 'triangle'
-        osc.frequency.setValueAtTime(frequency, noteStart)
-        osc.frequency.exponentialRampToValueAtTime(frequency * 1.08, noteStart + 0.28)
-        gain.gain.setValueAtTime(0.0001, noteStart)
-        gain.gain.exponentialRampToValueAtTime(index === 2 ? 0.1 : 0.06, noteStart + 0.025)
-        gain.gain.exponentialRampToValueAtTime(0.0001, noteStart + 0.7)
-        osc.connect(gain)
-        gain.connect(master)
-        osc.start(noteStart)
-        osc.stop(noteStart + 0.75)
-      })
-      window.setTimeout(() => void ctx.close().catch(() => {}), 1500)
-    }
-    if (ctx.state === 'suspended') ctx.resume().then(start).catch(() => {})
-    else start()
-  } catch { /* el navegador bloqueó el audio — la animación sigue igual */ }
-}
-
-export default function AgenSplash({ duration = 2600, onFinish, playSound = true }: AgenSplashProps) {
-  const [visible, setVisible] = useState(true)
-  const hasPlayed = useRef(false)
+export default function AgenSplash({ onFinish }: { onFinish?: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [fading, setFading] = useState(false)
+  const finishedRef = useRef(false)
 
   useEffect(() => {
-    if (playSound && !hasPlayed.current) {
-      hasPlayed.current = true
-      playAgenStartupSound()
+    const finish = () => {
+      if (finishedRef.current) return
+      finishedRef.current = true
+      onFinish?.()
     }
-    const fadeTimer = window.setTimeout(() => setVisible(false), duration - 450)
-    const finishTimer = window.setTimeout(() => onFinish?.(), duration)
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const timer = window.setTimeout(finish, 50)
+      return () => window.clearTimeout(timer)
+    }
+
+    const video = videoRef.current
+    if (!video) return
+    let fadeStarted = false
+    let rafId = 0
+
+    // Se disipa suave en vez de cortar en seco: baja el volumen mientras se desvanece la pantalla.
+    const startFade = () => {
+      if (fadeStarted) return
+      fadeStarted = true
+      setFading(true)
+      const startVolume = video.volume
+      const startedAt = performance.now()
+      const rampDown = (now: number) => {
+        const progress = Math.min(1, (now - startedAt) / 1000 / FADE_SECONDS)
+        video.volume = startVolume * (1 - progress)
+        if (progress < 1) rafId = requestAnimationFrame(rampDown)
+      }
+      rafId = requestAnimationFrame(rampDown)
+      window.setTimeout(finish, FADE_SECONDS * 1000)
+    }
+
+    const onTimeUpdate = () => {
+      if (Number.isFinite(video.duration) && video.currentTime >= video.duration - FADE_SECONDS) startFade()
+    }
+    video.addEventListener('timeupdate', onTimeUpdate)
+    video.addEventListener('ended', startFade)
+
+    // Los navegadores bloquean el audio si no hubo un clic real antes. Si el primer intento
+    // falla, se reintenta solo con el próximo clic o tecla del usuario, sin pedirle nada aparte.
+    const retryPlay = () => { video.play().catch(() => {}) }
+    video.play().catch(() => {
+      window.addEventListener('pointerdown', retryPlay, { once: true })
+      window.addEventListener('keydown', retryPlay, { once: true })
+      window.addEventListener('touchstart', retryPlay, { once: true })
+    })
+
     return () => {
-      window.clearTimeout(fadeTimer)
-      window.clearTimeout(finishTimer)
+      video.removeEventListener('timeupdate', onTimeUpdate)
+      video.removeEventListener('ended', startFade)
+      window.removeEventListener('pointerdown', retryPlay)
+      window.removeEventListener('keydown', retryPlay)
+      window.removeEventListener('touchstart', retryPlay)
+      cancelAnimationFrame(rafId)
     }
-  }, [duration, onFinish, playSound])
+  }, [onFinish])
 
   return (
-    <div className={`${styles.splash} ${!visible ? styles.exit : ''}`} aria-label="Iniciando Agen" role="status">
-      <div className={styles.brandWrap}>
-        <div className={styles.logoWrap}>
-          <img src="/brand/agen-logo.png" alt="Agen" className={styles.logo} draggable={false} />
-          <span className={styles.orbitDot} aria-hidden="true" />
-        </div>
-        <div className={styles.wordmark}>Agen</div>
-      </div>
+    <div className={`${styles.splash} ${fading ? styles.fading : ''}`} role="status" aria-label="Iniciando Agen">
+      <video ref={videoRef} className={styles.video} src={SRC} autoPlay playsInline preload="auto" />
     </div>
   )
 }

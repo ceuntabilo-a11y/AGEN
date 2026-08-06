@@ -1,0 +1,159 @@
+'use client'
+
+import { useEffect, useRef } from 'react'
+import gsap from 'gsap'
+import { MotionPathPlugin } from 'gsap/MotionPathPlugin'
+import styles from './AgenSplash.module.css'
+
+gsap.registerPlugin(MotionPathPlugin)
+
+type AgenSplashProps = {
+  onFinish?: () => void
+  playSound?: boolean
+}
+
+// Trazado a mano sobre la grilla de coordenadas del PNG original (1024x1024):
+// punta oculta tras la pata izquierda de la A -> barre el aro por abajo ->
+// sube por el gancho de la G -> sigue la antena -> termina en el punto final.
+const ORBIT_PATH = 'M345,392 C290,410 258,460 255,520 C252,575 285,615 340,635 C410,652 500,650 575,628 C645,605 695,565 710,510 C720,470 715,445 700,455 C712,432 730,420 735,420 C700,368 665,320 630,288 C665,300 700,285 722,262'
+
+function chime(ctx: AudioContext, notes: { frequency: number; type: OscillatorType; start: number; peak: number; dur: number }[]) {
+  notes.forEach(({ frequency, type, start, peak, dur }) => {
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = type
+    osc.frequency.setValueAtTime(frequency, ctx.currentTime + start)
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime + start)
+    gain.gain.exponentialRampToValueAtTime(peak, ctx.currentTime + start + 0.03)
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + dur)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start(ctx.currentTime + start)
+    osc.stop(ctx.currentTime + start + dur + 0.05)
+  })
+}
+
+export default function AgenSplash({ onFinish, playSound = true }: AgenSplashProps) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const synetiaWrapRef = useRef<HTMLDivElement>(null)
+  const agenWrapRef = useRef<HTMLDivElement>(null)
+  const aLayerRef = useRef<SVGImageElement>(null)
+  const ringLayerRef = useRef<SVGImageElement>(null)
+  const ringPathRef = useRef<SVGPathElement>(null)
+  const dotRef = useRef<SVGCircleElement>(null)
+  const fullLayerRef = useRef<SVGImageElement>(null)
+  const wordmarkRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    let audioCtx: AudioContext | null = null
+    if (playSound) {
+      try {
+        const AudioContextClass = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        if (AudioContextClass) audioCtx = new AudioContextClass()
+      } catch { /* navegador sin soporte de audio */ }
+    }
+
+    const ctx = gsap.context(() => {
+      if (reduceMotion) {
+        gsap.set(rootRef.current, { opacity: 1 })
+        gsap.set(agenWrapRef.current, { opacity: 1 })
+        gsap.set(fullLayerRef.current, { opacity: 1 })
+        gsap.set(wordmarkRef.current, { opacity: 1 })
+        gsap.set([aLayerRef.current, ringLayerRef.current, dotRef.current, synetiaWrapRef.current], { opacity: 0 })
+        const t = window.setTimeout(() => onFinish?.(), 700)
+        return () => window.clearTimeout(t)
+      }
+
+      if (ringPathRef.current) ringPathRef.current.setAttribute('stroke-dashoffset', '1')
+
+      const tl = gsap.timeline({ onComplete: () => onFinish?.() })
+
+      tl.to(rootRef.current, { opacity: 1, duration: 0.6, ease: 'power1.out' }, 0)
+
+      tl.to(synetiaWrapRef.current, { opacity: 1, scale: 1, duration: 0.5, ease: 'power2.out' }, 0.4)
+      tl.to(synetiaWrapRef.current, { rotation: 720, duration: 2.4, ease: 'power2.inOut' }, 0.4)
+      tl.to(synetiaWrapRef.current, { scale: 1.015, duration: 0.3, ease: 'sine.inOut', yoyo: true, repeat: 1 }, 3.2)
+      tl.to(synetiaWrapRef.current, { opacity: 0, filter: 'blur(6px)', duration: 0.7, ease: 'power1.in' }, 3.8)
+      if (audioCtx) tl.call(() => chime(audioCtx!, [
+        { frequency: 587, type: 'sine', start: 0, peak: 0.05, dur: 0.5 },
+        { frequency: 880, type: 'sine', start: 0.08, peak: 0.035, dur: 0.6 },
+      ]), [], 0.45)
+
+      tl.to(agenWrapRef.current, { opacity: 1, duration: 0.01 }, 4.4)
+      tl.fromTo(aLayerRef.current, { opacity: 0, scale: 0.94, filter: 'blur(6px)' }, { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 0.7, ease: 'power2.out', transformOrigin: '50% 50%' }, 4.4)
+
+      tl.set(ringLayerRef.current, { opacity: 1 }, 5.8)
+      tl.set(dotRef.current, { opacity: 1 }, 5.8)
+      tl.to(ringPathRef.current, { attr: { 'stroke-dashoffset': 0 }, duration: 3, ease: 'power1.inOut' }, 5.8)
+      tl.to(dotRef.current, {
+        motionPath: { path: ORBIT_PATH, align: ORBIT_PATH, alignOrigin: [0.5, 0.5] },
+        duration: 3,
+        ease: 'power1.inOut',
+      }, 5.8)
+
+      tl.set([aLayerRef.current, ringLayerRef.current, dotRef.current], { opacity: 0 }, 8.8)
+      tl.set(fullLayerRef.current, { opacity: 1 }, 8.8)
+      tl.fromTo(agenWrapRef.current, { scale: 1, rotate: 0 }, { keyframes: [
+        { scale: 1.02, rotate: -0.6, duration: 0.27 },
+        { scale: 0.997, rotate: 0.2, duration: 0.27 },
+        { scale: 1, rotate: 0, duration: 0.26 },
+      ], ease: 'sine.inOut' }, 8.8)
+      if (audioCtx) tl.call(() => chime(audioCtx!, [
+        { frequency: 261.6, type: 'triangle', start: 0, peak: 0.08, dur: 0.55 },
+        { frequency: 329.6, type: 'triangle', start: 0.05, peak: 0.07, dur: 0.6 },
+        { frequency: 392, type: 'sine', start: 0.1, peak: 0.09, dur: 0.8 },
+      ]), [], 8.85)
+
+      tl.fromTo(wordmarkRef.current, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 1, ease: 'power2.out' }, 9.7)
+
+      tl.to({}, { duration: 1 }, 10.7)
+
+      tl.to(rootRef.current, { opacity: 0, filter: 'blur(14px)', duration: 1.4, ease: 'power1.in' }, 11.8)
+
+      return () => { tl.kill() }
+    }, rootRef)
+
+    return () => {
+      ctx.revert()
+      if (audioCtx) void audioCtx.close().catch(() => {})
+    }
+  }, [onFinish, playSound])
+
+  return (
+    <div ref={rootRef} className={styles.splash} aria-label="Iniciando Agen" role="status">
+      <div className={styles.stage}>
+        <div ref={synetiaWrapRef} className={styles.synetiaWrap} style={{ opacity: 0, transform: 'scale(0.9)' }}>
+          <img src="/brand/synetia-logo.png" alt="" className={styles.synetiaLogo} draggable={false} />
+        </div>
+        <div ref={agenWrapRef} className={styles.agenWrap} style={{ opacity: 0 }}>
+          <svg className={styles.agenSvg} viewBox="0 0 1024 1024">
+            <defs>
+              <clipPath id="agen-a-clip">
+                <polygon points="497,178 566,178 700,452 705,470 690,510 668,552 620,452 560,452 500,452 460,452 400,452 358,552 335,510 320,470 330,445" />
+              </clipPath>
+              <clipPath id="agen-ring-reveal">
+                <path
+                  ref={ringPathRef}
+                  d={ORBIT_PATH}
+                  fill="none"
+                  stroke="#000"
+                  strokeWidth={140}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  pathLength={1}
+                  strokeDasharray={1}
+                />
+              </clipPath>
+            </defs>
+            <image ref={aLayerRef} href="/brand/agen-logo.png" width={1024} height={1024} clipPath="url(#agen-a-clip)" opacity={0} />
+            <image ref={ringLayerRef} href="/brand/agen-logo.png" width={1024} height={1024} clipPath="url(#agen-ring-reveal)" opacity={0} />
+            <circle ref={dotRef} className={styles.dot} r={16} fill="#18e4ff" opacity={0} />
+            <image ref={fullLayerRef} href="/brand/agen-logo.png" width={1024} height={1024} opacity={0} />
+          </svg>
+        </div>
+        <div ref={wordmarkRef} className={styles.wordmark} style={{ opacity: 0 }}>AGEN</div>
+      </div>
+    </div>
+  )
+}
