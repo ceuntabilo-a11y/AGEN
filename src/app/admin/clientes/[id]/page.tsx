@@ -3,7 +3,7 @@
 import { PageHeader } from '@/components/PageHeader'
 import { money } from '@/lib/money'
 import { formatInZone, formatTimeInZone } from '@/lib/timezone'
-import { ArrowLeft, CalendarPlus, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeft, CalendarPlus, Pencil, Send, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { FormEvent, useCallback, useEffect, useState } from 'react'
@@ -19,6 +19,8 @@ type Detail = {
   stats: { total: number; completed: number; cancelled: number; noShow: number; paid: number }
   timezone: string
   currency: string
+  businessName?: string
+  inviteLink?: string | null
 }
 
 const STATUS: Record<string, string> = { PENDING: 'Pendiente', CONFIRMED: 'Confirmada', CHECKED_IN: 'Llegó', IN_PROGRESS: 'En curso', COMPLETED: 'Completada', CANCELLED: 'Cancelada', NO_SHOW: 'No asistió' }
@@ -96,6 +98,7 @@ export default function ClientDetailPage() {
     <Link href="/admin/clientes" className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[#5b3df5]"><ArrowLeft size={16}/>Volver a clientes</Link>
     <PageHeader title={client.full_name} description={[client.phone, client.email].filter(Boolean).join(' · ') || 'Sin datos de contacto'} action={<div className="flex flex-wrap gap-2">
       <button type="button" onClick={() => setBooking(true)} className="inline-flex items-center gap-2 rounded-xl bg-[#5b3df5] px-4 py-2.5 text-sm font-bold text-white"><CalendarPlus size={16}/>Reservar</button>
+      {data.inviteLink && <a href={`https://wa.me/${(client.phone ?? '').replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${client.full_name}, te dejo el enlace para que reserves tus horas en ${data.businessName ?? 'nuestro negocio'}: ${data.inviteLink}`)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold"><Send size={16}/>Invitar</a>}
       <button type="button" onClick={() => setEditing((value) => !value)} className="inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold"><Pencil size={16}/>{editing ? 'Cancelar' : 'Editar'}</button>
     </div>}/>
 

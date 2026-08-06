@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireBusinessContext } from '@/lib/supabase-server'
 import { apiError } from '@/lib/http-errors'
+import { clientInviteLink } from '@/lib/referrals'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       db.from('communication_consents').select('channel,purpose,granted,updated_at').eq('client_id', id),
       db.from('quotes').select('id,status,total,created_at,valid_until').eq('business_id', businessId).eq('client_id', id).order('created_at', { ascending: false }).limit(20),
       db.from('payments').select('id,amount,status,method,paid_at,created_at').eq('business_id', businessId).eq('client_id', id).order('created_at', { ascending: false }).limit(20),
-      db.from('businesses').select('timezone,currency').eq('id', businessId).single(),
+      db.from('businesses').select('timezone,currency,slug,name').eq('id', businessId).single(),
     ])
     const failure = appointments.error || consents.error || quotes.error || payments.error || business.error
     if (failure) throw failure
@@ -41,6 +42,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       },
       timezone: business.data?.timezone ?? 'America/Santiago',
       currency: business.data?.currency ?? 'CLP',
+      businessName: business.data?.name ?? 'Agen',
+      inviteLink: business.data?.slug ? clientInviteLink(business.data.slug, { full_name: client.full_name, phone: client.phone }) : null,
     })
   } catch (error) { return apiError(error) }
 }

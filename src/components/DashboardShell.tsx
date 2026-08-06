@@ -10,6 +10,7 @@ import {
   CalendarDays,
   CircleDollarSign,
   Clock3,
+  Gift,
   ContactRound,
   Image,
   KeyRound,
@@ -54,6 +55,7 @@ const adminItems = [
   ['/admin/agente', 'Agente IA', Bot],
   ['/admin/integraciones', 'Integraciones', Plug],
   ['/admin/configuracion', 'Configuración', Settings],
+  ['/admin/invitar', 'Invitar', Gift],
   ['/admin/ayuda', 'Ayuda', LifeBuoy],
 ] as const
 
@@ -79,6 +81,7 @@ const platformItems = [
   ['/plataforma', 'Resumen', LayoutDashboard],
   ['/plataforma/negocios', 'Negocios', Building2],
   ['/plataforma/planes', 'Planes y complementos', CircleDollarSign],
+  ['/plataforma/invitaciones', 'Invitaciones', Gift],
   ['/plataforma/monitor', 'Monitor', Activity],
   ['/plataforma/claves', 'Claves de plataforma', KeyRound],
 ] as const

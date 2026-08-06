@@ -1,5 +1,5 @@
 'use client'
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 function slugify(value: string) {
@@ -13,14 +13,22 @@ export default function BusinessSetup() {
   const [editedSlug, setEditedSlug] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [referral, setReferral] = useState('')
+
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get('ref')?.trim().toUpperCase()
+    setReferral(fromUrl || sessionStorage.getItem('agen_referral') || '')
+  }, [])
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setLoading(true)
     setError('')
     const form = new FormData(event.currentTarget)
-    const response = await fetch('/api/setup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, slug, phone: form.get('phone'), address: form.get('address'), timezone: form.get('timezone'), currency: form.get('currency') }) })
+    const response = await fetch('/api/setup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, slug, phone: form.get('phone'), address: form.get('address'), timezone: form.get('timezone'), currency: form.get('currency'), referralCode: referral || undefined }) })
     const data = await response.json()
     if (!response.ok) { setError(data.error ?? 'No se pudo crear'); setLoading(false); return }
+    sessionStorage.removeItem('agen_referral')
     router.replace('/admin')
     router.refresh()
   }
