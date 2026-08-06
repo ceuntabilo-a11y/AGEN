@@ -26,7 +26,12 @@ export async function GET(request: Request) {
       db.from('appointments').select('quoted_price,material_cost,status,professional:professionals(id,display_name,color,commission_percent)').eq('business_id',businessId).eq('status','COMPLETED').overlaps('service_period',`[${from},${until})`),
       db.from('quotes').select('id,status,total,created_at,client:clients(full_name),quote_items(description)').eq('business_id',businessId).order('created_at',{ascending:false}).limit(10),
     ])
-    const error = payments.error || expenses.error || appointments.error || quotes.error
+    const [recentPayments,recentExpenses,pending] = await Promise.all([
+      db.from('payments').select('id,amount,status,method,paid_at,created_at,client:clients(id,full_name)').eq('business_id',businessId).eq('status','PAID').order('paid_at',{ascending:false}).limit(20),
+      db.from('expenses').select('id,category,description,amount,incurred_on').eq('business_id',businessId).order('incurred_on',{ascending:false}).limit(20),
+      db.from('payments').select('id,amount,method,created_at,client:clients(id,full_name)').eq('business_id',businessId).eq('status','PENDING').order('created_at',{ascending:false}).limit(50),
+    ])
+    const error = payments.error || expenses.error || appointments.error || quotes.error || recentPayments.error || recentExpenses.error || pending.error
     if (error) throw error
     const sales = payments.data?.reduce((sum,payment) => sum + Number(payment.amount),0) ?? 0
     const directCosts = appointments.data?.reduce((sum,appointment) => sum + Number(appointment.material_cost),0) ?? 0
@@ -35,7 +40,8 @@ export async function GET(request: Request) {
       return sum + Number(appointment.quoted_price) * Number(professional?.commission_percent ?? 0) / 100
     },0) ?? 0
     const operatingExpenses = expenses.data?.reduce((sum,expense) => sum + Number(expense.amount),0) ?? 0
-    return NextResponse.json({ sales,directCosts,commissions,operatingExpenses,net:sales-directCosts-commissions-operatingExpenses,quotes:quotes.data,appointments:appointments.data,currency:business.currency,timezone })
+    const receivable = (pending.data ?? []).reduce((sum,payment) => sum + Number(payment.amount),0)
+    return NextResponse.json({ sales,directCosts,commissions,operatingExpenses,net:sales-directCosts-commissions-operatingExpenses,receivable,quotes:quotes.data,appointments:appointments.data,recentPayments:recentPayments.data,recentExpenses:recentExpenses.data,pendingPayments:pending.data,currency:business.currency,timezone })
   } catch (error) {
     return apiError(error)
   }
