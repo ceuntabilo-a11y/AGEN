@@ -1,5 +1,6 @@
 import { ArrowRight, Bot, CalendarDays, ChartNoAxesCombined, ShieldCheck, UsersRound } from 'lucide-react'
 import Link from 'next/link'
+import { formatInZone } from '@/lib/timezone'
 
 const professionals = [
   { name: 'Valentina', specialty: 'Peluquería', color: '#7c5cff', appointments: 6 },
@@ -9,7 +10,11 @@ const professionals = [
   { name: 'Sofía', specialty: 'Masajes', color: '#2d9cdb', appointments: 3 },
 ]
 
+// La portada se sirve en cada visita para que la fecha del ejemplo sea siempre la de hoy.
+export const dynamic = 'force-dynamic'
+
 export default function Home() {
+  const hoy = formatInZone(new Date(), 'America/Santiago', { weekday: 'long', day: 'numeric', month: 'long' })
   return (
     <main className="min-h-screen px-5 py-6 md:px-10 lg:px-16">
       <nav className="mx-auto flex max-w-7xl items-center justify-between">
@@ -33,7 +38,7 @@ export default function Home() {
 
         <div className="rounded-[2rem] border border-white bg-[rgba(255,255,255,.82)] p-5 shadow-2xl shadow-violet-200/50 backdrop-blur-xl">
           <div className="flex items-center justify-between border-b border-black/5 pb-4">
-            <div><p className="text-sm text-[#736f83]">Agenda general</p><h2 className="text-xl font-extrabold">Miércoles, 31 de julio</h2></div>
+            <div><p className="text-sm text-[#736f83]">Agenda general</p><h2 className="text-xl font-extrabold capitalize">{hoy}</h2></div>
             <CalendarDays className="text-[#5b3df5]" />
           </div>
           <div className="mt-5 space-y-3">
