@@ -138,6 +138,7 @@ export default function AgendaPage() {
           serviceName: appointment.service?.name ?? 'Servicio',
           status: appointment.status,
           notes: appointment.notes,
+          confirmedByClient: Boolean(appointment.client_confirmed_at),
         }
       }))
       setHolds((agenda.holds ?? []).map((hold: any) => {

@@ -2,86 +2,86 @@
   "name": "AGEN 02 - Recordatorios y notificaciones",
   "nodes": [
     {
-      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 2 }] } },
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      },
       "id": "schedule",
       "name": "Cada 2 minutos",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-700, 0]
+      "position": [
+        -700,
+        0
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.AGEN_APP_URL + '/api/automation/notifications/claim'}}",
+        "url": "={{$env.AGEN_APP_URL + '/api/automation/notifications/dispatch'}}",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-agen-secret",
+              "value": "={{$env.AGEN_WEBHOOK_SECRET}}"
+            }
+          ]
+        },
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
         "body": "={}",
-        "options": {}
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
       },
-      "id": "claim",
-      "name": "Reclamar cola",
+      "id": "dispatch-notifications",
+      "name": "Enviar avisos pendientes",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-480, 0]
-    },
-    {
-      "parameters": { "fieldToSplitOut": "notifications", "options": {} },
-      "id": "split",
-      "name": "Separar notificaciones",
-      "type": "n8n-nodes-base.splitOut",
-      "typeVersion": 1,
-      "position": [-250, 0]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{$env.AGEN_NOTIFICATION_GATEWAY_URL}}",
-        "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "authorization", "value": "={{'Bearer ' + $env.AGEN_NOTIFICATION_GATEWAY_TOKEN}}" }] },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{JSON.stringify({id: $json.id, eventType: $json.event_type, channel: $json.channel, payload: $json.payload, appointment: $json.appointment})}}",
-        "options": { "response": { "response": { "neverError": true, "responseFormat": "json" } } }
-      },
-      "id": "deliver",
-      "name": "Enviar por canal oficial",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [0, 0]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{$env.AGEN_APP_URL + '/api/automation/notifications/result'}}",
-        "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "x-agen-secret", "value": "={{$env.AGEN_WEBHOOK_SECRET}}" }] },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{JSON.stringify({id: $('Separar notificaciones').item.json.id, success: $json.success === true, error: $json.error || (!$json.success ? 'El proveedor rechazó el envío' : null)})}}",
-        "options": {}
-      },
-      "id": "result",
-      "name": "Registrar resultado",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [250, 0]
+      "position": [
+        460,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000
     }
   ],
   "connections": {
-    "Cada 2 minutos": { "main": [[{ "node": "Reclamar cola", "type": "main", "index": 0 }]] },
-    "Reclamar cola": { "main": [[{ "node": "Separar notificaciones", "type": "main", "index": 0 }]] },
-    "Separar notificaciones": { "main": [[{ "node": "Enviar por canal oficial", "type": "main", "index": 0 }]] },
-    "Enviar por canal oficial": { "main": [[{ "node": "Registrar resultado", "type": "main", "index": 0 }]] }
+    "Cada 2 minutos": {
+      "main": [
+        [
+          {
+            "node": "Enviar avisos pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "pinData": {},
-  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
   "active": false,
   "versionId": "c503b502-1939-4dc2-9aef-a9e100000002",
-  "meta": { "templateCredsSetupCompleted": false },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
   "tags": []
 }

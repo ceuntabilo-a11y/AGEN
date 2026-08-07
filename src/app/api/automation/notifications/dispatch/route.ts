@@ -1,0 +1,128 @@
+import { NextResponse } from 'next/server'
+import { isAuthorizedAgent } from '@/lib/agent-auth'
+import { createAdminClient } from '@/lib/supabase-admin'
+import { buildNotification } from '@/lib/notification-templates'
+import { sendWhatsApp } from '@/lib/whatsapp'
+import { sendMarketingEmail } from '@/lib/resend'
+
+/**
+ * Envía de verdad los avisos pendientes de la cola.
+ *
+ * Antes esta cola se entregaba a un "gateway" externo que nunca existió, así que ningún
+ * cliente recibía nada. Ahora la propia app arma el texto y lo manda por el WhatsApp del
+ * negocio (Evolution/Meta/360dialog) o por correo (Resend). n8n solo dispara este endpoint.
+ */
+
+export const dynamic = 'force-dynamic'
+
+type OutboxRow = {
+  id: number
+  business_id: string
+  appointment_id: string | null
+  client_id: string
+  event_type: string
+  channel: string
+  payload: Record<string, unknown> | null
+}
+
+const BUSINESS_FIELDS = 'id,name,address,maps_url,timezone,email,whatsapp_provider,whatsapp_instance,whatsapp_phone_id,whatsapp_token,whatsapp_360_api_key'
+
+/** El texto de WhatsApp (con *negrita*) reutilizado como correo simple y legible. */
+function textToHtml(text: string) {
+  const escaped = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>')
+    .replace(/_([^_\n]+)_/g, '<em>$1</em>')
+    .replace(/\n/g, '<br/>')
+  return `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.6;color:#1c1b22;max-width:520px">${escaped}</div>`
+}
+
+export async function POST(request: Request) {
+  if (!isAuthorizedAgent(request)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  const db = createAdminClient()
+
+  const { data: claimed, error: claimError } = await db.rpc('claim_due_notifications', { p_limit: 50 })
+  if (claimError) return NextResponse.json({ error: 'No se pudo reclamar la cola' }, { status: 500 })
+  const rows = (claimed ?? []) as OutboxRow[]
+  if (!rows.length) return NextResponse.json({ sent: 0, skipped: 0, failed: 0 })
+
+  const businessIds = Array.from(new Set(rows.map((row) => row.business_id)))
+  const clientIds = Array.from(new Set(rows.map((row) => row.client_id)))
+  const appointmentIds = Array.from(new Set(rows.map((row) => row.appointment_id).filter((id): id is string => Boolean(id))))
+
+  const [businesses, clients, appointments] = await Promise.all([
+    db.from('businesses').select(BUSINESS_FIELDS).in('id', businessIds),
+    db.from('clients').select('id,full_name,phone,email').in('id', clientIds),
+    appointmentIds.length
+      ? db.from('appointments').select('id,status,service_period,client_confirmed_at,professional:professionals(display_name),service:services(name)').in('id', appointmentIds)
+      : Promise.resolve({ data: [], error: null } as { data: unknown[]; error: null }),
+  ])
+  if (businesses.error || clients.error || appointments.error) {
+    return NextResponse.json({ error: 'No se pudo cargar el detalle de los avisos' }, { status: 500 })
+  }
+
+  const businessById = new Map((businesses.data ?? []).map((item: any) => [item.id, item]))
+  const clientById = new Map((clients.data ?? []).map((item: any) => [item.id, item]))
+  const appointmentById = new Map((appointments.data as any[] ?? []).map((item: any) => [item.id, item]))
+
+  let sent = 0
+  let skipped = 0
+  let failed = 0
+  const now = new Date().toISOString()
+
+  for (const row of rows) {
+    const business = businessById.get(row.business_id)
+    const client = clientById.get(row.client_id)
+    const appointment = row.appointment_id ? appointmentById.get(row.appointment_id) : null
+
+    const discard = async (reason: string) => {
+      skipped += 1
+      await db.from('notification_outbox').update({ processed_at: now, claimed_at: null, last_error: reason }).eq('id', row.id)
+    }
+
+    if (!business || !client) { await discard('sin_negocio_o_cliente'); continue }
+
+    // Una cita cancelada no manda recordatorios, y quien ya confirmó no recibe el de la mañana.
+    if (appointment) {
+      const scheduled = ['CONFIRM_REQUEST', 'DAY_OF_REMINDER', 'REMINDER_24H', 'REMINDER_2H'].includes(row.event_type)
+      if (scheduled && !['PENDING', 'CONFIRMED'].includes(appointment.status)) { await discard('cita_no_vigente'); continue }
+      if (scheduled && appointment.client_confirmed_at) { await discard('ya_confirmada'); continue }
+    }
+
+    const start = appointment?.service_period ? String(appointment.service_period).replace(/[[\]()"]/g, '').split(',')[0] : null
+    const end = appointment?.service_period ? String(appointment.service_period).replace(/[[\]()"]/g, '').split(',')[1] : null
+
+    const message = buildNotification(row.event_type, {
+      business: { name: business.name, address: business.address, maps_url: business.maps_url, timezone: business.timezone },
+      clientName: client.full_name,
+      appointment: start
+        ? { start, end, serviceName: appointment?.service?.name ?? null, professionalName: appointment?.professional?.display_name ?? null }
+        : null,
+      payload: row.payload ?? {},
+    })
+    if (!message) { await discard('sin_plantilla'); continue }
+
+    let result: { success: boolean; error?: string }
+    if (row.channel === 'WHATSAPP') {
+      result = client.phone
+        ? await sendWhatsApp(business, { phone: client.phone, text: message.text })
+        : { success: false, error: 'cliente_sin_telefono' }
+    } else if (row.channel === 'EMAIL') {
+      result = client.email
+        ? await sendMarketingEmail({ to: client.email, subject: message.subject, html: textToHtml(message.text), businessName: business.name, replyTo: business.email })
+        : { success: false, error: 'cliente_sin_correo' }
+    } else {
+      result = { success: false, error: `canal_no_soportado_${row.channel}` }
+    }
+
+    if (result.success) {
+      sent += 1
+      await db.from('notification_outbox').update({ processed_at: new Date().toISOString(), claimed_at: null, last_error: null }).eq('id', row.id)
+    } else {
+      failed += 1
+      await db.from('notification_outbox').update({ claimed_at: null, last_error: (result.error ?? 'error_desconocido').slice(0, 1000) }).eq('id', row.id)
+    }
+  }
+
+  return NextResponse.json({ sent, skipped, failed })
+}

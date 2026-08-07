@@ -1,9 +1,9 @@
 # CLAUDE.md — Agen
 
 Guía completa de arquitectura, convenciones, reglas de negocio y modo de trabajo de este
-repositorio. Única referencia — no depende de ningún otro archivo de guía. Incluye la
-sección 6.1 (capa de plataforma/super admin, canales WhatsApp, voz, copiloto real, marketing
-con IA) añadida el 2026-08-05.
+repositorio. Única referencia — no depende de ningún otro archivo de guía (incluye el Manual
+Operativo de Desarrollo v1.0 fusionado). Incluye la sección 6.1 (capa de plataforma/super
+admin, canales WhatsApp, voz, copiloto real, marketing con IA) añadida el 2026-08-05.
 
 Agenda + Agente inteligente para negocios de servicios (peluquerías, estética, barberías).
 Multi-tenant: cada negocio gestiona profesionales, servicios, agenda, clientes, cotizaciones,
@@ -20,6 +20,22 @@ MediCore.
 
 **Stack:** Next.js 15.5 App Router · React 18 · TypeScript estricto · Tailwind ·
 Supabase (PostgreSQL + Auth + Storage) · n8n · PWA. Node 22 (engines >=20.9 <25).
+
+## 0. Filosofía y estándar de calidad
+
+El objetivo no es "terminar tareas" sino entregar soluciones production-ready: verificadas,
+mantenibles, eficientes, robustas, escalables y de alta calidad — como el trabajo de un
+equipo profesional. "Funciona" no es suficiente. Toda decisión busca mayor calidad, eficiencia
+y estabilidad, menor deuda técnica y menor mantenimiento futuro, y mejor experiencia para el
+usuario final (menos trabajo para él, automatización inteligente, sistema más simple, rápido,
+estable e intuitivo). Nunca elegir la solución más rápida si existe otra claramente mejor: la
+eficiencia se mide por valor entregado y ausencia de retrabajo, no por velocidad.
+
+**Regla suprema, sin excepción:** prohibido inventar resultados, verificaciones, pruebas,
+comportamientos, o afirmar que algo funciona sin haberlo comprobado. Nunca asumir, nunca
+adivinar. Si algo no se pudo verificar, decirlo explícitamente (ver §9, "No verificado").
+Prohibido usar "debería funcionar", "probablemente", "parece correcto", "quizás",
+"posiblemente" — solo afirmar lo comprobado.
 
 ## 1. Arquitectura por capas
 
@@ -128,8 +144,18 @@ UNAUTHORIZED→401, FORBIDDEN→403, resto→500), `timezone.ts`, `phone.ts` (`n
   _public_read`; mutaciones `*_safe_appointment`; consultas `find_*`; colas
   `queue_*`/`enqueue_*`/`claim_*`; enums SCREAMING_SNAKE_CASE; triggers `{tabla}_{acción}`;
   migraciones idempotentes. GUC `agen.suppress_notifications` silencia notificaciones internas.
+  Todo SQL para que el usuario ejecute manualmente va en un único bloque, sin nada adicional
+  dentro, copiable directo, e indicando siempre si es reversible, si modifica datos, o si
+  puede ser destructivo.
 - Límites: `.limit()` en listados, recortes de longitud (notas 1000, títulos 120–160,
   resúmenes 4000), `normalizePhone()` en todos los teléfonos.
+- **Código existente:** nunca modificar código estable sin entender por qué existe, qué hace
+  y quién depende de él; si un cambio puede romper otra parte del sistema, verificarlo antes.
+- **Duplicación/código muerto:** eliminar código duplicado solo si se investigó y se comprobó
+  que no tiene efectos secundarios (si hay duda, reportarlo en vez de tocarlo); código muerto
+  se informa (qué parece ser) sin borrarlo automáticamente si hay incertidumbre.
+- **Dependencias:** agregar solo cuando aporten valor objetivo, mejoren eficiencia o
+  mantenimiento, o sean práctica moderna ampliamente aceptada; nunca agregar innecesarias.
 
 ## 4. Seguridad (no negociable)
 
@@ -161,6 +187,9 @@ UNAUTHORIZED→401, FORBIDDEN→403, resto→500), `timezone.ts`, `phone.ts` (`n
 7. Compatibilidad de esquema: mantener fallbacks sin columnas nuevas (`maps_url`,
    `claimed_at`, `marketing_unsubscribe_token`) si la app se despliega antes que la migración.
 8. Ante 409 de reserva, el frontend reconsulta slots y ofrece alternativas.
+9. Si existe una solución arquitectónicamente superior a la actual, investigarla y
+   proponerla primero — nunca implementarla automáticamente si cambia arquitectura,
+   comportamiento, funcionalidades o estructura importante; se discute antes en el chat.
 
 ## 6. Qué NUNCA debe hacerse
 
@@ -173,6 +202,7 @@ UNAUTHORIZED→401, FORBIDDEN→403, resto→500), `timezone.ts`, `phone.ts` (`n
 - Afirmar reservas sin `booked=true`.
 - Activar workflows n8n sin credenciales y gateways probados (se exportan inactivos).
 - Romper el contrato de gateways: `{success, error}` + `unsubscribeUrl` en email.
+- Inventar resultados, verificaciones, pruebas o comportamientos (ver §0, Regla suprema).
 
 ## 6.1 Capa SaaS de plataforma (super admin), canales, voz y copiloto real
 
@@ -235,6 +265,37 @@ Añadido el 2026-08-05, investigado en MediCore y adaptado a Agen (ver
   máx. 500 car.) en vez de una frase fija; `POST /api/admin/agent/voice-preview` recibe
   `{text}` en el body.
 
+## 6.3 Avisos al cliente: envío real, motivo obligatorio y confirmación
+
+Añadido el 2026-08-07 (`20260807000002_appointment_change_notices.sql`, aplicada).
+
+- **La cola se envía desde la app, no desde un gateway externo.** El workflow 02 ya no manda
+  nada a `AGEN_NOTIFICATION_GATEWAY_URL` (ese servicio nunca existió: ningún cliente recibía
+  avisos). Ahora dispara `POST /api/automation/notifications/dispatch`, que reclama la cola,
+  arma el texto con `src/lib/notification-templates.ts` y lo envía por `sendWhatsApp()` o por
+  Resend según el canal. `claim/` y `result/` quedan por compatibilidad, ya no se usan.
+- **Todo cambio se avisa con motivo y autor.** `cancel|reschedule|move|resize_safe_appointment`
+  aceptan `p_reason`/`p_actor` (las firmas antiguas siguen existiendo y delegan). Encolan un
+  evento `CHANGED` con `kind` (`CANCEL|RESCHEDULE|MOVE|RESIZE`), horas/profesional/duración
+  antes y después, motivo y autor. `PATCH /api/admin/agenda` exige el motivo (400 sin él) y
+  resuelve el autor con `resolveActorName` (nunca el correo interno).
+- **Un aviso por cambio, no uno por tipo.** La unicidad de `notification_outbox` ahora solo
+  aplica a los avisos programados (`REMINDER_*`, `CONFIRM_REQUEST`, `DAY_OF_REMINDER`), que se
+  reprograman al mover la cita; los informativos se insertan siempre.
+- **Confirmación en dos tiempos.** `schedule_appointment_reminders()` programa
+  `CONFIRM_REQUEST` la tarde anterior (`settings.confirm_hour_day_before`) y `DAY_OF_REMINDER`
+  la mañana del día (`settings.reminder_hour_same_day`), en la zona del negocio. Si el cliente
+  responde que sí, el agente llama `confirmar_reserva` → `confirm_appointment_by_client()`:
+  estado `CONFIRMED` + `appointments.client_confirmed_at`, y se borran los avisos pendientes.
+  El dispatcher descarta avisos programados de citas ya confirmadas o no vigentes.
+- **Liberar y lista de espera.** Si el cliente no puede, el agente llama `liberar_reserva`
+  (`/api/agent/appointments`, acción `release`) y luego le ofrece horarios nuevos. Cancelar
+  dispara `offer_freed_slot_to_waitlist()`: hasta 5 entradas `WAITING` del mismo servicio
+  (mismo profesional o sin preferencia, dentro de su rango) reciben `WAITLIST_SLOT` y pasan a
+  `CONTACTED`.
+- Herramientas nuevas del agente en `01-agen-agent.json`: `mis_reservas`, `confirmar_reserva`,
+  `liberar_reserva`, más las reglas 13–15 del prompt.
+
 ## 7. Entorno y despliegue
 
 Variables nuevas: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` (Evolution API compartida por la
@@ -261,6 +322,13 @@ holds, confirmación de hold y move con validación de compatibilidad.
 
 ## 8. Flujo de trabajo recomendado
 
+0. **Antes de escribir una sola línea de código:** entender completamente el requerimiento,
+   investigar el proyecto y su arquitectura, leer todos los archivos relacionados, entender
+   dependencias y flujo completo, y detectar posibles impactos. Recién después empezar.
+   Evaluar también dificultad/tamaño/impacto/tiempo estimado y recomendar el modelo de Claude
+   más eficiente para la tarea (no usar modelos muy potentes para tareas simples ni modelos
+   chicos para trabajo arquitectónico complejo) — el objetivo es minimizar el costo TOTAL del
+   desarrollo, no solo el de la conversación actual.
 1. Leer este archivo y el README antes de tocar nada.
 2. UI: ubicar página en `src/app` + componentes; patrón `'use client'` + API propia
    (no llamar Supabase directo desde páginas salvo auth).
@@ -273,16 +341,37 @@ holds, confirmación de hold y move con validación de compatibilidad.
    `booking_invariants.sql`.
 7. Commits: conventional en inglés (`fix:`, `feat:`) como el historial.
 
+**Ante cualquier duda importante:** detenerse y preguntar en vez de asumir. Preguntas cortas,
+numeradas, claras, simples, con ejemplo si ayuda — preguntar solo lo que de verdad no se puede
+descubrir investigando.
+
+**Una vez iniciada una tarea:** trabajar hasta completarla. Nada de código parcial, respuestas
+a mitad de camino ni mensajes de avance — entregar solo cuando esté terminado. Si en el camino
+aparecen bugs, deuda técnica, duplicaciones u otras oportunidades objetivas de mejora,
+abordarlas o proponerlas: el objetivo es dejar siempre el proyecto mejor de como estaba,
+pensando en rendimiento, escalabilidad y mantenibilidad a futuro (nunca soluciones que solo
+sirvan para el estado actual).
+
 ## 9. Modo de trabajo (obligatorio)
 
-- Trabajar en silencio: nada de narrar pasos internos, sin chat de relleno mientras se
-  ejecutan herramientas. El texto visible debe limitarse a: una frase antes de empezar,
-  avisos puntuales si algo cambia de rumbo o se traba, y un resumen final corto (qué se
-  hizo, qué falta). Nada de explicaciones largas ni "voy a hacer X, ahora Y, ahora Z".
-- Todo resultado se entrega terminado y verificado, nunca a medias: correr `npm run lint` y
-  `npm run typecheck` (y `booking_invariants.sql` si se tocó SQL de reservas) antes de
-  entregar. Si algo no se pudo probar, decirlo explícitamente — nunca presentarlo como
-  verificado.
+- **Trabajar en silencio:** nada de narrar pasos internos ("Pensando...", "Analizando...",
+  "Revisando...", "Estoy haciendo...", "Espera...", avisos de progreso/estado), sin chat de
+  relleno ni mensajes intermedios mientras se ejecutan herramientas. El texto visible se
+  limita a: una frase antes de empezar, avisos puntuales si algo cambia de rumbo o hay un
+  bloqueo real que impide continuar, y el resumen final (formato abajo). Nada de frases de
+  cortesía ("Claro", "Perfecto", "Excelente", "Con gusto", "Entendido") ni explicaciones de lo
+  que se hizo, del razonamiento interno, o justificaciones de cambios — salvo que el usuario
+  lo pida explícitamente. Ir directo al punto, con la menor cantidad de texto posible.
+- **Verificar siempre antes de entregar**, nunca a medias: correr `npm run lint` y
+  `npm run typecheck` (y `booking_invariants.sql` si se tocó SQL de reservas). Si se tocó UI,
+  verificar funcionamiento, responsive, estilos y pantallas relacionadas; si se tocó backend,
+  verificar endpoints, errores, respuestas e integración; si se tocó base de datos, verificar
+  migraciones, consultas y compatibilidad; si existen tests, correrlos. Antes de responder,
+  hacer una revisión final completa como si fuera un Pull Request (errores, regresiones,
+  omisiones, inconsistencias, problemas de arquitectura o rendimiento) — si no quedó
+  completamente verificado, no entregarlo. Si algo no se pudo probar, decirlo explícitamente
+  en el resumen final (sección "No verificado": qué, por qué, qué falta) — nunca presentarlo
+  como probado, y nunca usar "debería funcionar"/"probablemente"/similares (ver §0).
 - **Orden obligatorio: local → probado 100% → commit → push.** Nunca subir a GitHub un cambio
   sin antes probarlo en el propio entorno: si toca UI/flujo de usuario, levantar
   `npm run dev` y usar la función de verdad en el navegador (no solo lint/typecheck, que no
@@ -314,6 +403,35 @@ holds, confirmación de hold y move con validación de compatibilidad.
   pago, confirmar algo irreversible). Nunca pedirle que haga a mano algo que Claude puede hacer
   con las herramientas que tiene.
 - No dejar nada a medias ni con pasos implícitos.
+- **Si el usuario pregunta por tareas futuras:** dar una estimación lo más cercana posible a
+  la realidad, considerando complejidad, modelo a utilizar y tamaño del proyecto.
+
+### Formato de entrega final
+
+Siempre usar exactamente este formato al terminar una tarea:
+
+```
+## Hecho
+- ...
+
+## Verificado
+- ...
+
+## Archivos modificados
+- ruta/archivo1
+
+## Pendiente del desarrollador
+- ...
+
+## Riesgos encontrados
+- ...
+
+## Mejoras recomendadas
+- ...
+
+## No verificado
+(Solo si aplica: qué, por qué, qué falta)
+```
 
 ## 9.1 n8n: Claude administra, el usuario nunca entra a tocar nada
 

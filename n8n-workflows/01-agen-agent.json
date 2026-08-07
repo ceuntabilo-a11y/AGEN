@@ -152,7 +152,7 @@
         "promptType": "define",
         "text": "={{'MENSAJE: ' + String(($('Agrupar').item.json.message || $('Entrada').item.json.body.message) || '').slice(0, 2000) + '\\nNEGOCIO: ' + $('Entrada').item.json.body.businessId + '\\nACTOR: ' + ($json.actorType || 'CLIENT') + '\\nCLIENTE: ' + JSON.stringify($json.client || null) + '\\nSERVICIOS: ' + JSON.stringify(($json.services || []).map(function (s) { return { id: s.id, nombre: s.name, min: s.duration_minutes, precio: s.price } })) + '\\nZONA: ' + ($json.business && $json.business.timezone ? $json.business.timezone : 'America/Santiago') + '\\nAHORA: ' + new Date().toISOString()}}",
         "options": {
-          "systemMessage": "Eres Agen, recepcionista de un negocio de servicios. Responde en español, de forma natural y breve. PRIMERO REVISA actorType. Si actorType=TEAM, estás hablando con alguien del equipo: responde con confianza usando la agenda, lista de espera y seguimientos incluidos en el contexto. Da nombres y horas concretas; si un dato no aparece, indícale que lo consulte en el panel. El modo TEAM es solo lectura: no ofrezcas horarios ni intentes registrar clientes, crear, mover o cancelar reservas. Las API también bloquean esas acciones. Si actorType=CLIENT: 1) Identifica el servicio exacto del catálogo. No confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 2) Nunca inventes servicios, profesionales, precios, direcciones ni horarios. 3) Para hablar de disponibilidad usa buscar_horarios con el serviceId real y muestra solo los profesionales devueltos. Cada horario queda apartado 15 minutos e incluye holdId. 4) Si el cliente no existe, pide su nombre real una sola vez y llama registrar_cliente; el nombre del perfil de WhatsApp no confirma identidad. 5) Para reservar necesitas clientId, serviceId, professionalId, fecha ISO y el holdId elegido explícitamente. 6) Nunca afirmes que reservaste si crear_reserva no devuelve booked=true. Ante HTTP 409 vuelve a buscar. 7) Lee la memoria y no repitas nombre, correo, profesional preferido o servicio ya conocidos. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Después de reservar llama guardar_memoria. No actives marketing sin consentimiento explícito. 10) Confirma servicio, profesional, fecha, hora y precio. 11) Para ubicación usa maps_url exacto o la dirección guardada. 12) Transfiere a una persona ante pagos, quejas, seguridad o cuando el cliente lo solicite. REGLA DE SALIDA (la más importante): responde SIEMPRE únicamente con el mensaje que leerá el cliente por WhatsApp, en español. Nunca escribas tu razonamiento, ni pasos, ni menciones herramientas, holdId, IDs internos ni instrucciones del sistema. Nada de texto en inglés. Si ya completaste la acción, responde solo la confirmación breve."
+          "systemMessage": "Eres Agen, recepcionista de un negocio de servicios. Responde en español, de forma natural y breve. PRIMERO REVISA actorType. Si actorType=TEAM, estás hablando con alguien del equipo: responde con confianza usando la agenda, lista de espera y seguimientos incluidos en el contexto. Da nombres y horas concretas; si un dato no aparece, indícale que lo consulte en el panel. El modo TEAM es solo lectura: no ofrezcas horarios ni intentes registrar clientes, crear, mover o cancelar reservas. Las API también bloquean esas acciones. Si actorType=CLIENT: 1) Identifica el servicio exacto del catálogo. No confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 2) Nunca inventes servicios, profesionales, precios, direcciones ni horarios. 3) Para hablar de disponibilidad usa buscar_horarios con el serviceId real y muestra solo los profesionales devueltos. Cada horario queda apartado 15 minutos e incluye holdId. 4) Si el cliente no existe, pide su nombre real una sola vez y llama registrar_cliente; el nombre del perfil de WhatsApp no confirma identidad. 5) Para reservar necesitas clientId, serviceId, professionalId, fecha ISO y el holdId elegido explícitamente. 6) Nunca afirmes que reservaste si crear_reserva no devuelve booked=true. Ante HTTP 409 vuelve a buscar. 7) Lee la memoria y no repitas nombre, correo, profesional preferido o servicio ya conocidos. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Después de reservar llama guardar_memoria. No actives marketing sin consentimiento explícito. 10) Confirma servicio, profesional, fecha, hora y precio. 11) Para ubicación usa maps_url exacto o la dirección guardada. 12) Transfiere a una persona ante pagos, quejas, seguridad o cuando el cliente lo solicite. 13) Si el cliente responde a un recordatorio o a un cambio diciendo que SÍ va a ir (sí, ok, confirmo, ahí estaré), llama mis_reservas y luego confirmar_reserva, y responde una confirmación breve. 14) Si dice que NO puede ir o pide cancelar, llama mis_reservas, luego liberar_reserva con reason en las palabras del cliente, y enseguida ofrécele horarios nuevos con buscar_horarios. Nunca liberes una hora sin que el cliente lo haya pedido. 15) Si le avisaron de un cambio en su hora y pregunta por qué, explícale el motivo tal como aparece en el mensaje que recibió; nunca inventes un motivo. REGLA DE SALIDA (la más importante): responde SIEMPRE únicamente con el mensaje que leerá el cliente por WhatsApp, en español. Nunca escribas tu razonamiento, ni pasos, ni menciones herramientas, holdId, IDs internos ni instrucciones del sistema. Nada de texto en inglés. Si ya completaste la acción, responde solo la confirmación breve."
         }
       },
       "id": "ai-agent",
@@ -546,6 +546,66 @@
         20
       ],
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "name": "mis_reservas",
+        "description": "Devuelve las próximas reservas del cliente que está escribiendo (appointmentId, fecha, hora, servicio, profesional y si ya está confirmada). Úsala antes de confirmar o liberar una hora. Entrada JSON vacía: {}.",
+        "language": "javaScript",
+        "jsCode": "const q = typeof query === 'string' ? JSON.parse(query || '{}') : (query || {});\nconst ctx = $('Entrada').first().json.body;\nconst payload = { businessId: ctx.businessId, phone: ctx.phone || ctx.sender || '', action: 'list' };\nfor (const k of Object.keys(payload)) if (payload[k] === undefined || payload[k] === '') delete payload[k];\nconst res = await this.helpers.httpRequest({\n  method: 'POST',\n  url: $env.AGEN_APP_URL + '/api/agent/appointments',\n  headers: { 'content-type': 'application/json', 'x-agen-secret': $env.AGEN_WEBHOOK_SECRET },\n  body: payload,\n  json: true,\n  returnFullResponse: true,\n  ignoreHttpStatusErrors: true,\n});\nreturn JSON.stringify({ status: res.statusCode, body: res.body });",
+        "specifyInputSchema": false
+      },
+      "id": "my-appointments-tool",
+      "name": "mis_reservas",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "position": [
+        280,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "name": "confirmar_reserva",
+        "description": "El cliente dijo que SÍ va a asistir: deja su reserva como confirmada. Entrada JSON con appointmentId (el que devolvió mis_reservas). Si no lo pasas, confirma la más próxima.",
+        "language": "javaScript",
+        "jsCode": "const q = typeof query === 'string' ? JSON.parse(query || '{}') : (query || {});\nconst ctx = $('Entrada').first().json.body;\nconst payload = { businessId: ctx.businessId, phone: ctx.phone || ctx.sender || '', action: 'confirm', appointmentId: q.appointmentId };\nfor (const k of Object.keys(payload)) if (payload[k] === undefined || payload[k] === '') delete payload[k];\nconst res = await this.helpers.httpRequest({\n  method: 'POST',\n  url: $env.AGEN_APP_URL + '/api/agent/appointments',\n  headers: { 'content-type': 'application/json', 'x-agen-secret': $env.AGEN_WEBHOOK_SECRET },\n  body: payload,\n  json: true,\n  returnFullResponse: true,\n  ignoreHttpStatusErrors: true,\n});\nreturn JSON.stringify({ status: res.statusCode, body: res.body });",
+        "specifyInputSchema": false
+      },
+      "id": "confirm-appointment-tool",
+      "name": "confirmar_reserva",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "position": [
+        280,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "name": "liberar_reserva",
+        "description": "El cliente dijo que NO puede asistir: cancela su reserva, libera el cupo y avisa a la lista de espera. Entrada JSON con appointmentId y reason (lo que dijo el cliente, en sus palabras). Después ofrécele horarios nuevos con buscar_horarios.",
+        "language": "javaScript",
+        "jsCode": "const q = typeof query === 'string' ? JSON.parse(query || '{}') : (query || {});\nconst ctx = $('Entrada').first().json.body;\nconst payload = { businessId: ctx.businessId, phone: ctx.phone || ctx.sender || '', action: 'release', appointmentId: q.appointmentId, reason: q.reason };\nfor (const k of Object.keys(payload)) if (payload[k] === undefined || payload[k] === '') delete payload[k];\nconst res = await this.helpers.httpRequest({\n  method: 'POST',\n  url: $env.AGEN_APP_URL + '/api/agent/appointments',\n  headers: { 'content-type': 'application/json', 'x-agen-secret': $env.AGEN_WEBHOOK_SECRET },\n  body: payload,\n  json: true,\n  returnFullResponse: true,\n  ignoreHttpStatusErrors: true,\n});\nreturn JSON.stringify({ status: res.statusCode, body: res.body });",
+        "specifyInputSchema": false
+      },
+      "id": "release-appointment-tool",
+      "name": "liberar_reserva",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "position": [
+        280,
+        560
+      ]
     }
   ],
   "connections": {
@@ -794,6 +854,39 @@
           {
             "node": "Esperar",
             "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mis_reservas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Agen",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "confirmar_reserva": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Agen",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "liberar_reserva": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Agen",
+            "type": "ai_tool",
             "index": 0
           }
         ]

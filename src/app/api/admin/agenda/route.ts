@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
     const from = url.searchParams.get('from') ?? new Date().toISOString()
     const until = url.searchParams.get('until') ?? new Date(Date.now() + 7 * 86400000).toISOString()
-    let appointmentsQuery=db.from('appointments').select('id,status,source,period,service_period,quoted_price,deposit_paid,notes,client:clients(id,full_name,phone),professional:professionals(id,display_name,color),service:services(id,name,duration_minutes,specialty:specialties(id,name))').eq('business_id', businessId).overlaps('service_period', `[${from},${until})`).order('service_period')
+    let appointmentsQuery=db.from('appointments').select('id,status,source,period,service_period,quoted_price,deposit_paid,notes,client_confirmed_at,client:clients(id,full_name,phone),professional:professionals(id,display_name,color),service:services(id,name,duration_minutes,specialty:specialties(id,name))').eq('business_id', businessId).overlaps('service_period', `[${from},${until})`).order('service_period')
     let holdsQuery=db.from('appointment_holds').select('id,period,expires_at,contact_key,client:clients(id,full_name,phone),professional:professionals(id,display_name,color),service:services(id,name,buffer_before_minutes,buffer_after_minutes)').eq('business_id',businessId).gt('expires_at',new Date().toISOString()).overlaps('period',`[${from},${until})`).order('period')
     if(role==='PROFESSIONAL'){
       const {data:professional,error}=await db.from('professionals').select('id').eq('business_id',businessId).eq('member_id',memberId).eq('active',true).maybeSingle()
@@ -44,9 +44,27 @@ export async function POST(request: Request) {
   } catch (error) { return apiError(error) }
 }
 
+/**
+ * Nombre de quien hace el cambio: viaja en el aviso al cliente para que sepa quién lo movió.
+ */
+async function resolveActorName(
+  db: Awaited<ReturnType<typeof requireBusinessContext>>['db'],
+  businessId: string,
+  memberId: string,
+  role: string,
+) {
+  const [professional, member] = await Promise.all([
+    db.from('professionals').select('display_name').eq('business_id', businessId).eq('member_id', memberId).maybeSingle(),
+    db.from('business_members').select('agent_display_name').eq('id', memberId).maybeSingle(),
+  ])
+  // Nunca el correo interno: al cliente se le muestra un nombre o el rol, nada más.
+  const roleLabels: Record<string, string> = { OWNER: 'El equipo', ADMIN: 'El equipo', RECEPTIONIST: 'Recepción', PROFESSIONAL: 'Tu profesional' }
+  return professional.data?.display_name || member.data?.agent_display_name || roleLabels[role] || 'El equipo'
+}
+
 export async function PATCH(request: Request) {
   try {
-    const { db, businessId } = await requireBusinessContext(['OWNER','ADMIN','RECEPTIONIST'])
+    const { db, businessId, role, memberId } = await requireBusinessContext(['OWNER','ADMIN','RECEPTIONIST'])
     const body = await request.json() as {
       appointmentId?: string
       action?: 'status' | 'cancel' | 'reschedule' | 'move' | 'resize'
@@ -63,11 +81,21 @@ export async function PATCH(request: Request) {
     if (currentError) throw currentError
     if (!current) return NextResponse.json({ error: 'Reserva inexistente' }, { status: 404 })
 
+    // Todo cambio sobre una cita se le explica al cliente: sin motivo no se guarda.
+    const CHANGE_ACTIONS = ['cancel', 'reschedule', 'move', 'resize']
+    const reason = body.reason?.trim().slice(0, 300) ?? ''
+    if (CHANGE_ACTIONS.includes(body.action) && !reason) {
+      return NextResponse.json({ error: 'Escribe el motivo del cambio: se le explicará al cliente' }, { status: 400 })
+    }
+    const actor = CHANGE_ACTIONS.includes(body.action)
+      ? await resolveActorName(db, businessId, memberId, role)
+      : ''
+
     if (body.action === 'cancel') {
       if (current.status === 'CANCELLED') return NextResponse.json({ appointment: current })
-      const { data, error } = await db.rpc('cancel_safe_appointment', { p_appointment_id: body.appointmentId })
+      const { data, error } = await db.rpc('cancel_safe_appointment', { p_appointment_id: body.appointmentId, p_reason: reason, p_actor: actor })
       if (error) throw error
-      if (body.reason?.trim()) await db.from('appointments').update({ notes: [current.notes, `Cancelación: ${body.reason.trim()}`].filter(Boolean).join('\n').slice(0,1000) }).eq('id',body.appointmentId).eq('business_id',businessId)
+      await db.from('appointments').update({ notes: [current.notes, `Cancelación: ${reason}`].filter(Boolean).join('\n').slice(0,1000) }).eq('id',body.appointmentId).eq('business_id',businessId)
       return NextResponse.json({ appointment: data })
     }
 
@@ -76,8 +104,8 @@ export async function PATCH(request: Request) {
       if (!newStart || Number.isNaN(newStart.getTime())) return NextResponse.json({ error: 'Nueva fecha inválida' }, { status: 400 })
       if(body.action==='move'&&!body.professionalId)return NextResponse.json({error:'Selecciona el profesional'},{status:400})
       const { data, error } = body.action==='move'
-        ? await db.rpc('move_safe_appointment',{p_appointment_id:body.appointmentId,p_new_start:newStart.toISOString(),p_new_professional_id:body.professionalId})
-        : await db.rpc('reschedule_safe_appointment', { p_appointment_id: body.appointmentId, p_new_start: newStart.toISOString() })
+        ? await db.rpc('move_safe_appointment',{p_appointment_id:body.appointmentId,p_new_start:newStart.toISOString(),p_new_professional_id:body.professionalId,p_reason:reason,p_actor:actor})
+        : await db.rpc('reschedule_safe_appointment', { p_appointment_id: body.appointmentId, p_new_start: newStart.toISOString(), p_reason: reason, p_actor: actor })
       if (error?.code === '23P01') return NextResponse.json({ error: error.message, conflict: true }, { status: 409 })
       if (error) throw error
       return NextResponse.json({ appointment: data })
@@ -86,7 +114,7 @@ export async function PATCH(request: Request) {
     if(body.action==='resize'){
       const duration=Math.round(Number(body.durationMinutes))
       if(!Number.isFinite(duration)||duration<5||duration>1440)return NextResponse.json({error:'Duración inválida'},{status:400})
-      const {data,error}=await db.rpc('resize_safe_appointment',{p_appointment_id:body.appointmentId,p_duration_minutes:duration})
+      const {data,error}=await db.rpc('resize_safe_appointment',{p_appointment_id:body.appointmentId,p_duration_minutes:duration,p_reason:reason,p_actor:actor})
       if(error?.code==='23P01')return NextResponse.json({error:error.message,conflict:true},{status:409})
       if(error)throw error
       return NextResponse.json({appointment:data})
