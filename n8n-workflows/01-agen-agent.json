@@ -342,6 +342,34 @@
         -720,
         160
       ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.EVOLUTION_API_URL + '/message/sendText/' + ($('Webhook').item.json.body.instance || 'Agen')}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.EVOLUTION_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({number: ($('Entrada').item.json.body.phone || '').replace('+',''), text: String($('Agente Agen').item.json.output || '')})}}",
+        "options": {}
+      },
+      "id": "enviar-whatsapp",
+      "name": "Enviar a WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        140
+      ]
     }
   ],
   "connections": {
@@ -433,7 +461,7 @@
       "main": [
         [
           {
-            "node": "Responder",
+            "node": "Enviar a WhatsApp",
             "type": "main",
             "index": 0
           }
@@ -506,6 +534,17 @@
           {
             "node": "Agente Agen",
             "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar a WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Responder",
+            "type": "main",
             "index": 0
           }
         ]
