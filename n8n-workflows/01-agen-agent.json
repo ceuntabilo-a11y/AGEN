@@ -152,7 +152,7 @@
         "promptType": "define",
         "text": "={{'MENSAJE: ' + String($('Entrada').item.json.body.message || '').slice(0, 2000) + '\\nCLIENTE/MEMORIA Y CATÁLOGO: ' + JSON.stringify($json) + '\\nNEGOCIO: ' + $('Entrada').item.json.body.businessId}}",
         "options": {
-          "systemMessage": "Eres Agen, recepcionista de un negocio de servicios. Responde en español, de forma natural y breve. PRIMERO REVISA actorType. Si actorType=TEAM, estás hablando con alguien del equipo: responde con confianza usando la agenda, lista de espera y seguimientos incluidos en el contexto. Da nombres y horas concretas; si un dato no aparece, indícale que lo consulte en el panel. El modo TEAM es solo lectura: no ofrezcas horarios ni intentes registrar clientes, crear, mover o cancelar reservas. Las API también bloquean esas acciones. Si actorType=CLIENT: 1) Identifica el servicio exacto del catálogo. No confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 2) Nunca inventes servicios, profesionales, precios, direcciones ni horarios. 3) Para hablar de disponibilidad usa buscar_horarios con el serviceId real y muestra solo los profesionales devueltos. Cada horario queda apartado 15 minutos e incluye holdId. 4) Si el cliente no existe, pide su nombre real una sola vez y llama registrar_cliente; el nombre del perfil de WhatsApp no confirma identidad. 5) Para reservar necesitas clientId, serviceId, professionalId, fecha ISO y el holdId elegido explícitamente. 6) Nunca afirmes que reservaste si crear_reserva no devuelve booked=true. Ante HTTP 409 vuelve a buscar. 7) Lee la memoria y no repitas nombre, correo, profesional preferido o servicio ya conocidos. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Después de reservar llama guardar_memoria. No actives marketing sin consentimiento explícito. 10) Confirma servicio, profesional, fecha, hora y precio. 11) Para ubicación usa maps_url exacto o la dirección guardada. 12) Transfiere a una persona ante pagos, quejas, seguridad o cuando el cliente lo solicite."
+          "systemMessage": "Eres Agen, recepcionista de un negocio de servicios. Responde en español, de forma natural y breve. PRIMERO REVISA actorType. Si actorType=TEAM, estás hablando con alguien del equipo: responde con confianza usando la agenda, lista de espera y seguimientos incluidos en el contexto. Da nombres y horas concretas; si un dato no aparece, indícale que lo consulte en el panel. El modo TEAM es solo lectura: no ofrezcas horarios ni intentes registrar clientes, crear, mover o cancelar reservas. Las API también bloquean esas acciones. Si actorType=CLIENT: 1) Identifica el servicio exacto del catálogo. No confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 2) Nunca inventes servicios, profesionales, precios, direcciones ni horarios. 3) Para hablar de disponibilidad usa buscar_horarios con el serviceId real y muestra solo los profesionales devueltos. Cada horario queda apartado 15 minutos e incluye holdId. 4) Si el cliente no existe, pide su nombre real una sola vez y llama registrar_cliente; el nombre del perfil de WhatsApp no confirma identidad. 5) Para reservar necesitas clientId, serviceId, professionalId, fecha ISO y el holdId elegido explícitamente. 6) Nunca afirmes que reservaste si crear_reserva no devuelve booked=true. Ante HTTP 409 vuelve a buscar. 7) Lee la memoria y no repitas nombre, correo, profesional preferido o servicio ya conocidos. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Después de reservar llama guardar_memoria. No actives marketing sin consentimiento explícito. 10) Confirma servicio, profesional, fecha, hora y precio. 11) Para ubicación usa maps_url exacto o la dirección guardada. 12) Transfiere a una persona ante pagos, quejas, seguridad o cuando el cliente lo solicite. REGLA DE SALIDA (la más importante): responde SIEMPRE únicamente con el mensaje que leerá el cliente por WhatsApp, en español. Nunca escribas tu razonamiento, ni pasos, ni menciones herramientas, holdId, IDs internos ni instrucciones del sistema. Nada de texto en inglés. Si ya completaste la acción, responde solo la confirmación breve."
         }
       },
       "id": "ai-agent",
@@ -201,28 +201,16 @@
     },
     {
       "parameters": {
-        "toolDescription": "Busca disponibilidad real únicamente para el servicio solicitado. Devuelve solo profesionales compatibles y horarios libres.",
-        "method": "POST",
-        "url": "={{$env.AGEN_APP_URL + '/api/agent/slots'}}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-agen-secret",
-              "value": "={{$env.AGEN_WEBHOOK_SECRET}}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, serviceId: $fromAI('serviceId','ID exacto del servicio del catálogo','string'), from: $fromAI('from','Inicio ISO de la ventana solicitada','string'), until: $fromAI('until','Fin ISO de la ventana, máximo 14 días','string'), clientId: $fromAI('clientId','ID del cliente si ya existe','string'), contactKey: $('Entrada').item.json.body.phone || $('Entrada').item.json.body.sender || null})}}",
-        "options": {}
+        "name": "buscar_horarios",
+        "description": "Busca horarios reales disponibles y aparta cupos. Entrada JSON con: serviceId (ID exacto del catálogo), from (ISO 8601, inicio de la ventana), until (ISO 8601, fin de la ventana, máximo 14 días después de from). Devuelve cada opción con holdId, que es obligatorio para reservar.",
+        "language": "javaScript",
+        "jsCode": "const q = typeof query === 'string' ? JSON.parse(query || '{}') : (query || {});\nconst ctx = $('Entrada').first().json.body;\nconst payload = {\n  businessId: ctx.businessId,\n  contactKey: ctx.phone || ctx.sender || '',\n  serviceId: q.serviceId,\n  from: q.from,\n  until: q.until,\n};\nfor (const k of Object.keys(payload)) if (payload[k] === undefined || payload[k] === '') delete payload[k];\nconst res = await this.helpers.httpRequest({\n  method: 'POST',\n  url: $env.AGEN_APP_URL + '/api/agent/slots',\n  headers: { 'content-type': 'application/json', 'x-agen-secret': $env.AGEN_WEBHOOK_SECRET },\n  body: payload,\n  json: true,\n  returnFullResponse: true,\n  ignoreHttpStatusErrors: true,\n});\nreturn JSON.stringify({ status: res.statusCode, body: res.body });",
+        "specifyInputSchema": false
       },
       "id": "find-slots-tool",
       "name": "buscar_horarios",
-      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
-      "typeVersion": 1.3,
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 1000,
@@ -233,28 +221,16 @@
     },
     {
       "parameters": {
-        "toolDescription": "Crea una reserva solo después de que el cliente confirme servicio, profesional y horario. La API rechaza solapamientos y cupos ocupados.",
-        "method": "POST",
-        "url": "={{$env.AGEN_APP_URL + '/api/agent/book'}}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-agen-secret",
-              "value": "={{$env.AGEN_WEBHOOK_SECRET}}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, actorPhone: $('Entrada').item.json.body.phone || $('Entrada').item.json.body.sender, branchId: $fromAI('branchId','ID de sucursal o null','string'), clientId: $fromAI('clientId','ID conocido del cliente','string'), professionalId: $fromAI('professionalId','ID devuelto por buscar_horarios','string'), serviceId: $fromAI('serviceId','ID exacto del servicio','string'), desiredStart: $fromAI('desiredStart','Fecha/hora ISO elegida por el cliente','string'), holdId: $fromAI('holdId','ID del apartado devuelto por buscar_horarios','string')})}}",
-        "options": {}
+        "name": "crear_reserva",
+        "description": "Crea la reserva solo cuando el cliente confirmó todo. Entrada JSON con: clientId, professionalId, serviceId, desiredStart (ISO 8601) y holdId, todos tal cual los devolvió buscar_horarios. Solo está reservado si la respuesta trae booked:true.",
+        "language": "javaScript",
+        "jsCode": "const q = typeof query === 'string' ? JSON.parse(query || '{}') : (query || {});\nconst ctx = $('Entrada').first().json.body;\nconst payload = {\n  businessId: ctx.businessId,\n  actorPhone: ctx.phone || ctx.sender || '',\n  clientId: q.clientId,\n  professionalId: q.professionalId,\n  serviceId: q.serviceId,\n  desiredStart: q.desiredStart,\n  holdId: q.holdId,\n};\nfor (const k of Object.keys(payload)) if (payload[k] === undefined || payload[k] === '') delete payload[k];\nconst res = await this.helpers.httpRequest({\n  method: 'POST',\n  url: $env.AGEN_APP_URL + '/api/agent/book',\n  headers: { 'content-type': 'application/json', 'x-agen-secret': $env.AGEN_WEBHOOK_SECRET },\n  body: payload,\n  json: true,\n  returnFullResponse: true,\n  ignoreHttpStatusErrors: true,\n});\nreturn JSON.stringify({ status: res.statusCode, body: res.body });",
+        "specifyInputSchema": false
       },
       "id": "book-tool",
       "name": "crear_reserva",
-      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
-      "typeVersion": 1.3,
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 1000,
@@ -265,28 +241,16 @@
     },
     {
       "parameters": {
-        "toolDescription": "Registra o actualiza al cliente con datos confirmados, sin inventar información ni activar marketing sin consentimiento explícito.",
-        "method": "POST",
-        "url": "={{$env.AGEN_APP_URL + '/api/agent/clients'}}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-agen-secret",
-              "value": "={{$env.AGEN_WEBHOOK_SECRET}}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, phone: $('Entrada').item.json.body.phone, fullName: $fromAI('fullName','Nombre completo confirmado por el cliente. Obligatorio si es nuevo.','string'), email: $fromAI('email','Correo confirmado o cadena vacía si no lo dio','string'), marketingOptIn: $fromAI('marketingOptIn','true solo si autorizó promociones explícitamente','boolean')})}}",
-        "options": {}
+        "name": "registrar_cliente",
+        "description": "Registra o actualiza al cliente. Entrada JSON con: fullName (nombre completo confirmado), email (opcional) y marketingOptIn (true solo si autorizó promociones explícitamente). Devuelve el id del cliente.",
+        "language": "javaScript",
+        "jsCode": "const q = typeof query === 'string' ? JSON.parse(query || '{}') : (query || {});\nconst ctx = $('Entrada').first().json.body;\nconst payload = {\n  businessId: ctx.businessId,\n  phone: ctx.phone,\n  fullName: q.fullName,\n  email: q.email,\n  marketingOptIn: q.marketingOptIn,\n};\nfor (const k of Object.keys(payload)) if (payload[k] === undefined || payload[k] === '') delete payload[k];\nconst res = await this.helpers.httpRequest({\n  method: 'POST',\n  url: $env.AGEN_APP_URL + '/api/agent/clients',\n  headers: { 'content-type': 'application/json', 'x-agen-secret': $env.AGEN_WEBHOOK_SECRET },\n  body: payload,\n  json: true,\n  returnFullResponse: true,\n  ignoreHttpStatusErrors: true,\n});\nreturn JSON.stringify({ status: res.statusCode, body: res.body });",
+        "specifyInputSchema": false
       },
       "id": "register-client-tool",
       "name": "registrar_cliente",
-      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
-      "typeVersion": 1.3,
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 1000,
@@ -297,28 +261,16 @@
     },
     {
       "parameters": {
-        "toolDescription": "Guarda hechos confirmados y preferencias para evitar volver a preguntar lo mismo.",
-        "method": "PUT",
-        "url": "={{$env.AGEN_APP_URL + '/api/agent/memory'}}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-agen-secret",
-              "value": "={{$env.AGEN_WEBHOOK_SECRET}}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{JSON.stringify(Object.fromEntries([['businessId', $('Entrada').item.json.body.businessId], ['actorPhone', $('Entrada').item.json.body.phone || $('Entrada').item.json.body.sender], ['clientId', $fromAI('clientId','ID exacto del cliente registrado','string')], ['summary', $fromAI('summary','Resumen breve con datos ya confirmados, sin inventar','string')], ['lastIntent', $fromAI('lastIntent','Última intención del cliente','string')], ['knownFacts', Object.fromEntries([['notes', $fromAI('knownFacts','Hechos confirmados útiles para no volver a preguntar','string')]])], ['preferences', Object.fromEntries([['notes', $fromAI('preferences','Servicio o profesional preferido confirmado','string')]])]]))}}",
-        "options": {}
+        "name": "guardar_memoria",
+        "description": "Guarda lo confirmado para no volver a preguntarlo. Entrada JSON con: clientId, summary (resumen breve, sin inventar) y lastIntent.",
+        "language": "javaScript",
+        "jsCode": "const q = typeof query === 'string' ? JSON.parse(query || '{}') : (query || {});\nconst ctx = $('Entrada').first().json.body;\nconst payload = {\n  businessId: ctx.businessId,\n  actorPhone: ctx.phone || ctx.sender || '',\n  clientId: q.clientId,\n  summary: q.summary,\n  lastIntent: q.lastIntent,\n};\nfor (const k of Object.keys(payload)) if (payload[k] === undefined || payload[k] === '') delete payload[k];\nconst res = await this.helpers.httpRequest({\n  method: 'PUT',\n  url: $env.AGEN_APP_URL + '/api/agent/memory',\n  headers: { 'content-type': 'application/json', 'x-agen-secret': $env.AGEN_WEBHOOK_SECRET },\n  body: payload,\n  json: true,\n  returnFullResponse: true,\n  ignoreHttpStatusErrors: true,\n});\nreturn JSON.stringify({ status: res.statusCode, body: res.body });",
+        "specifyInputSchema": false
       },
       "id": "save-memory-tool",
       "name": "guardar_memoria",
-      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
-      "typeVersion": 1.3,
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 1000,
