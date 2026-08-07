@@ -12,7 +12,7 @@ export async function GET(request:Request){
     const from=url.searchParams.get('from')??new Date().toISOString()
     const until=url.searchParams.get('until')??new Date(Date.now()+7*86400000).toISOString()
     const [appointments,business,blocks]=await Promise.all([
-      db.from('appointments').select('id,status,service_period,quoted_price,deposit_paid,notes,client:clients(id,full_name,phone,notes),service:services(id,name,duration_minutes)').eq('business_id',businessId).eq('professional_id',professional.id).overlaps('service_period',`[${from},${until})`).order('service_period'),
+      db.from('appointments').select('id,status,service_period,quoted_price,deposit_paid,notes,client_confirmed_at,client:clients(id,full_name,phone,notes),service:services(id,name,duration_minutes)').eq('business_id',businessId).eq('professional_id',professional.id).overlaps('service_period',`[${from},${until})`).order('service_period'),
       db.from('businesses').select('timezone').eq('id',businessId).single(),
       db.from('schedule_blocks').select('id,period,reason').eq('business_id',businessId).eq('professional_id',professional.id).overlaps('period',`[${from},${until})`).order('period').limit(100),
     ])
@@ -24,11 +24,54 @@ export async function GET(request:Request){
 export async function PATCH(request:Request){
   try{
     const {db,businessId,professional}=await requireProfessionalContext()
-    const body=await request.json() as {appointmentId?:string;status?:string;notify?:boolean}
-    if(!body.appointmentId||!body.status)return NextResponse.json({error:'Cambio inválido'},{status:400})
-    const {data:current,error:currentError}=await db.from('appointments').select('id,status').eq('id',body.appointmentId).eq('business_id',businessId).eq('professional_id',professional.id).maybeSingle()
+    const body=await request.json() as {
+      appointmentId?:string
+      action?:'status'|'cancel'|'reschedule'|'resize'
+      status?:string
+      newStart?:string
+      durationMinutes?:number
+      reason?:string
+      notify?:boolean
+    }
+    const action=body.action??'status'
+    if(!body.appointmentId)return NextResponse.json({error:'Cambio inválido'},{status:400})
+
+    const {data:current,error:currentError}=await db.from('appointments').select('id,status,notes').eq('id',body.appointmentId).eq('business_id',businessId).eq('professional_id',professional.id).maybeSingle()
     if(currentError)throw currentError
     if(!current)return NextResponse.json({error:'Reserva inexistente'},{status:404})
+
+    // Igual que en el panel del negocio: cualquier cambio se le explica al cliente por WhatsApp.
+    const CHANGE_ACTIONS=['cancel','reschedule','resize']
+    const reason=body.reason?.trim().slice(0,300)??''
+    if(CHANGE_ACTIONS.includes(action)&&!reason)return NextResponse.json({error:'Escribe el motivo del cambio: se le explicará al cliente'},{status:400})
+
+    if(action==='cancel'){
+      if(current.status==='CANCELLED')return NextResponse.json({appointment:current})
+      const {data,error}=await db.rpc('cancel_safe_appointment',{p_appointment_id:body.appointmentId,p_reason:reason,p_actor:professional.display_name})
+      if(error)throw error
+      await db.from('appointments').update({notes:[current.notes,`Cancelación: ${reason}`].filter(Boolean).join('\n').slice(0,1000)}).eq('id',body.appointmentId).eq('business_id',businessId)
+      return NextResponse.json({appointment:data})
+    }
+
+    if(action==='reschedule'){
+      const newStart=body.newStart?new Date(body.newStart):null
+      if(!newStart||Number.isNaN(newStart.getTime()))return NextResponse.json({error:'Nueva fecha inválida'},{status:400})
+      const {data,error}=await db.rpc('reschedule_safe_appointment',{p_appointment_id:body.appointmentId,p_new_start:newStart.toISOString(),p_reason:reason,p_actor:professional.display_name})
+      if(error?.code==='23P01')return NextResponse.json({error:error.message,conflict:true},{status:409})
+      if(error)throw error
+      return NextResponse.json({appointment:data})
+    }
+
+    if(action==='resize'){
+      const duration=Math.round(Number(body.durationMinutes))
+      if(!Number.isFinite(duration)||duration<5||duration>1440)return NextResponse.json({error:'Duración inválida'},{status:400})
+      const {data,error}=await db.rpc('resize_safe_appointment',{p_appointment_id:body.appointmentId,p_duration_minutes:duration,p_reason:reason,p_actor:professional.display_name})
+      if(error?.code==='23P01')return NextResponse.json({error:error.message,conflict:true},{status:409})
+      if(error)throw error
+      return NextResponse.json({appointment:data})
+    }
+
+    if(!body.status)return NextResponse.json({error:'Cambio inválido'},{status:400})
     const transitions:Record<string,string[]>={PENDING:['CONFIRMED','CHECKED_IN','NO_SHOW'],CONFIRMED:['CHECKED_IN','NO_SHOW'],CHECKED_IN:['IN_PROGRESS'],IN_PROGRESS:['COMPLETED']}
     if(!(transitions[current.status]??[]).includes(body.status))return NextResponse.json({error:'Cambio de estado no permitido'},{status:409})
     const {data,error}=await db.from('appointments').update({status:body.status,updated_at:new Date().toISOString()}).eq('id',body.appointmentId).eq('business_id',businessId).eq('professional_id',professional.id).select().single()

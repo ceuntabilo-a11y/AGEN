@@ -51,7 +51,7 @@ const nextActions: Record<string, Array<{ status: string; label: string; style: 
   IN_PROGRESS: [{ status: 'COMPLETED', label: 'Completar', style: 'bg-emerald-600 text-white' }],
 }
 
-export function AppointmentDetailsModal({ appointment, timezone, onClose, onUpdated }: { appointment: AgendaAppointment; timezone: string; onClose: () => void; onUpdated: () => void }) {
+export function AppointmentDetailsModal({ appointment, timezone, onClose, onUpdated, endpoint = '/api/admin/agenda' }: { appointment: AgendaAppointment; timezone: string; onClose: () => void; onUpdated: () => void; endpoint?: string }) {
   const [date, setDate] = useState(dateKeyInZone(appointment.start, timezone))
   const [slots, setSlots] = useState<Slot[]>([])
   const [selectedStart, setSelectedStart] = useState('')
@@ -71,7 +71,7 @@ export function AppointmentDetailsModal({ appointment, timezone, onClose, onUpda
     setLoading(true)
     setError('')
     const payload = CHANGE_ACTIONS.includes(String(body.action)) ? { reason: reason.trim(), ...body } : body
-    const response = await fetch('/api/admin/agenda', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ appointmentId: appointment.id, ...payload }) })
+    const response = await fetch(endpoint, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ appointmentId: appointment.id, ...payload }) })
     const data = await response.json()
     if (!response.ok) {
       setError(data.error ?? 'No se pudo actualizar la reserva')
