@@ -332,7 +332,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Evolution API manda su propio formato. Acá se normaliza a lo que espera el resto\n// del flujo: body.businessId / body.phone / body.message / body.sender.\n// El businessId viaja en la query del webhook, así cada negocio tiene su propia URL.\nconst raw = $('Webhook').item.json;\nconst query = raw.query || {};\nconst body = raw.body || {};\nconst data = body.data || {};\n\n// Formato Evolution\nconst remoteJid = data?.key?.remoteJid || '';\nconst phoneFromJid = remoteJid.split('@')[0] || '';\nconst evolutionText =\n  data?.message?.conversation ||\n  data?.message?.extendedTextMessage?.text ||\n  data?.message?.imageMessage?.caption ||\n  '';\n\n// Si alguien llama al webhook ya normalizado (pruebas), se respeta tal cual.\nconst businessId = body.businessId || query.businessId || '';\nconst phone = body.phone || (phoneFromJid ? '+' + phoneFromJid : '');\nconst message = body.message || evolutionText;\nconst sender = body.sender || data?.pushName || body.pushName || '';\n\nreturn [{\n  json: {\n    body: { businessId, phone, message, sender },\n    headers: raw.headers || {},\n    fromMe: Boolean(data?.key?.fromMe),\n  },\n}];"
+        "jsCode": "// Evolution API manda su propio formato. Acá se normaliza a lo que espera el resto\n// del flujo: body.businessId / body.phone / body.message / body.sender.\n// El businessId viaja en la query del webhook, así cada negocio tiene su propia URL.\nconst raw = $('Webhook').item.json;\nconst query = raw.query || {};\nconst body = raw.body || {};\nconst data = body.data || {};\n\n// Formato Evolution\nconst remoteJid = data?.key?.remoteJid || '';\nconst phoneFromJid = remoteJid.split('@')[0] || '';\nconst evolutionText =\n  data?.message?.conversation ||\n  data?.message?.extendedTextMessage?.text ||\n  data?.message?.imageMessage?.caption ||\n  '';\n\n// Si alguien llama al webhook ya normalizado (pruebas), se respeta tal cual.\nconst businessId = body.businessId || query.businessId || '';\nconst phone = body.phone || (phoneFromJid ? '+' + phoneFromJid : '');\nconst message = body.message || evolutionText;\nconst sender = body.sender || data?.pushName || body.pushName || '';\n\nreturn [{\n  json: {\n    body: { businessId, phone, message, sender },\n    headers: raw.headers || {},\n    fromMe: Boolean(data?.key?.fromMe),\n    messageKey: data?.key || null,\n    instance: body.instance || raw.body?.instance || 'Agen',\n  },\n}];"
       },
       "id": "normalizar-entrada-evolution",
       "name": "Entrada",
@@ -370,6 +370,64 @@
         280,
         140
       ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.EVOLUTION_API_URL + '/chat/markMessageAsRead/' + $('Entrada').item.json.instance}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.EVOLUTION_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({readMessages: [$('Entrada').item.json.messageKey]})}}",
+        "options": {}
+      },
+      "id": "marcar-leido",
+      "name": "Marcar leído",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -560,
+        20
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.EVOLUTION_API_URL + '/chat/sendPresence/' + $('Entrada').item.json.instance}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.EVOLUTION_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({number: ($('Entrada').item.json.body.phone || '').replace('+',''), delay: 20000, presence: 'composing'})}}",
+        "options": {}
+      },
+      "id": "escribiendo",
+      "name": "Escribiendo…",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -400,
+        20
+      ],
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -483,12 +541,7 @@
       "main": [
         [
           {
-            "node": "Cargar memoria",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Cargar catálogo",
+            "node": "Marcar leído",
             "type": "main",
             "index": 0
           }
@@ -544,6 +597,33 @@
         [
           {
             "node": "Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar leído": {
+      "main": [
+        [
+          {
+            "node": "Escribiendo…",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escribiendo…": {
+      "main": [
+        [
+          {
+            "node": "Cargar memoria",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Cargar catálogo",
             "type": "main",
             "index": 0
           }
