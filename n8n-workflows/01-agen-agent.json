@@ -150,7 +150,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "={{'MENSAJE: ' + String($('Entrada').item.json.body.message || '').slice(0, 2000) + '\\nCLIENTE/MEMORIA Y CATÁLOGO: ' + JSON.stringify($json) + '\\nNEGOCIO: ' + $('Entrada').item.json.body.businessId}}",
+        "text": "={{'MENSAJE: ' + String(($('Agrupar').item.json.message || $('Entrada').item.json.body.message) || '').slice(0, 2000) + '\\nNEGOCIO: ' + $('Entrada').item.json.body.businessId + '\\nACTOR: ' + ($json.actorType || 'CLIENT') + '\\nCLIENTE: ' + JSON.stringify($json.client || null) + '\\nSERVICIOS: ' + JSON.stringify(($json.services || []).map(function (s) { return { id: s.id, nombre: s.name, min: s.duration_minutes, precio: s.price } })) + '\\nZONA: ' + ($json.business && $json.business.timezone ? $json.business.timezone : 'America/Santiago') + '\\nAHORA: ' + new Date().toISOString()}}",
         "options": {
           "systemMessage": "Eres Agen, recepcionista de un negocio de servicios. Responde en español, de forma natural y breve. PRIMERO REVISA actorType. Si actorType=TEAM, estás hablando con alguien del equipo: responde con confianza usando la agenda, lista de espera y seguimientos incluidos en el contexto. Da nombres y horas concretas; si un dato no aparece, indícale que lo consulte en el panel. El modo TEAM es solo lectura: no ofrezcas horarios ni intentes registrar clientes, crear, mover o cancelar reservas. Las API también bloquean esas acciones. Si actorType=CLIENT: 1) Identifica el servicio exacto del catálogo. No confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 2) Nunca inventes servicios, profesionales, precios, direcciones ni horarios. 3) Para hablar de disponibilidad usa buscar_horarios con el serviceId real y muestra solo los profesionales devueltos. Cada horario queda apartado 15 minutos e incluye holdId. 4) Si el cliente no existe, pide su nombre real una sola vez y llama registrar_cliente; el nombre del perfil de WhatsApp no confirma identidad. 5) Para reservar necesitas clientId, serviceId, professionalId, fecha ISO y el holdId elegido explícitamente. 6) Nunca afirmes que reservaste si crear_reserva no devuelve booked=true. Ante HTTP 409 vuelve a buscar. 7) Lee la memoria y no repitas nombre, correo, profesional preferido o servicio ya conocidos. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Después de reservar llama guardar_memoria. No actives marketing sin consentimiento explícito. 10) Confirma servicio, profesional, fecha, hora y precio. 11) Para ubicación usa maps_url exacto o la dirección guardada. 12) Transfiere a una persona ante pagos, quejas, seguridad o cuando el cliente lo solicite. REGLA DE SALIDA (la más importante): responde SIEMPRE únicamente con el mensaje que leerá el cliente por WhatsApp, en español. Nunca escribas tu razonamiento, ni pasos, ni menciones herramientas, holdId, IDs internos ni instrucciones del sistema. Nada de texto en inglés. Si ya completaste la acción, responde solo la confirmación breve."
         }
@@ -416,7 +416,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{JSON.stringify({number: ($('Entrada').item.json.body.phone || '').replace('+',''), delay: 20000, presence: 'composing'})}}",
+        "body": "={{JSON.stringify({number: ($('Entrada').item.json.body.phone || '').replace('+',''), delay: 0, presence: 'composing'})}}",
         "options": {}
       },
       "id": "escribiendo",
@@ -425,6 +425,124 @@
       "typeVersion": 4.2,
       "position": [
         -400,
+        20
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "id": "esperar-mas-mensajes",
+      "name": "Esperar",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -240,
+        20
+      ],
+      "webhookId": "esperar-mas-mensajes"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "es-el-ultimo",
+              "leftValue": "={{$json.claim}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "soy-el-ultimo",
+      "name": "¿Responde este?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        20
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "no-responder",
+      "name": "Ya respondió otro",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        400,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/agent/inbox'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-agen-secret",
+              "value": "={{$env.AGEN_WEBHOOK_SECRET}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, phone: $('Entrada').item.json.body.phone, messageId: $('Entrada').item.json.messageKey?.id || String(Date.now()), content: $('Entrada').item.json.body.message})}}",
+        "options": {}
+      },
+      "id": "registrar-inbox",
+      "name": "Registrar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        20
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{$env.AGEN_APP_URL + '/api/agent/inbox'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-agen-secret",
+              "value": "={{$env.AGEN_WEBHOOK_SECRET}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({businessId: $('Entrada').item.json.body.businessId, phone: $('Entrada').item.json.body.phone, messageId: $('Entrada').item.json.messageKey?.id || ''})}}",
+        "options": {}
+      },
+      "id": "agrupar-inbox",
+      "name": "Agrupar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
         20
       ],
       "onError": "continueRegularOutput"
@@ -508,7 +626,7 @@
       "main": [
         [
           {
-            "node": "Persistir interacción",
+            "node": "Enviar a WhatsApp",
             "type": "main",
             "index": 0
           }
@@ -519,7 +637,7 @@
       "main": [
         [
           {
-            "node": "Enviar a WhatsApp",
+            "node": "Responder",
             "type": "main",
             "index": 0
           }
@@ -596,7 +714,7 @@
       "main": [
         [
           {
-            "node": "Responder",
+            "node": "Persistir interacción",
             "type": "main",
             "index": 0
           }
@@ -618,12 +736,63 @@
       "main": [
         [
           {
+            "node": "Registrar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar": {
+      "main": [
+        [
+          {
+            "node": "Agrupar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agrupar": {
+      "main": [
+        [
+          {
+            "node": "¿Responde este?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Responde este?": {
+      "main": [
+        [
+          {
             "node": "Cargar memoria",
             "type": "main",
             "index": 0
           },
           {
             "node": "Cargar catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ya respondió otro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar": {
+      "main": [
+        [
+          {
+            "node": "Esperar",
             "type": "main",
             "index": 0
           }
