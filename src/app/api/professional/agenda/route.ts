@@ -5,6 +5,16 @@ import { createAdminClient } from '@/lib/supabase-admin'
 
 export const dynamic='force-dynamic'
 
+/**
+ * Regla de negocio devuelta por Postgres (`P0001`), por ejemplo el horario de atención.
+ * El mensaje ya viene en español y escrito para el usuario, así que se muestra tal cual.
+ */
+function businessRuleResponse(error: { code?: string; message?: string } | null) {
+  if (error?.code !== 'P0001') return null
+  return NextResponse.json({ error: error.message ?? 'No se puede hacer ese cambio' }, { status: 409 })
+}
+
+
 /** Minutos que dura hoy la reserva, leídos del rango `[inicio,fin)` que devuelve Postgres. */
 function currentDurationMinutes(period: unknown) {
   const [start, end] = String(period ?? '').replace(/[[\]()"]/g, '').split(',')
@@ -64,6 +74,7 @@ export async function PATCH(request:Request){
       const newStart=body.newStart?new Date(body.newStart):null
       if(!newStart||Number.isNaN(newStart.getTime()))return NextResponse.json({error:'Nueva fecha inválida'},{status:400})
       const {data,error}=await db.rpc('reschedule_safe_appointment',{p_appointment_id:body.appointmentId,p_new_start:newStart.toISOString(),p_reason:reason,p_actor:professional.display_name})
+      const rule = businessRuleResponse(error); if (rule) return rule
       if(error?.code==='23P01')return NextResponse.json({error:error.message,conflict:true},{status:409})
       if(error)throw error
       return NextResponse.json({appointment:data})
@@ -74,6 +85,7 @@ export async function PATCH(request:Request){
       if(!Number.isFinite(duration)||duration<5||duration>1440)return NextResponse.json({error:'Duración inválida'},{status:400})
       if(duration===currentDurationMinutes(current.service_period))return NextResponse.json({error:'La duración es la misma: no hay ningún cambio que guardar'},{status:400})
       const {data,error}=await db.rpc('resize_safe_appointment',{p_appointment_id:body.appointmentId,p_duration_minutes:duration,p_reason:reason,p_actor:professional.display_name})
+      const rule = businessRuleResponse(error); if (rule) return rule
       if(error?.code==='23P01')return NextResponse.json({error:error.message,conflict:true},{status:409})
       if(error)throw error
       return NextResponse.json({appointment:data})

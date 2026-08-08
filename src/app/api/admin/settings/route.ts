@@ -31,6 +31,23 @@ export async function PATCH(request: Request) {
         if (!['http:','https:'].includes(url.protocol)) throw new Error()
       } catch { return NextResponse.json({ error: 'El enlace de Google Maps no es válido' }, { status: 400 }) }
     }
+    // El horario del negocio bloquea reservas: se valida antes de guardarlo.
+    const hours = (body.settings as Record<string, unknown> | undefined)?.business_hours
+    if (hours !== undefined) {
+      if (!Array.isArray(hours) || hours.length > 7) return NextResponse.json({ error: 'Horario del negocio inválido' }, { status: 400 })
+      for (const entry of hours as Array<Record<string, unknown>>) {
+        const day = Number(entry?.day)
+        if (!Number.isInteger(day) || day < 1 || day > 7) return NextResponse.json({ error: 'Horario del negocio inválido: día fuera de rango' }, { status: 400 })
+        if (entry?.enabled === false) continue
+        const start = String(entry?.start ?? ''), end = String(entry?.end ?? '')
+        if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) return NextResponse.json({ error: 'Horario del negocio inválido: usa horas con formato HH:MM' }, { status: 400 })
+        if (start >= end) return NextResponse.json({ error: 'Horario del negocio inválido: la hora de cierre debe ser posterior a la de apertura' }, { status: 400 })
+      }
+      if ((hours as Array<Record<string, unknown>>).every((entry) => entry?.enabled === false)) {
+        return NextResponse.json({ error: 'Deja al menos un día abierto: con todos cerrados nadie puede reservar' }, { status: 400 })
+      }
+    }
+
     const allowed = ['name','timezone','currency','phone','email','address','maps_url','logo_url','settings','agent_settings']
     const changes = Object.fromEntries(Object.entries(body).filter(([key]) => allowed.includes(key)))
     let result = await db.from('businesses').update({ ...changes, updated_at: new Date().toISOString() }).eq('id',businessId).select().single()

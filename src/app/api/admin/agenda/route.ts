@@ -4,6 +4,16 @@ import { requireBusinessContext } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Regla de negocio devuelta por Postgres (`P0001`), por ejemplo el horario de atención.
+ * El mensaje ya viene en español y escrito para el usuario, así que se muestra tal cual.
+ */
+function businessRuleResponse(error: { code?: string; message?: string } | null) {
+  if (error?.code !== 'P0001') return null
+  return NextResponse.json({ error: error.message ?? 'No se puede hacer ese cambio' }, { status: 409 })
+}
+
+
 /** Minutos que dura hoy la reserva, leídos del rango `[inicio,fin)` que devuelve Postgres. */
 function currentDurationMinutes(period: unknown) {
   const [start, end] = String(period ?? '').replace(/[[\]()"]/g, '').split(',')
@@ -45,6 +55,7 @@ export async function POST(request: Request) {
     const desiredStart = new Date(body.desiredStart)
     if (Number.isNaN(desiredStart.getTime()) || desiredStart.getTime() <= Date.now()) return NextResponse.json({ error: 'La fecha debe ser futura' }, { status: 400 })
     const { data, error } = await db.rpc('create_safe_appointment', { p_business_id: businessId, p_branch_id: body.branchId ?? null, p_client_id: body.clientId, p_professional_id: body.professionalId, p_service_id: body.serviceId, p_desired_start: desiredStart.toISOString(), p_source: 'ADMIN', p_notes: body.notes?.slice(0,1000) ?? null })
+    const rule = businessRuleResponse(error); if (rule) return rule
     if (error?.code === '23P01') return NextResponse.json({ error: error.message, conflict: true }, { status: 409 })
     if (error) throw error
     return NextResponse.json({ appointment: data }, { status: 201 })
@@ -113,6 +124,7 @@ export async function PATCH(request: Request) {
       const { data, error } = body.action==='move'
         ? await db.rpc('move_safe_appointment',{p_appointment_id:body.appointmentId,p_new_start:newStart.toISOString(),p_new_professional_id:body.professionalId,p_reason:reason,p_actor:actor})
         : await db.rpc('reschedule_safe_appointment', { p_appointment_id: body.appointmentId, p_new_start: newStart.toISOString(), p_reason: reason, p_actor: actor })
+      const rule = businessRuleResponse(error); if (rule) return rule
       if (error?.code === '23P01') return NextResponse.json({ error: error.message, conflict: true }, { status: 409 })
       if (error) throw error
       return NextResponse.json({ appointment: data })
@@ -124,6 +136,7 @@ export async function PATCH(request: Request) {
       // Un cambio que no cambia nada no puede generar un aviso al cliente.
       if(duration===currentDurationMinutes(current.service_period))return NextResponse.json({error:'La duración es la misma: no hay ningún cambio que guardar'},{status:400})
       const {data,error}=await db.rpc('resize_safe_appointment',{p_appointment_id:body.appointmentId,p_duration_minutes:duration,p_reason:reason,p_actor:actor})
+      const rule = businessRuleResponse(error); if (rule) return rule
       if(error?.code==='23P01')return NextResponse.json({error:error.message,conflict:true},{status:409})
       if(error)throw error
       return NextResponse.json({appointment:data})

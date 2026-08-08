@@ -334,6 +334,31 @@ Añadido el 2026-08-08 (`20260808000001_agenda_change_guards.sql`, aplicada).
   servicio, en ámbar si el profesional de la reserva no trabaja ese día o si trabaja pero no le
   quedan horas. Antes la lista quedaba vacía en silencio.
 
+## 6.6 Horario del negocio: la fuente de verdad de la agenda
+
+Añadido el 2026-08-08 (`20260808000002_business_hours.sql` y `20260808000003_business_closed_message.sql`,
+aplicadas). Antes solo existía el horario por profesional, así que si los datos decían que
+alguien atendía el domingo la agenda ofrecía el domingo aunque el negocio estuviera cerrado.
+
+- **Dónde vive:** `businesses.settings.business_hours` =
+  `[{day:1..7, enabled, start:"HH:MM", end:"HH:MM"}]` (1 = lunes). Se edita en
+  `/admin/configuracion` con `BusinessHoursEditor`. **Sin la clave, el negocio se considera
+  abierto toda la semana** — los negocios que aún no lo configuraron no cambian de conducta.
+- **Quién lo aplica:** `business_day_window()` dentro de `find_available_professionals`, que es
+  la única puerta de disponibilidad (agenda, agente, portal, `*_safe_appointment`).
+  `assert_business_open()` corre antes en `create/reschedule/move` para que el error sea
+  `P0001` con un mensaje en español y no el genérico "el horario acaba de ocuparse".
+  `resize_safe_appointment` comprueba también el cierre.
+- **El negocio manda sobre el profesional:** `validateAgainstBusinessHours()` (en
+  `src/lib/business-hours.ts`) rechaza guardar un horario de profesional fuera de la ventana
+  del negocio, y `AvailabilityEditor` muestra los días cerrados bloqueados y descarta al cargar
+  los tramos de días que el negocio cerró.
+- **En pantalla:** la agenda abre en vista **Mes**, marca los días cerrados con rayado y la
+  palabra "Cerrado", y bloquea "Nueva reserva" en ellos.
+- **Bug del mini-calendario:** usaba `.getDay()` (hora local del navegador) sobre una fecha
+  construida con `Date.UTC`, así que al oeste de Greenwich toda la grilla se corría una columna
+  y el día de hoy caía bajo la letra equivocada. Va con `.getUTCDay()`.
+
 ## 7. Entorno y despliegue
 
 Variables nuevas: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` (Evolution API compartida por la

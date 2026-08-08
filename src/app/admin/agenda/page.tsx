@@ -5,6 +5,7 @@ import { NewAppointmentModal } from '@/components/NewAppointmentModal'
 import { AgendaAppointment, AppointmentDetailsModal } from '@/components/AppointmentDetailsModal'
 import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { normalizeBusinessHours, WEEKDAY_PLURAL, type BusinessDay } from '@/lib/business-hours'
 import {
   addDaysToDateKey,
   dateKeyInZone,
@@ -56,7 +57,7 @@ function rangeDates(range: string) {
 const isActiveStatus = (status: string) => ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS'].includes(status)
 
 export default function AgendaPage() {
-  const [view, setView] = useState<View>('day')
+  const [view, setView] = useState<View>('month')
   const [timezone, setTimezone] = useState('America/Santiago')
   const [anchor, setAnchor] = useState(() => new Date().toISOString().slice(0, 10))
   const [loading, setLoading] = useState(true)
@@ -66,6 +67,7 @@ export default function AgendaPage() {
   const [newDate, setNewDate] = useState<string | null>(null)
   const [selectedAppointment, setSelectedAppointment] = useState<AgendaAppointment | null>(null)
   const [revision, setRevision] = useState(0)
+  const [businessHours, setBusinessHours] = useState<BusinessDay[] | null>(null)
   const [professionals, setProfessionals] = useState<Professional[]>([])
   const [selected, setSelected] = useState('all')
   const [professionalQuery, setProfessionalQuery] = useState('')
@@ -103,6 +105,7 @@ export default function AgendaPage() {
     }).then((catalog) => {
       const businessTimezone = catalog.business?.timezone || 'America/Santiago'
       setTimezone(businessTimezone)
+      setBusinessHours(normalizeBusinessHours((catalog.business as any)?.settings?.business_hours))
       setAnchor(dateKeyInZone(new Date(), businessTimezone))
       setProfessionals(catalog.professionals.map((professional: any) => ({
         id: professional.id,
@@ -257,6 +260,19 @@ export default function AgendaPage() {
     return `${MONTHS_ES[month - 1]} ${year}`
   }
 
+  /** Días que el negocio no abre según Configuración → Horario de atención. */
+  function closedDay(dayKey: string) {
+    if (!businessHours) return false
+    const [year, month, day] = dayKey.split('-').map(Number)
+    const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay() || 7
+    return !businessHours.find((item) => item.day === weekday)?.enabled
+  }
+  function closedLabel(dayKey: string) {
+    const [year, month, day] = dayKey.split('-').map(Number)
+    const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay() || 7
+    return `El negocio cierra los ${WEEKDAY_PLURAL[weekday]}`
+  }
+
   const weekDays = Array.from({ length: 7 }, (_, index) => addDaysToDateKey(windowRange.first, index))
   const monthGridStart = startOfWeekDateKey(windowRange.first)
   const monthDays = Array.from({ length: 42 }, (_, index) => addDaysToDateKey(monthGridStart, index))
@@ -267,6 +283,7 @@ export default function AgendaPage() {
   }
 
   function openNew(dayKey: string) {
+    if (closedDay(dayKey)) { setSaved(''); setError(`${closedLabel(dayKey)}: no se puede reservar ese día. Cámbialo en Configuración → Horario de atención.`); return }
     setNewDate(dayKey)
     setShowNew(true)
   }
@@ -467,7 +484,7 @@ export default function AgendaPage() {
 
     <div className="flex flex-col gap-4 xl:flex-row">
       <aside className="w-full shrink-0 space-y-4 xl:w-60">
-        <MiniCalendar todayKey={todayKey} anchor={anchor} dotMap={dotMap} onPick={(day) => { setAnchor(day); setView('day') }} />
+        <MiniCalendar todayKey={todayKey} anchor={anchor} dotMap={dotMap} closedDay={closedDay} closedLabel={closedLabel} onPick={(day) => { setAnchor(day); setView('day') }} />
         <section className="rounded-2xl border bg-white p-4">
           <h3 className="text-xs font-black uppercase tracking-wide text-[#736f83]">Esta semana</h3>
           <div className="mt-2 space-y-1 text-sm">{[
@@ -521,7 +538,7 @@ export default function AgendaPage() {
             {weekDays.map((day) => {
               const count = visibleAppointments.filter((appointment) => dateKeyInZone(appointment.start, timezone) === day).length
               return <button key={day} onClick={() => { setAnchor(day); setView('day') }} className={`flex-1 border-l border-black/5 p-2 text-center hover:bg-violet-50 ${day === todayKey ? 'bg-violet-50' : ''}`}>
-                <span className={`block text-[10px] font-bold uppercase ${day === todayKey ? 'text-[#5b3df5]' : 'text-[#736f83]'}`}>{WEEK_HEADS[weekDays.indexOf(day)]}</span>
+                <span className={`block text-[10px] font-bold uppercase ${day === todayKey ? 'text-[#5b3df5]' : closedDay(day) ? 'text-[#c9c5d4]' : 'text-[#736f83]'}`}>{WEEK_HEADS[weekDays.indexOf(day)]}{closedDay(day) ? ' · cerrado' : ''}</span>
                 <span className={`mx-auto mt-0.5 grid h-7 w-7 place-items-center rounded-full text-sm font-black ${day === todayKey ? 'bg-[#5b3df5] text-white' : ''}`}>{Number(day.slice(-2))}</span>
                 {count > 0 && <span className="mt-0.5 inline-block rounded-full border px-1.5 text-[10px] font-bold text-[#736f83]">{count}</span>}
               </button>
@@ -538,8 +555,10 @@ export default function AgendaPage() {
           <div className="grid grid-cols-7">{monthDays.map((day) => {
             const dayAppointments = visibleAppointments.filter((appointment) => dateKeyInZone(appointment.start, timezone) === day).sort((a, b) => a.start.localeCompare(b.start))
             const inMonth = day.slice(0, 7) === windowRange.first.slice(0, 7)
-            return <button key={day} onClick={() => { setAnchor(day); setView('day') }} className={`min-h-28 border-b border-r p-2 text-left align-top hover:bg-violet-50/40 ${inMonth ? '' : 'bg-[#fafafa] opacity-55'}`}>
-              <span className={`mb-1 grid h-7 w-7 place-items-center rounded-full text-sm font-bold ${day === todayKey ? 'bg-[#5b3df5] text-white' : ''}`}>{Number(day.slice(-2))}</span>
+            const isClosed = closedDay(day)
+            return <button key={day} onClick={() => { setAnchor(day); setView('day') }} title={isClosed ? closedLabel(day) : ''} className={`min-h-28 border-b border-r p-2 text-left align-top hover:bg-violet-50/40 ${inMonth ? '' : 'bg-[#fafafa] opacity-55'} ${isClosed ? 'bg-[repeating-linear-gradient(45deg,#f7f6fa,#f7f6fa_6px,#efedf5_6px,#efedf5_12px)]' : ''}`}>
+              <span className={`mb-1 grid h-7 w-7 place-items-center rounded-full text-sm font-bold ${day === todayKey ? 'bg-[#5b3df5] text-white' : isClosed ? 'text-[#a9a4b8]' : ''}`}>{Number(day.slice(-2))}</span>
+              {isClosed && dayAppointments.length === 0 && <span className="block text-[10px] font-bold uppercase tracking-wide text-[#a9a4b8]">Cerrado</span>}
               {dayAppointments.slice(0, 3).map((appointment) => {
                 const tone = appointmentTone(appointment)
                 return <span key={appointment.id} className="mb-1 block truncate rounded border-l-2 px-1 py-0.5 text-[10px] font-semibold" style={{ background: tone.bg, color: tone.tx, borderColor: tone.border }}>{formatTimeInZone(appointment.start, timezone)} {appointment.client}</span>
@@ -553,12 +572,14 @@ export default function AgendaPage() {
   </>
 }
 
-function MiniCalendar({ todayKey, anchor, dotMap, onPick }: { todayKey: string; anchor: string; dotMap: Record<string, { count: number; unresolved: number }>; onPick: (day: string) => void }) {
+function MiniCalendar({ todayKey, anchor, dotMap, closedDay, closedLabel, onPick }: { todayKey: string; anchor: string; dotMap: Record<string, { count: number; unresolved: number }>; closedDay: (day: string) => boolean; closedLabel: (day: string) => string; onPick: (day: string) => void }) {
   const [year, month] = anchor.split('-').map(Number)
   const [calYear, setCalYear] = useState(year)
   const [calMonth, setCalMonth] = useState(month)
   useEffect(() => { setCalYear(year); setCalMonth(month) }, [year, month])
-  const firstDow = (new Date(Date.UTC(calYear, calMonth - 1, 1)).getDay() + 6) % 7
+  // getUTCDay(), no getDay(): la fecha se construye en UTC y en un navegador al oeste de
+  // Greenwich getDay() devuelve el día anterior, corriendo toda la grilla una columna.
+  const firstDow = (new Date(Date.UTC(calYear, calMonth - 1, 1)).getUTCDay() + 6) % 7
   const daysInMonth = new Date(Date.UTC(calYear, calMonth, 0)).getUTCDate()
   const cells: Array<string | null> = []
   for (let index = 0; index < firstDow; index++) cells.push(null)
@@ -576,7 +597,10 @@ function MiniCalendar({ todayKey, anchor, dotMap, onPick }: { todayKey: string; 
       const info = dotMap[day]
       const isToday = day === todayKey
       const isPast = day < todayKey
-      return <button key={index} onClick={() => onPick(day)} title={info ? `${info.count} reserva(s)${info.unresolved ? ` · ${info.unresolved} sin cerrar` : ''}` : ''} className={`flex h-7 flex-col items-center justify-center rounded text-[11px] font-semibold ${isToday ? 'bg-[#5b3df5] text-white' : isPast ? 'text-[#9ca3af]' : 'text-[#374151] hover:bg-violet-50'}`}>
+      const isClosed = closedDay(day)
+      const isAnchor = day === anchor
+      const title = [info ? `${info.count} reserva(s)${info.unresolved ? ` · ${info.unresolved} sin cerrar` : ''}` : '', isClosed ? closedLabel(day) : ''].filter(Boolean).join(' · ')
+      return <button key={index} onClick={() => onPick(day)} title={title} className={`flex h-7 flex-col items-center justify-center rounded text-[11px] font-semibold ${isToday ? 'bg-[#5b3df5] text-white' : isAnchor ? 'bg-violet-100 text-[#4c1d95]' : isClosed ? 'text-[#c9c5d4] line-through' : isPast ? 'text-[#9ca3af]' : 'text-[#374151] hover:bg-violet-50'}`}>
         {Number(day.slice(-2))}
         <span className="flex h-1.5 gap-0.5">
           {info && info.unresolved > 0 && <i className="h-1.5 w-1.5 rounded-full bg-red-600" />}
