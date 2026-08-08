@@ -3,7 +3,7 @@
 import { PageHeader } from '@/components/PageHeader'
 import { NewAppointmentModal } from '@/components/NewAppointmentModal'
 import { AgendaAppointment, AppointmentDetailsModal } from '@/components/AppointmentDetailsModal'
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   addDaysToDateKey,
@@ -61,6 +61,7 @@ export default function AgendaPage() {
   const [anchor, setAnchor] = useState(() => new Date().toISOString().slice(0, 10))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [saved, setSaved] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [newDate, setNewDate] = useState<string | null>(null)
   const [selectedAppointment, setSelectedAppointment] = useState<AgendaAppointment | null>(null)
@@ -82,6 +83,13 @@ export default function AgendaPage() {
   const [busy, setBusy] = useState(false)
   const [, setTick] = useState(0)
   const gridRef = useRef<HTMLDivElement | null>(null)
+
+  /** Confirmación verde arriba de la agenda: se va sola a los pocos segundos. */
+  function flash(message: string) {
+    setError('')
+    setSaved(message)
+    setTimeout(() => setSaved(''), 6000)
+  }
 
   useEffect(() => {
     const timer = setInterval(() => setTick((value) => value + 1), 60000)
@@ -291,6 +299,9 @@ export default function AgendaPage() {
     if (ok) {
       setDropConfirm(null)
       setDropReason('')
+      flash(changedProfessional
+        ? `Reserva movida a ${dropProfessional?.name ?? 'otro profesional'}. El cliente recibirá el aviso con el motivo.`
+        : 'Reserva movida. El cliente recibirá el aviso con el motivo.')
     }
   }
 
@@ -425,15 +436,18 @@ export default function AgendaPage() {
         <p className="opacity-70 line-through">{positionOf(dropAppointment).day} · {formatTimeInZone(dropAppointment.start, timezone)} · {dropAppointment.professionalName}</p>
         <p className="font-bold">{dropConfirm.day} · {fmtMins(dropConfirm.mins)} · {dropProfessional?.name ?? dropAppointment.professionalName}</p>
       </div>
-      <label className="mt-4 block text-sm font-semibold">Motivo del cambio *<input autoFocus value={dropReason} onChange={(event) => setDropReason(event.target.value)} maxLength={300} className="mt-2 w-full rounded-xl border p-3" placeholder="Se quedará en las notas de la reserva"/></label>
+      <label className="mt-4 block text-sm font-semibold">Motivo del cambio *<input autoFocus value={dropReason} onChange={(event) => setDropReason(event.target.value)} maxLength={300} className="mt-2 w-full rounded-xl border-2 p-3" placeholder="Ej: la profesional tuvo una urgencia"/></label>
+      <p className="mt-2 text-xs text-[#736f83]">{dropAppointment.phone ? `Se le enviará un WhatsApp a ${dropAppointment.client} con el cambio y el motivo.` : 'El cliente no tiene teléfono registrado: no recibirá aviso.'}</p>
+      {error && <p role="alert" className="mt-3 flex items-start gap-2 rounded-xl border-2 border-red-300 bg-red-50 p-3 text-sm font-bold text-red-800"><AlertTriangle size={18} className="shrink-0"/><span>{error}</span></p>}
       <div className="mt-4 flex gap-2">
-        <button disabled={busy} onClick={() => void applyDrop()} className="flex-1 rounded-xl bg-[#5b3df5] py-2.5 text-sm font-bold text-white disabled:opacity-50">Sí, mover</button>
-        <button onClick={() => setDropConfirm(null)} className="flex-1 rounded-xl border py-2.5 text-sm font-semibold">Cancelar</button>
+        <button disabled={busy} onClick={() => void applyDrop()} className="flex-1 rounded-xl bg-[#5b3df5] py-2.5 text-sm font-bold text-white disabled:opacity-50">{busy ? 'Guardando…' : 'Sí, mover y avisar'}</button>
+        <button onClick={() => { setDropConfirm(null); setError('') }} className="flex-1 rounded-xl border py-2.5 text-sm font-semibold">Cancelar</button>
       </div>
     </div></div>}
 
     <PageHeader title="Agenda general" description="Agenda del negocio por profesional, con apartados del agente y pendientes por cerrar." action={<button onClick={() => openNew(anchor)} className="inline-flex items-center gap-2 rounded-xl bg-[#5b3df5] px-4 py-2.5 text-sm font-bold text-white"><Plus size={17}/>Nueva reserva</button>} />
-    {error && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+    {error && !dropConfirm && <p role="alert" className="mb-4 flex items-start gap-2 rounded-2xl border-2 border-red-300 bg-red-50 p-4 text-sm font-bold text-red-800"><AlertTriangle size={20} className="shrink-0"/><span>{error}</span></p>}
+    {saved && <p role="status" className="mb-4 flex items-start gap-2 rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4 text-sm font-bold text-emerald-800"><CheckCircle2 size={20} className="shrink-0"/><span>{saved}</span></p>}
 
     <div className="mb-4 flex flex-col justify-between gap-3 rounded-2xl border bg-white p-3 lg:flex-row lg:items-center">
       <div className="flex flex-wrap items-center gap-2">

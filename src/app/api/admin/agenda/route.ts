@@ -4,6 +4,13 @@ import { requireBusinessContext } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 
+/** Minutos que dura hoy la reserva, leídos del rango `[inicio,fin)` que devuelve Postgres. */
+function currentDurationMinutes(period: unknown) {
+  const [start, end] = String(period ?? '').replace(/[[\]()"]/g, '').split(',')
+  const minutes = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000)
+  return Number.isFinite(minutes) ? minutes : -1
+}
+
 export async function GET(request: Request) {
   try {
     const { db, businessId,role,memberId } = await requireBusinessContext(['OWNER','ADMIN','RECEPTIONIST','PROFESSIONAL'])
@@ -77,7 +84,7 @@ export async function PATCH(request: Request) {
     }
     if (!body.appointmentId || !body.action) return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 })
 
-    const { data: current, error: currentError } = await db.from('appointments').select('id,status,notes').eq('id',body.appointmentId).eq('business_id',businessId).maybeSingle()
+    const { data: current, error: currentError } = await db.from('appointments').select('id,status,notes,service_period').eq('id',body.appointmentId).eq('business_id',businessId).maybeSingle()
     if (currentError) throw currentError
     if (!current) return NextResponse.json({ error: 'Reserva inexistente' }, { status: 404 })
 
@@ -114,6 +121,8 @@ export async function PATCH(request: Request) {
     if(body.action==='resize'){
       const duration=Math.round(Number(body.durationMinutes))
       if(!Number.isFinite(duration)||duration<5||duration>1440)return NextResponse.json({error:'Duración inválida'},{status:400})
+      // Un cambio que no cambia nada no puede generar un aviso al cliente.
+      if(duration===currentDurationMinutes(current.service_period))return NextResponse.json({error:'La duración es la misma: no hay ningún cambio que guardar'},{status:400})
       const {data,error}=await db.rpc('resize_safe_appointment',{p_appointment_id:body.appointmentId,p_duration_minutes:duration,p_reason:reason,p_actor:actor})
       if(error?.code==='23P01')return NextResponse.json({error:error.message,conflict:true},{status:409})
       if(error)throw error

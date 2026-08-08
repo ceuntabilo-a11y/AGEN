@@ -316,6 +316,24 @@ le preguntaba "¿confirmas tu cita?" a gente que nunca había reservado).
   una sola frase firme ante temas ajenos al negocio o contenido ofensivo, y prohibido usar el
   nombre del perfil de WhatsApp como nombre del cliente.
 
+## 6.5 Agenda: confirmar antes de cambiar y avisar solo cambios reales
+
+Añadido el 2026-08-08 (`20260808000001_agenda_change_guards.sql`, aplicada).
+
+- **Un cambio que no cambia nada no es un cambio.** `resize`, `reschedule` y `move` devuelven la
+  reserva intacta y no encolan aviso si la duración, la hora o el profesional son los mismos.
+  Antes, guardar la duración sin moverla le mandaba al cliente "cambiamos la duración de tu
+  hora" con la fecha vieja.
+- **Confirmación explícita antes de aplicar.** `AppointmentDetailsModal` muestra un panel con
+  el antes → después de cada campo, el motivo escrito y a quién se le va a avisar; nada se
+  guarda hasta pulsar "Sí, aplicar el cambio".
+- **Avisos visibles.** Errores en recuadro rojo con borde arriba del modal (`role="alert"`),
+  confirmación verde al guardar, y toast verde en `/admin/agenda` al mover por arrastre.
+- **Día no laboral.** `POST /api/admin/slots` devuelve `coverage` y `dayOff` usando
+  `service_weekday_coverage()`. La agenda avisa en rojo si ese día no atiende nadie para el
+  servicio, en ámbar si el profesional de la reserva no trabaja ese día o si trabaja pero no le
+  quedan horas. Antes la lista quedaba vacía en silencio.
+
 ## 7. Entorno y despliegue
 
 Variables nuevas: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` (Evolution API compartida por la
