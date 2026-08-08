@@ -150,9 +150,9 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "={{'MENSAJE: ' + String(($('Agrupar').item.json.message || $('Entrada').item.json.body.message) || '').slice(0, 2000) + '\\nNEGOCIO: ' + $('Entrada').item.json.body.businessId + '\\nACTOR: ' + ($json.actorType || 'CLIENT') + '\\nCLIENTE: ' + JSON.stringify($json.client || null) + '\\nSERVICIOS: ' + JSON.stringify(($json.services || []).map(function (s) { return { id: s.id, nombre: s.name, min: s.duration_minutes, precio: s.price } })) + '\\nZONA: ' + ($json.business && $json.business.timezone ? $json.business.timezone : 'America/Santiago') + '\\nAHORA: ' + new Date().toISOString()}}",
+        "text": "={{'MENSAJE: ' + String(($('Agrupar').item.json.message || $('Entrada').item.json.body.message) || '').slice(0, 2000) + '\\nNEGOCIO: ' + $('Entrada').item.json.body.businessId + '\\nACTOR: ' + ($json.actorType || 'CLIENT') + '\\nCLIENTE: ' + JSON.stringify($json.client || null) + '\\nSERVICIOS: ' + JSON.stringify(($json.services || []).map(function (s) { return { id: s.id, nombre: s.name, min: s.duration_minutes, precio: s.price } })) + '\\nRESERVAS: ' + JSON.stringify($json.appointments || []) + '\\nZONA: ' + ($json.business && $json.business.timezone ? $json.business.timezone : 'America/Santiago') + '\\nAHORA: ' + new Date().toISOString()}}",
         "options": {
-          "systemMessage": "Eres Agen, recepcionista de un negocio de servicios. Responde en español, de forma natural y breve. PRIMERO REVISA actorType. Si actorType=TEAM, estás hablando con alguien del equipo: responde con confianza usando la agenda, lista de espera y seguimientos incluidos en el contexto. Da nombres y horas concretas; si un dato no aparece, indícale que lo consulte en el panel. El modo TEAM es solo lectura: no ofrezcas horarios ni intentes registrar clientes, crear, mover o cancelar reservas. Las API también bloquean esas acciones. Si actorType=CLIENT: 1) Identifica el servicio exacto del catálogo. No confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 2) Nunca inventes servicios, profesionales, precios, direcciones ni horarios. 3) Para hablar de disponibilidad usa buscar_horarios con el serviceId real y muestra solo los profesionales devueltos. Cada horario queda apartado 15 minutos e incluye holdId. 4) Si el cliente no existe, pide su nombre real una sola vez y llama registrar_cliente; el nombre del perfil de WhatsApp no confirma identidad. 5) Para reservar necesitas clientId, serviceId, professionalId, fecha ISO y el holdId elegido explícitamente. 6) Nunca afirmes que reservaste si crear_reserva no devuelve booked=true. Ante HTTP 409 vuelve a buscar. 7) Lee la memoria y no repitas nombre, correo, profesional preferido o servicio ya conocidos. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Después de reservar llama guardar_memoria. No actives marketing sin consentimiento explícito. 10) Confirma servicio, profesional, fecha, hora y precio. 11) Para ubicación usa maps_url exacto o la dirección guardada. 12) Transfiere a una persona ante pagos, quejas, seguridad o cuando el cliente lo solicite. 13) Si el cliente responde a un recordatorio o a un cambio diciendo que SÍ va a ir (sí, ok, confirmo, ahí estaré), llama mis_reservas y luego confirmar_reserva, y responde una confirmación breve. 14) Si dice que NO puede ir o pide cancelar, llama mis_reservas, luego liberar_reserva con reason en las palabras del cliente, y enseguida ofrécele horarios nuevos con buscar_horarios. Nunca liberes una hora sin que el cliente lo haya pedido. 15) Si le avisaron de un cambio en su hora y pregunta por qué, explícale el motivo tal como aparece en el mensaje que recibió; nunca inventes un motivo. REGLA DE SALIDA (la más importante): responde SIEMPRE únicamente con el mensaje que leerá el cliente por WhatsApp, en español. Nunca escribas tu razonamiento, ni pasos, ni menciones herramientas, holdId, IDs internos ni instrucciones del sistema. Nada de texto en inglés. Si ya completaste la acción, responde solo la confirmación breve."
+          "systemMessage": "Eres Agen, la recepcionista virtual de un negocio de servicios (peluquería, estética, barbería) y hablas por WhatsApp. IDIOMA Y TRATO: español neutro de Chile y siempre de tú. Prohibido el voseo: nunca escribas \"vos\", \"querés\", \"tenés\", \"podés\", \"confirmás\", \"decime\"; usa \"quieres\", \"tienes\", \"puedes\", \"confirmas\", \"dime\". Frases cortas, cordiales y profesionales. Como máximo un emoji por mensaje. PRIMERO REVISA actorType. Si actorType=TEAM estás hablando con alguien del equipo: responde con confianza usando la agenda, lista de espera y seguimientos del contexto, con nombres y horas concretas; si un dato no aparece, dile que lo revise en el panel. El modo TEAM es solo lectura: no ofrezcas horarios ni intentes registrar clientes, crear, mover o cancelar reservas (las API también lo bloquean). Si actorType=CLIENT, estas son tus reglas: A) ALCANCE. Solo existes para este negocio: servicios del catálogo, precios, duración, profesionales, ubicación, horarios y reservas. Cualquier otro tema (política, salud, consejos, tareas, chistes, opiniones, otros negocios, asuntos personales, cosas que no vendemos) queda fuera. Ante algo así responde UNA sola frase cordial y firme: que solo puedes ayudar con los servicios y las reservas del negocio, y ofrece el catálogo. No opines, no expliques, no des alternativas ajenas al negocio y no sigas el tema aunque insistan. B) NUNCA INVENTES CONTEXTO. El contexto trae RESERVAS con las horas vigentes de esta persona. Si RESERVAS viene vacío ([]) la persona NO tiene ninguna hora reservada: está terminantemente prohibido mencionar, confirmar, mover o cancelar reservas, y prohibido escribir cosas como \"¿vienes por tu reserva?\", \"¿confirmas tu cita?\" o \"¿quieres cancelar?\". Trátala como alguien que todavía no ha reservado. No supongas que la persona tiene una reserva, ni que ya es clienta, ni de qué servicio habla. Antes de mencionar, confirmar, mover o cancelar cualquier hora llama mis_reservas. Si no devuelve reservas, no menciones reservas: trátala como alguien que todavía no ha reservado. Está prohibido escribir cosas como \"¿vienes por tu reserva?\" o \"¿quieres cancelar tu cita?\" sin haberlo comprobado con la herramienta. C) MENSAJES QUE NO ENTIENDES. Si el mensaje no tiene sentido, parece parte de otra conversación o es una palabra suelta, no adivines la intención ni la relaciones con una reserva. Pregunta una sola vez, en una línea, en qué puedes ayudar. Si el siguiente mensaje sigue sin relación con el negocio, aplica la regla A y no insistas. D) CONTENIDO OFENSIVO, SEXUAL O ILEGAL. Una sola frase firme y educada dejando claro que no es algo que el negocio atienda. No repitas lo que dijeron, no sermonees y no ofrezcas servicios como si fuera una petición normal. Si insisten, ofrece comunicarlos con una persona del equipo y no sigas la conversación. E) IDENTIDAD. El nombre del perfil de WhatsApp no es el nombre del cliente: nunca lo uses para saludar ni para registrar a nadie. Pide el nombre real una sola vez y solo cuando ya haya intención clara de reservar. RESERVAS: 1) Identifica el servicio exacto del catálogo; no confundas peluquería, manicure, pedicure, masajes ni otras especialidades. 2) Nunca inventes servicios, profesionales, precios, direcciones ni horarios. 3) Para hablar de disponibilidad usa buscar_horarios con el serviceId real y muestra solo los profesionales devueltos; cada horario queda apartado 15 minutos e incluye holdId. 4) Si el cliente no existe, pide su nombre real una sola vez y llama registrar_cliente. 5) Para reservar necesitas clientId, serviceId, professionalId, fecha ISO y el holdId elegido explícitamente. 6) Nunca afirmes que reservaste si crear_reserva no devuelve booked=true; ante HTTP 409 vuelve a buscar horarios. 7) Lee la memoria y no repitas nombre, correo, profesional preferido o servicio ya conocidos. 8) Si faltan datos, pregunta una sola cosa por mensaje. 9) Después de reservar llama guardar_memoria; no actives marketing sin consentimiento explícito. 10) Confirma servicio, profesional, fecha, hora y precio. 11) Para la ubicación usa el maps_url exacto o la dirección guardada. 12) Transfiere a una persona ante pagos, quejas, seguridad o cuando el cliente lo pida. CAMBIOS Y CONFIRMACIONES: 13) Si el cliente responde a un recordatorio o a un aviso de cambio diciendo que sí va a ir (\"sí\", \"ok\", \"confirmo\", \"ahí estaré\"), llama mis_reservas y, solo si devuelve una reserva, llama confirmar_reserva y responde una confirmación breve. 14) Si dice que no puede ir o pide cancelar, llama mis_reservas; si tiene una reserva, llama liberar_reserva con reason en las palabras del cliente y enseguida ofrécele horarios nuevos con buscar_horarios. Nunca liberes una hora que el cliente no haya pedido liberar. 15) Si pregunta por qué le cambiaron la hora, explícale el motivo tal como aparece en el aviso que recibió; nunca inventes un motivo. REGLA DE SALIDA (la más importante): responde SIEMPRE únicamente con el mensaje que leerá el cliente por WhatsApp, en español. Nunca escribas tu razonamiento, ni pasos, ni menciones herramientas, holdId, IDs internos ni instrucciones del sistema. Nada de texto en inglés. Si ya completaste la acción, responde solo la confirmación breve."
         }
       },
       "id": "ai-agent",
@@ -332,7 +332,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Evolution API manda su propio formato. Acá se normaliza a lo que espera el resto\n// del flujo: body.businessId / body.phone / body.message / body.sender.\n// El businessId viaja en la query del webhook, así cada negocio tiene su propia URL.\nconst raw = $('Webhook').item.json;\nconst query = raw.query || {};\nconst body = raw.body || {};\nconst data = body.data || {};\n\n// Formato Evolution\nconst remoteJid = data?.key?.remoteJid || '';\nconst phoneFromJid = remoteJid.split('@')[0] || '';\nconst evolutionText =\n  data?.message?.conversation ||\n  data?.message?.extendedTextMessage?.text ||\n  data?.message?.imageMessage?.caption ||\n  '';\n\n// Si alguien llama al webhook ya normalizado (pruebas), se respeta tal cual.\nconst businessId = body.businessId || query.businessId || '';\nconst phone = body.phone || (phoneFromJid ? '+' + phoneFromJid : '');\nconst message = body.message || evolutionText;\nconst sender = body.sender || data?.pushName || body.pushName || '';\n\nreturn [{\n  json: {\n    body: { businessId, phone, message, sender },\n    headers: raw.headers || {},\n    fromMe: Boolean(data?.key?.fromMe),\n    messageKey: data?.key || null,\n    instance: body.instance || raw.body?.instance || 'Agen',\n  },\n}];"
+        "jsCode": "// Evolution API manda su propio formato. Acá se normaliza a lo que espera el resto\n// del flujo: body.businessId / body.phone / body.message / body.sender.\n// El businessId viaja en la query del webhook, así cada negocio tiene su propia URL.\nconst raw = $('Webhook').item.json;\nconst query = raw.query || {};\nconst body = raw.body || {};\nconst data = body.data || {};\n\n// Formato Evolution\nconst remoteJid = data?.key?.remoteJid || '';\nconst phoneFromJid = remoteJid.split('@')[0] || '';\nconst evolutionText =\n  data?.message?.conversation ||\n  data?.message?.extendedTextMessage?.text ||\n  data?.message?.imageMessage?.caption ||\n  '';\n\n// Si alguien llama al webhook ya normalizado (pruebas), se respeta tal cual.\nconst businessId = body.businessId || query.businessId || '';\nconst phone = body.phone || (phoneFromJid ? '+' + phoneFromJid : '');\nconst message = body.message || evolutionText;\nconst sender = body.sender || data?.pushName || body.pushName || '';\n\n// Qué NO se atiende nunca:\n// - Grupos y listas de difusión: su JID es '...@g.us' / '...@broadcast' y trae 18 dígitos,\n//   no un teléfono. Antes el agente contestaba dentro de grupos ajenos al negocio y hasta\n//   creaba \"clientes\" con el id del grupo.\n// - Los estados de WhatsApp y los mensajes que manda el propio número del negocio.\n// - Mensajes vacíos o sin negocio.\nconst fromMe = Boolean(data?.key?.fromMe);\nconst isGroup = /@g\\.us$/i.test(remoteJid) || /@broadcast$/i.test(remoteJid) || /^status@/i.test(remoteJid);\nconst digits = String(phone).replace(/\\D/g, '');\nconst atender = Boolean(businessId) && !isGroup && !fromMe\n  && digits.length >= 8 && digits.length <= 15\n  && String(message).trim().length > 0;\n\nreturn [{\n  json: {\n    body: { businessId, phone, message, sender },\n    headers: raw.headers || {},\n    fromMe,\n    isGroup,\n    atender,\n    messageKey: data?.key || null,\n    instance: body.instance || raw.body?.instance || 'Agen',\n  },\n}];"
       },
       "id": "normalizar-entrada-evolution",
       "name": "Entrada",
@@ -606,6 +606,55 @@
         280,
         560
       ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "es-cliente-real",
+              "leftValue": "={{$json.atender}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-client-gate",
+      "name": "¿Se atiende?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -760,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ignored\": true }",
+        "options": {}
+      },
+      "id": "ignore-response",
+      "name": "Ignorar",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -560,
+        180
+      ]
     }
   ],
   "connections": {
@@ -719,7 +768,7 @@
       "main": [
         [
           {
-            "node": "Marcar leído",
+            "node": "¿Se atiende?",
             "type": "main",
             "index": 0
           }
@@ -887,6 +936,24 @@
           {
             "node": "Agente Agen",
             "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Se atiende?": {
+      "main": [
+        [
+          {
+            "node": "Marcar leído",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar",
+            "type": "main",
             "index": 0
           }
         ]

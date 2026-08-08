@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { isAuthorizedAgent } from '@/lib/agent-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { normalizePhone } from '@/lib/phone'
-import {dateKeyInZone,zonedDayRange} from '@/lib/timezone'
+import {dateKeyInZone,formatInZone,formatTimeInZone,zonedDayRange} from '@/lib/timezone'
 import {findAgentTeamActor,rejectTeamActor} from '@/lib/agent-actor'
 
 export async function POST(request: Request) {
@@ -27,7 +27,33 @@ export async function POST(request: Request) {
   }
   const { data, error } = await db.from('clients').select('id,full_name,phone,email,birthday,notes,marketing_opt_in,client_memory(preferred_professional_id,preferred_service_id,preferences,known_facts,conversation_summary,last_intent,last_interaction_at)').eq('business_id', body.businessId).eq('phone', phone).maybeSingle()
   if (error) return NextResponse.json({ error: 'No se pudo consultar la memoria' }, { status: 500 })
-  return NextResponse.json({ known: Boolean(data), actorType:'CLIENT',client: data })
+
+  // Las reservas vigentes viajan siempre en el contexto: sin esto el agente adivinaba y le
+  // preguntaba "¿confirmas tu cita?" a gente que nunca había reservado.
+  let appointments: Array<Record<string, unknown>> = []
+  if (data) {
+    const { data: business } = await db.from('businesses').select('timezone').eq('id', body.businessId).maybeSingle()
+    const timezone = business?.timezone || 'America/Santiago'
+    const { data: upcoming } = await db.from('appointments')
+      .select('id,status,service_period,client_confirmed_at,professional:professionals(display_name),service:services(name)')
+      .eq('business_id', body.businessId).eq('client_id', data.id)
+      .in('status', ['PENDING', 'CONFIRMED'])
+      .overlaps('service_period', `[${new Date().toISOString()},${new Date(Date.now() + 90 * 86400000).toISOString()})`)
+      .order('service_period').limit(5)
+    appointments = (upcoming ?? []).map((item: any) => {
+      const start = String(item.service_period).replace(/[[\]()"]/g, '').split(',')[0]
+      return {
+        appointmentId: item.id,
+        status: item.status,
+        confirmedByClient: Boolean(item.client_confirmed_at),
+        date: formatInZone(start, timezone, { weekday: 'long', day: 'numeric', month: 'long' }),
+        time: formatTimeInZone(start, timezone),
+        serviceName: item.service?.name ?? null,
+        professionalName: item.professional?.display_name ?? null,
+      }
+    })
+  }
+  return NextResponse.json({ known: Boolean(data), actorType:'CLIENT', client: data, appointments })
 }
 
 export async function PUT(request: Request) {

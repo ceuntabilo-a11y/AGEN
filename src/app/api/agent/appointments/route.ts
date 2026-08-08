@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isAuthorizedAgent } from '@/lib/agent-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { normalizePhone } from '@/lib/phone'
+import { isRealClientPhone, normalizePhone } from '@/lib/phone'
 import { rejectTeamActor } from '@/lib/agent-actor'
 import { formatInZone, formatTimeInZone } from '@/lib/timezone'
 
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   const body = await request.json() as Body
   const phone = normalizePhone(body.phone)
   const action = body.action ?? 'list'
-  if (!body.businessId || phone.length < 7) return NextResponse.json({ error: 'Negocio o teléfono inválido' }, { status: 400 })
+  if (!body.businessId || !isRealClientPhone(phone)) return NextResponse.json({ error: 'Negocio o teléfono inválido' }, { status: 400 })
   if (!['list', 'confirm', 'release'].includes(action)) return NextResponse.json({ error: 'Acción inválida' }, { status: 400 })
 
   const db = createAdminClient()

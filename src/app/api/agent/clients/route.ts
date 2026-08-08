@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
 import { isAuthorizedAgent } from '@/lib/agent-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { normalizePhone } from '@/lib/phone'
+import { isRealClientPhone, normalizePhone } from '@/lib/phone'
 import {rejectTeamActor} from '@/lib/agent-actor'
 
 export async function POST(request: Request) {
   if (!isAuthorizedAgent(request)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   const body = await request.json() as { businessId?: string; phone?: string; fullName?: string; email?: string; marketingOptIn?: boolean }
   const phone = normalizePhone(body.phone)
-  if (!body.businessId || phone.length < 7) return NextResponse.json({ error: 'Negocio o teléfono inválido' }, { status: 400 })
+  if (!body.businessId || !isRealClientPhone(phone)) return NextResponse.json({ error: 'Negocio o teléfono inválido' }, { status: 400 })
 
   const db = createAdminClient()
   if(await rejectTeamActor(db,body.businessId,phone))return NextResponse.json({error:'El equipo no puede registrarse como cliente desde el agente'},{status:403})

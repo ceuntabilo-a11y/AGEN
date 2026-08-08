@@ -296,6 +296,26 @@ Añadido el 2026-08-07 (`20260807000002_appointment_change_notices.sql`, aplicad
 - Herramientas nuevas del agente en `01-agen-agent.json`: `mis_reservas`, `confirmar_reserva`,
   `liberar_reserva`, más las reglas 13–15 del prompt.
 
+## 6.4 El agente solo atiende clientes reales y solo habla del negocio
+
+Añadido el 2026-08-07 tras revisar conversaciones reales (el agente respondía dentro de grupos
+de WhatsApp, creaba "clientes" con el id del grupo, llegó a agendar una hora desde un grupo, y
+le preguntaba "¿confirmas tu cita?" a gente que nunca había reservado).
+
+- **Puerta de entrada (`Entrada` + nodo `¿Se atiende?` en `01-agen-agent.json`).** Se ignoran
+  grupos (`@g.us`), listas de difusión, estados, mensajes propios (`key.fromMe`), mensajes
+  vacíos y JID que no son teléfonos (E.164: 8–15 dígitos). El webhook responde
+  `{"ignored":true}` sin gastar tokens ni tocar la app.
+- **Defensa en la app:** `isRealClientPhone()` en `src/lib/phone.ts`; `/api/agent/clients` y
+  `/api/agent/appointments` devuelven 400 ante un identificador que no es un teléfono.
+- **Contexto en vez de adivinanza:** `POST /api/agent/memory` devuelve además `appointments`
+  (hasta 5 reservas vigentes, ya formateadas en la zona del negocio) y el prompt las inyecta
+  como `RESERVAS`. Si viene `[]`, el prompt prohíbe explícitamente mencionar, confirmar o
+  cancelar reservas.
+- **Prompt con alcance cerrado:** trato de tú en español neutro de Chile (voseo prohibido),
+  una sola frase firme ante temas ajenos al negocio o contenido ofensivo, y prohibido usar el
+  nombre del perfil de WhatsApp como nombre del cliente.
+
 ## 7. Entorno y despliegue
 
 Variables nuevas: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` (Evolution API compartida por la
