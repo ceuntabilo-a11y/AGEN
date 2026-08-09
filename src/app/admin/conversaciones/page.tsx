@@ -6,6 +6,7 @@ import { formatInZone, formatTimeInZone } from '@/lib/timezone'
 import { Bot, MessageCircle, UserRound } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
+import { ListPlaceholder } from '@/components/ListPlaceholder'
 
 type Conversation = {
   id: string
@@ -26,6 +27,7 @@ export default function ConversationsPage() {
   const [impact, setImpact] = useState<Impact | null>(null)
   const [selected, setSelected] = useState<any>(null)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     try {
@@ -39,6 +41,7 @@ export default function ConversationsPage() {
       if (stats.ok) setImpact(await stats.json())
       setError('')
     } catch { setError('No se pudieron cargar las conversaciones') }
+    finally { setLoading(false) }
   }, [])
 
   useEffect(() => { void load() }, [load])
@@ -79,7 +82,7 @@ export default function ConversationsPage() {
           <p className="mt-1 truncate text-xs text-[#736f83]">{conversation.last_message ? `${SENDER[conversation.last_message.sender] ?? ''}: ${conversation.last_message.content}` : 'Sin mensajes'}</p>
           <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${conversation.status === 'HUMAN' ? 'bg-amber-50 text-amber-800' : conversation.status === 'CLOSED' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700'}`}>{STATUS[conversation.status] ?? conversation.status}</span>
         </button>)}
-        {conversations.length === 0 && !error && <p className="p-6 text-center text-sm text-[#736f83]">Todavía no hay conversaciones. Aparecen solas cuando un cliente le escribe al agente.</p>}
+        {conversations.length === 0 && <ListPlaceholder loading={loading} error={Boolean(error)} className="p-6 text-center text-sm text-[#736f83]">Todavía no hay conversaciones. Aparecen solas cuando un cliente le escribe al agente.</ListPlaceholder>}
       </div>
 
       <div className="rounded-2xl border bg-white p-5">

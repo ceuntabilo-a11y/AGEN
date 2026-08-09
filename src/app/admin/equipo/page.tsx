@@ -7,6 +7,7 @@ import { EditProfessionalModal } from '@/components/EditProfessionalModal'
 import { useEffect, useState } from 'react'
 import { TeamAgentContacts } from '@/components/TeamAgentContacts'
 import { SpecialtyEditor } from '@/components/SpecialtyEditor'
+import { ListPlaceholder } from '@/components/ListPlaceholder'
 
 type Professional = {
   id: string
@@ -25,6 +26,7 @@ export default function TeamPage() {
   const [items, setItems] = useState<Professional[]>([])
   const [specialties, setSpecialties] = useState<Array<{ id: string; name: string }>>([])
   const [error, setError] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [show, setShow] = useState(false)
   const [schedule, setSchedule] = useState<{ id: string; name: string } | null>(null)
   const [editing, setEditing] = useState<Professional | null>(null)
@@ -36,7 +38,7 @@ export default function TeamPage() {
     setItems(data.professionals ?? [])
     setSpecialties(data.specialties ?? [])
     setError(false)
-  }).catch(() => setError(true))
+  }).catch(() => setError(true)).finally(() => setLoading(false))
 
   useEffect(() => { load() }, [])
 
@@ -69,7 +71,7 @@ export default function TeamPage() {
           </div>
         </article>
       })}
-      {!error && items.length === 0 && <p className="text-sm text-[#736f83]">Aún no hay profesionales.</p>}
+      {items.length === 0 && <ListPlaceholder loading={loading} error={error} className="text-sm text-[#736f83]">Aún no hay profesionales.</ListPlaceholder>}
     </div>
     <SpecialtyEditor onChanged={load}/>
     <TeamAgentContacts/>

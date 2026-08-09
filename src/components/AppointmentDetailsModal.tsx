@@ -3,6 +3,7 @@
 import { AlertTriangle, CalendarClock, CheckCircle2, MessageSquareText, TimerReset, X } from 'lucide-react'
 import { useState } from 'react'
 import { dateKeyInZone, formatInZone, formatTimeInZone, zonedDayRange } from '@/lib/timezone'
+import { ModalShell } from '@/components/ModalShell'
 
 export type AgendaAppointment = {
   id: string
@@ -167,7 +168,7 @@ export function AppointmentDetailsModal({ appointment, timezone, onClose, onUpda
       ? { tone: 'ok' as const, text: saved }
       : null
 
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4">
+  return <ModalShell titulo="Detalle de la reserva" onClose={onClose}>
     <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-[#f8f7fb] shadow-2xl">
 
       <div className="sticky top-0 z-10 rounded-t-3xl bg-[#f8f7fb] px-6 pb-2 pt-6">
@@ -313,5 +314,5 @@ export function AppointmentDetailsModal({ appointment, timezone, onClose, onUpda
       </>}
       </div>
     </div>
-  </div>
+  </ModalShell>
 }

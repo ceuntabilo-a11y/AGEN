@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react'
 import { X } from 'lucide-react'
+import { ModalShell } from '@/components/ModalShell'
 
 type Service = {
   id: string
@@ -71,7 +72,7 @@ export function EditServiceModal({ service, onClose, onSaved }: { service: Servi
     onClose()
   }
 
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+  return <ModalShell titulo="Editar servicio" onClose={onClose}>
     <form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6">
       <div className="flex justify-between">
         <div><h2 className="text-xl font-black">Editar servicio</h2><p className="text-sm text-[#736f83]">{service.name}</p></div>
@@ -93,5 +94,5 @@ export function EditServiceModal({ service, onClose, onSaved }: { service: Servi
       <button disabled={loading || !ready} className="mt-5 w-full rounded-xl bg-[#5b3df5] py-3 font-bold text-white disabled:opacity-50">{loading ? 'Guardando…' : ready ? 'Guardar cambios' : 'Cargando datos…'}</button>
       <button type="button" disabled={loading} onClick={() => void toggleActive()} className={`mt-3 w-full rounded-xl border py-3 font-bold disabled:opacity-50 ${service.active ? 'border-red-200 text-red-700' : 'border-emerald-200 text-emerald-700'}`}>{service.active ? 'Desactivar servicio' : 'Reactivar servicio'}</button>
     </form>
-  </div>
+  </ModalShell>
 }

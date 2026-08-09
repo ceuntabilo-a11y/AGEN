@@ -5,6 +5,7 @@ import { NewServiceModal } from '@/components/NewServiceModal'
 import { money } from '@/lib/money'
 import { Clock3, Pencil, Plus } from 'lucide-react'
 import { EditServiceModal } from '@/components/EditServiceModal'
+import { ListPlaceholder } from '@/components/ListPlaceholder'
 import { useEffect, useState } from 'react'
 
 type Service = {
@@ -26,6 +27,7 @@ export default function ServicesPage() {
   const [services,setServices] = useState<Service[]>([])
   const [currency,setCurrency] = useState('CLP')
   const [error,setError] = useState(false)
+  const [loading,setLoading] = useState(true)
   const [show,setShow] = useState(false)
   const [editing,setEditing] = useState<Service|null>(null)
   const load = () => fetch('/api/admin/catalog').then(async (response) => {
@@ -35,7 +37,7 @@ export default function ServicesPage() {
     setServices(data.services ?? [])
     setCurrency(data.business?.currency ?? 'CLP')
     setError(false)
-  }).catch(() => setError(true))
+  }).catch(() => setError(true)).finally(() => setLoading(false))
 
   useEffect(() => { load() }, [])
 
@@ -58,7 +60,7 @@ export default function ServicesPage() {
             <td className="pr-4 text-right"><button type="button" onClick={() => setEditing(service)} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold"><Pencil size={14}/>Editar</button></td>
           </tr>)}</tbody>
         </table>
-        {!error && services.length === 0 && <p className="p-8 text-center text-sm text-[#736f83]">Aún no hay servicios.</p>}
+        {services.length === 0 && <ListPlaceholder loading={loading} error={error}>Aún no hay servicios.</ListPlaceholder>}
       </div>
     </div>
   </>

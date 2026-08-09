@@ -2,6 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
 import { ImagePlus, Sparkles, X } from 'lucide-react'
+import { ModalShell } from '@/components/ModalShell'
 
 type CampaignDraft = { id:string; name:string; channel:string; content:string; subject?:string|null; email_html?:string|null; audience?:{segment?:string}; scheduled_at?:string|null; image_url?:string|null }
 
@@ -87,7 +88,7 @@ export function NewCampaignModal({ onClose, onCreated, campaign }: { onClose: ()
 
   const scheduled = campaign?.scheduled_at ? new Date(campaign.scheduled_at).toISOString().slice(0,16) : ''
 
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+  return <ModalShell titulo={campaign?'Editar campaña':'Nueva campaña'} onClose={onClose}>
     <form onSubmit={submit} className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6">
       <div className="flex justify-between">
         <div><h2 className="text-xl font-black">{campaign?'Editar campaña':'Nueva campaña'}</h2><p className="text-sm text-[#736f83]">Solo se enviará a clientes con consentimiento vigente.</p></div>
@@ -146,5 +147,5 @@ export function NewCampaignModal({ onClose, onCreated, campaign }: { onClose: ()
       {error&&<p className="mt-3 text-sm text-red-600">{error}</p>}
       <button disabled={loading} className="mt-5 w-full rounded-xl bg-[#5b3df5] py-3 font-bold text-white disabled:opacity-50">{loading?'Guardando…':campaign?'Guardar cambios':'Crear campaña'}</button>
     </form>
-  </div>
+  </ModalShell>
 }

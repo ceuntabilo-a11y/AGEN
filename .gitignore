@@ -2,8 +2,20 @@ node_modules/
 .next/
 out/
 .env
-.env.local
+.env*.local
+.env.test
 .env.production
 npm-debug.log*
 .DS_Store
 *.tsbuildinfo
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+# Sesiones guardadas (storageState): contienen cookies de sesión reales
+/playwright/.auth/
+# Artefactos de playwright-cli: snapshots, logs de consola y estado de sesión
+/.playwright/
+/.playwright-cli/

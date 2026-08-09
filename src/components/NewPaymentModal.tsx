@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react'
 import { X } from 'lucide-react'
+import { ModalShell } from '@/components/ModalShell'
 
 const METHODS: Array<[string, string]> = [['EFECTIVO', 'Efectivo'], ['TARJETA', 'Tarjeta'], ['TRANSFERENCIA', 'Transferencia'], ['OTRO', 'Otro']]
 
@@ -31,7 +32,7 @@ export function NewPaymentModal({ onClose, onCreated }: { onClose: () => void; o
     onClose()
   }
 
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+  return <ModalShell titulo="Registrar cobro" onClose={onClose}>
     <form onSubmit={submit} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6">
       <div className="flex justify-between">
         <div><h2 className="text-xl font-black">Registrar cobro</h2><p className="text-sm text-[#736f83]">Queda contado en las ventas del mes.</p></div>
@@ -50,5 +51,5 @@ export function NewPaymentModal({ onClose, onCreated }: { onClose: () => void; o
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       <button disabled={loading} className="mt-5 w-full rounded-xl bg-[#5b3df5] py-3 font-bold text-white disabled:opacity-50">{loading ? 'Guardando…' : 'Registrar cobro'}</button>
     </form>
-  </div>
+  </ModalShell>
 }

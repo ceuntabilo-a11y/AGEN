@@ -1,0 +1,126 @@
+name: CI
+
+# Puerta única de calidad: si algo de esto falla, el cambio no es apto para producción.
+# El deploy a EasyPanel sigue siendo manual y posterior; este workflow no despliega nada.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Un PR con varios pushes seguidos solo mantiene la última ejecución.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    name: Lint, typecheck, build y E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      # Necesarias en el BUILD: las NEXT_PUBLIC_* se incrustan al compilar, no al arrancar.
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      NEXT_PUBLIC_APP_URL: http://localhost:3010
+      # Solo servidor.
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Credenciales E2E: mismos nombres que en .env.test.local.
+      E2E_BASE_URL: http://localhost:3010
+      E2E_PLATFORM_EMAIL: ${{ secrets.E2E_PLATFORM_EMAIL }}
+      E2E_PLATFORM_PASSWORD: ${{ secrets.E2E_PLATFORM_PASSWORD }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_PROFESSIONAL_EMAIL: ${{ secrets.E2E_PROFESSIONAL_EMAIL }}
+      E2E_PROFESSIONAL_PASSWORD: ${{ secrets.E2E_PROFESSIONAL_PASSWORD }}
+      E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
+      E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      # Antes de gastar un solo minuto de CI: si falta un secret, se corta acá con un
+      # mensaje que dice exactamente cuál. Nunca se imprime ningún valor.
+      - name: Comprobar que están todos los secrets obligatorios
+        run: |
+          faltan=""
+          for nombre in \
+            NEXT_PUBLIC_SUPABASE_URL \
+            NEXT_PUBLIC_SUPABASE_ANON_KEY \
+            SUPABASE_SERVICE_ROLE_KEY \
+            E2E_PLATFORM_EMAIL E2E_PLATFORM_PASSWORD \
+            E2E_ADMIN_EMAIL E2E_ADMIN_PASSWORD \
+            E2E_PROFESSIONAL_EMAIL E2E_PROFESSIONAL_PASSWORD \
+            E2E_CLIENT_EMAIL E2E_CLIENT_PASSWORD
+          do
+            if [ -z "${!nombre}" ]; then faltan="$faltan $nombre"; fi
+          done
+          if [ -n "$faltan" ]; then
+            echo "::error::Faltan secrets en el repositorio:$faltan"
+            echo "Créalos en Settings → Secrets and variables → Actions → New repository secret."
+            exit 1
+          fi
+          echo "Los 11 secrets obligatorios están presentes."
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build de producción
+        run: npm run build
+
+      # Solo Chromium: todos los projects de AGEN usan Desktop Chrome. La caché evita volver
+      # a descargarlo en cada ejecución.
+      - name: Caché del navegador de Playwright
+        id: cache-navegador
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Instalar Chromium
+        if: steps.cache-navegador.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Instalar dependencias del sistema de Chromium
+        if: steps.cache-navegador.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # playwright.config.ts levanta `npm start` (puerto 3010) y espera a /api/health.
+      - name: Pruebas E2E contra el build de producción
+        run: npx playwright test
+
+      # Solo cuando hay algo que diagnosticar. El informe puede contener capturas del tenant
+      # de pruebas, por eso se guarda poco tiempo.
+      - name: Guardar el informe de Playwright
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Guardar trazas y capturas de los fallos
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_id }}
+          path: test-results/
+          retention-days: 7

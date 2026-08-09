@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react'
 import { X } from 'lucide-react'
+import { ModalShell } from '@/components/ModalShell'
 
 type Professional = {
   id: string
@@ -69,7 +70,7 @@ export function EditProfessionalModal({ professional, onClose, onSaved }: { prof
     onClose()
   }
 
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+  return <ModalShell titulo="Editar profesional" onClose={onClose}>
     <form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6">
       <div className="flex justify-between">
         <div><h2 className="text-xl font-black">Editar profesional</h2><p className="text-sm text-[#736f83]">{professional.display_name}</p></div>
@@ -91,5 +92,5 @@ export function EditProfessionalModal({ professional, onClose, onSaved }: { prof
       <button type="button" disabled={loading} onClick={() => void toggleActive()} className={`mt-3 w-full rounded-xl border py-3 font-bold disabled:opacity-50 ${professional.active ? 'border-red-200 text-red-700' : 'border-emerald-200 text-emerald-700'}`}>{professional.active ? 'Desactivar profesional' : 'Reactivar profesional'}</button>
       <p className="mt-2 text-xs text-[#736f83]">Desactivar no borra su historial: deja de aparecer en los cupos, en el portal del cliente y en el agente.</p>
     </form>
-  </div>
+  </ModalShell>
 }

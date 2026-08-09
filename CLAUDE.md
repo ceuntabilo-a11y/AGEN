@@ -529,10 +529,12 @@ vez. Si el usuario prefiere pegarlas una vez en el chat, Claude las guarda igual
 Después de esto, cualquier cambio a `n8n-workflows/*.json` lo sube Claude directo al n8n real
 por API, lo prueba, y recién ahí lo activa — el usuario solo se entera por el resumen final.
 
-## 10. Push a este repositorio
+## 10. Commit y push a este repositorio
 
-- `git push` normal (rama `main`, sin `--force`) está pre-autorizado: no hace falta pedir
-  confirmación en el chat cada vez.
+- **Nada se commitea ni se sube sin aprobación explícita.** `git commit` y `git push` piden
+  confirmación siempre, incluso en `main` y sin `--force` (reglas `ask` en
+  `.claude/settings.local.json`). Tampoco se preparan cambios por iniciativa propia: `git add`
+  y `git mv` también preguntan.
 - Regla que nunca se rompe, sin excepción:
   1. Nunca romper algo que ya funciona.
   2. Nunca subir un cambio de lógica que el usuario no haya autorizado explícitamente en el
@@ -541,8 +543,9 @@ por API, lo prueba, y recién ahí lo activa — el usuario solo se entera por e
   3. Antes de cualquier push: correr `npm run lint` y `npm run typecheck` en verde (y
      `supabase/tests/booking_invariants.sql` si se tocó SQL de reservas). Si algo no se pudo
      probar, decirlo explícitamente en el resumen final — nunca presentarlo como probado.
-- `git push --force` (o cualquier variante que reescriba historia) sigue pidiendo
-  confirmación explícita en el chat; no está pre-autorizado bajo ninguna circunstancia.
+- `git push --force` (o cualquier variante que reescriba historia) está **prohibido**: no es
+  que pregunte, está bloqueado por regla `deny`. Lo mismo `git reset --hard`, `git clean` y
+  `git restore`. Si de verdad hiciera falta, lo ejecuta el usuario a mano.
 
 ## 11. Permisos generales
 

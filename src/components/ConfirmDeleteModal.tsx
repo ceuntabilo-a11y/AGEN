@@ -2,6 +2,7 @@
 
 import { AlertTriangle, X } from 'lucide-react'
 import { useState } from 'react'
+import { ModalShell } from '@/components/ModalShell'
 
 /** Borrado definitivo: obliga a escribir una palabra para habilitar el botón, para que nadie borre de un clic distraído. */
 export function ConfirmDeleteModal({ title, description, detail, word = 'ELIMINAR', onCancel, onConfirm }: {
@@ -23,7 +24,7 @@ export function ConfirmDeleteModal({ title, description, detail, word = 'ELIMINA
     setWorking(false)
   }
 
-  return <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4">
+  return <ModalShell titulo={title} onClose={onCancel}>
     <div role="alertdialog" aria-modal="true" className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
@@ -53,5 +54,5 @@ export function ConfirmDeleteModal({ title, description, detail, word = 'ELIMINA
         <button type="button" disabled={!ready || working} onClick={() => void confirm()} className="flex-1 rounded-xl bg-red-600 py-3 font-bold text-white disabled:opacity-40">{working ? 'Eliminando…' : 'Eliminar'}</button>
       </div>
     </div>
-  </div>
+  </ModalShell>
 }

@@ -2,9 +2,10 @@
 
 import { X } from 'lucide-react'
 import { AvailabilityEditor } from '@/components/AvailabilityEditor'
+import { ModalShell } from '@/components/ModalShell'
 
 export function AvailabilityModal({ professionalId, professionalName, onClose }: { professionalId: string; professionalName: string; onClose: () => void }) {
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+  return <ModalShell titulo="Horario de atención" onClose={onClose}>
     <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6">
       <div className="flex justify-between">
         <div>
@@ -15,5 +16,5 @@ export function AvailabilityModal({ professionalId, professionalName, onClose }:
       </div>
       <div className="mt-5"><AvailabilityEditor endpoint="/api/admin/availability" professionalId={professionalId}/></div>
     </div>
-  </div>
+  </ModalShell>
 }

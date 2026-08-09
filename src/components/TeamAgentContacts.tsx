@@ -1,4 +1,5 @@
 'use client'
+import { ModalShell } from '@/components/ModalShell'
 
 import {FormEvent,useEffect,useState} from 'react'
 import {PhoneCall,Save,Trash2,X} from 'lucide-react'
@@ -43,7 +44,7 @@ export function TeamAgentContacts(){
       {(member.agent_phone||member.agent_display_name)?<button type="button" aria-label="Eliminar" title="Eliminar" onClick={()=>{setRemoving(member);setConfirmText('')}} className="grid h-10 w-10 place-items-center rounded-lg border text-red-600"><Trash2 size={17}/></button>:<span className="h-10 w-10"/>}
     </form>)}</div>
     {message&&<p className="mt-3 text-sm font-semibold text-[#5b3df5]">{message}</p>}
-    {removing&&<div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"><div className="w-full max-w-md rounded-3xl bg-white p-6">
+    {removing&&<ModalShell titulo="Eliminar miembro reconocido" onClose={()=>setRemoving(null)}><div className="w-full max-w-md rounded-3xl bg-white p-6">
       <div className="flex justify-between"><h3 className="text-lg font-black">Eliminar miembro reconocido</h3><button type="button" onClick={()=>setRemoving(null)}><X size={18}/></button></div>
       <p className="mt-3 text-sm leading-6 text-[#736f83]">Se quitará el teléfono y el nombre de <b>{displayName(removing)}</b> del reconocimiento del agente. Escribe <b>{displayName(removing)}</b> para confirmar el borrado.</p>
       <input autoFocus value={confirmText} onChange={event=>setConfirmText(event.target.value)} className="mt-4 w-full rounded-xl border p-3 text-sm" placeholder={displayName(removing)}/>
@@ -51,6 +52,6 @@ export function TeamAgentContacts(){
         <button disabled={busy||!sameName(confirmText,displayName(removing))} onClick={()=>void remove()} className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white disabled:opacity-40">{busy?'Eliminando…':'Eliminar definitivamente'}</button>
         <button type="button" onClick={()=>setRemoving(null)} className="flex-1 rounded-xl border py-2.5 text-sm font-semibold">Cancelar</button>
       </div>
-    </div></div>}
+    </div></ModalShell>}
   </section>
 }

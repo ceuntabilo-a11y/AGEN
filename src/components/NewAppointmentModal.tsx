@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
 import { dateKeyInZone, formatInZone, formatTimeInZone, zonedDayRange } from '@/lib/timezone'
+import { ModalShell } from '@/components/ModalShell'
 
 type Catalog = { services: Array<{ id: string; name: string; price: number }>; professionals: Array<{ id: string; display_name: string }>; branches: Array<{ id: string; name: string }> }
 type Client = { id: string; full_name: string; phone: string | null }
@@ -58,7 +59,7 @@ export function NewAppointmentModal({ onClose, onCreated, timezone = 'America/Sa
 
   const visibleClients = clients.filter((client) => `${client.full_name} ${client.phone ?? ''}`.toLowerCase().includes(clientQuery.toLowerCase()))
 
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+  return <ModalShell titulo="Nueva reserva" onClose={onClose}>
     <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
       <div className="flex items-center justify-between">
         <div><h2 className="text-xl font-black">Nueva reserva</h2><p className="text-sm text-[#736f83]">La hora se revalida al confirmar.</p></div>
@@ -92,5 +93,5 @@ export function NewAppointmentModal({ onClose, onCreated, timezone = 'America/Sa
 
       <button disabled={!slot || !clientId || loading} onClick={create} className="mt-6 w-full rounded-xl bg-[#5b3df5] py-3 font-bold text-white disabled:opacity-40">{loading ? 'Confirmando…' : 'Confirmar reserva'}</button>
     </div>
-  </div>
+  </ModalShell>
 }

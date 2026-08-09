@@ -1,4 +1,5 @@
 'use client'
+import { ModalShell } from '@/components/ModalShell'
 
 import { PageHeader } from '@/components/PageHeader'
 import { NewAppointmentModal } from '@/components/NewAppointmentModal'
@@ -437,7 +438,7 @@ export default function AgendaPage() {
     <style>{`@keyframes agendapulse{0%,100%{box-shadow:0 0 0 1.5px rgba(91,61,245,.45)}50%{box-shadow:0 0 0 3px rgba(91,61,245,.15)}}`}</style>
     {showNew && <NewAppointmentModal initialDate={newDate ?? undefined} timezone={timezone} onClose={() => { setShowNew(false); setNewDate(null) }} onCreated={() => setRevision((value) => value + 1)} />}
     {selectedAppointment && <AppointmentDetailsModal appointment={selectedAppointment} timezone={timezone} onClose={() => setSelectedAppointment(null)} onUpdated={() => setRevision((value) => value + 1)} />}
-    {noShowFor && <div className="fixed inset-0 z-[70] grid place-items-center bg-black/45 p-4"><div className="w-full max-w-md rounded-3xl bg-white p-6">
+    {noShowFor && <ModalShell titulo="Marcar como no asistió" onClose={() => setNoShowFor(null)}><div className="w-full max-w-md rounded-3xl bg-white p-6">
       <h3 className="text-lg font-black">Marcar como no asistió</h3>
       <p className="mt-2 text-sm leading-6 text-[#736f83]">{noShowFor.client} · {formatInZone(noShowFor.start, timezone, { day: 'numeric', month: 'short' })} {formatTimeInZone(noShowFor.start, timezone)}. ¿Avisar al cliente para reagendar?</p>
       <label className="mt-3 flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={noShowNotify} onChange={(event) => setNoShowNotify(event.target.checked)}/>Avisar al cliente por WhatsApp/correo</label>
@@ -445,8 +446,8 @@ export default function AgendaPage() {
         <button disabled={busy} onClick={async () => { const ok = await patch({ appointmentId: noShowFor.id, action: 'status', status: 'NO_SHOW', notify: noShowNotify }); if (ok) setNoShowFor(null) }} className="flex-1 rounded-xl bg-amber-600 py-2.5 text-sm font-bold text-white disabled:opacity-50">Marcar{noShowNotify ? ' y avisar' : ''}</button>
         <button onClick={() => setNoShowFor(null)} className="flex-1 rounded-xl border py-2.5 text-sm font-semibold">Cancelar</button>
       </div>
-    </div></div>}
-    {dropConfirm && dropAppointment && <div className="fixed inset-0 z-[70] grid place-items-center bg-black/45 p-4"><div className="w-full max-w-md rounded-3xl bg-white p-6">
+    </div></ModalShell>}
+    {dropConfirm && dropAppointment && <ModalShell titulo="Confirmar el cambio de la reserva" onClose={() => setDropConfirm(null)}><div className="w-full max-w-md rounded-3xl bg-white p-6">
       <h3 className="text-lg font-black">¿Mover esta reserva?</h3>
       <p className="mt-1 text-sm text-[#736f83]">{dropAppointment.client} · {dropAppointment.serviceName}</p>
       <div className="mt-4 space-y-2 rounded-xl bg-[#f6f5fa] p-3 text-sm">
@@ -460,7 +461,7 @@ export default function AgendaPage() {
         <button disabled={busy} onClick={() => void applyDrop()} className="flex-1 rounded-xl bg-[#5b3df5] py-2.5 text-sm font-bold text-white disabled:opacity-50">{busy ? 'Guardando…' : 'Sí, mover y avisar'}</button>
         <button onClick={() => { setDropConfirm(null); setError('') }} className="flex-1 rounded-xl border py-2.5 text-sm font-semibold">Cancelar</button>
       </div>
-    </div></div>}
+    </div></ModalShell>}
 
     <PageHeader title="Agenda general" description="Agenda del negocio por profesional, con apartados del agente y pendientes por cerrar." action={<button onClick={() => openNew(anchor)} className="inline-flex items-center gap-2 rounded-xl bg-[#5b3df5] px-4 py-2.5 text-sm font-bold text-white"><Plus size={17}/>Nueva reserva</button>} />
     {error && !dropConfirm && <p role="alert" className="mb-4 flex items-start gap-2 rounded-2xl border-2 border-red-300 bg-red-50 p-4 text-sm font-bold text-red-800"><AlertTriangle size={20} className="shrink-0"/><span>{error}</span></p>}
