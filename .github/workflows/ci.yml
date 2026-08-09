@@ -43,7 +43,7 @@ jobs:
 
     steps:
       - name: Descargar el repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # Antes de gastar un solo minuto de CI: si falta un secret, se corta acá con un
       # mensaje que dice exactamente cuál. Nunca se imprime ningún valor.
@@ -69,10 +69,15 @@ jobs:
           echo "Los 11 secrets obligatorios están presentes."
 
       - name: Preparar Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
+
+      # El lockfile se genera con npm 10.9.8 (ver "packageManager" en package.json). Con otra
+      # versión, `npm ci` falla por entradas que unas escriben y otras exigen.
+      - name: Fijar npm 10.9.8
+        run: npm install -g npm@10.9.8
 
       - name: Instalar dependencias
         run: npm ci
@@ -90,7 +95,7 @@ jobs:
       # a descargarlo en cada ejecución.
       - name: Caché del navegador de Playwright
         id: cache-navegador
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -111,7 +116,7 @@ jobs:
       # de pruebas, por eso se guarda poco tiempo.
       - name: Guardar el informe de Playwright
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ github.run_id }}
           path: playwright-report/
@@ -119,7 +124,7 @@ jobs:
 
       - name: Guardar trazas y capturas de los fallos
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ github.run_id }}
           path: test-results/
