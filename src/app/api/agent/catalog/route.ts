@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isAuthorizedAgent } from '@/lib/agent-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { referenciasTemporales } from '@/lib/timezone'
 
 export async function POST(request: Request) {
   if (!isAuthorizedAgent(request)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -16,5 +17,8 @@ export async function POST(request: Request) {
   ])
   if (!businessResult.data) return NextResponse.json({ error: 'Negocio inexistente o inactivo' }, { status: 404 })
   if (specialtyError || serviceError || branchError) return NextResponse.json({ error: 'No se pudo cargar el catálogo' }, { status: 500 })
-  return NextResponse.json({ business: { ...businessResult.data, maps_url: (businessResult.data as any).maps_url ?? null }, branches, specialties, services })
+  // El agente no debe deducir qué día es "mañana" a partir de un instante UTC: las fechas
+  // relativas se calculan acá, en la zona real del negocio y respetando el horario de verano.
+  const time = referenciasTemporales(new Date(), businessResult.data.timezone)
+  return NextResponse.json({ business: { ...businessResult.data, maps_url: (businessResult.data as any).maps_url ?? null }, branches, specialties, services, time })
 }

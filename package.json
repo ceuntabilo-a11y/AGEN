@@ -5,6 +5,8 @@
   "packageManager": "npm@10.9.8",
   "scripts": {
     "dev": "next dev -p 3000",
+    "dev:restart": "node scripts/dev-restart.mjs",
+    "dev:estado": "node scripts/dev-restart.mjs --estado",
     "build": "next build",
     "start": "next start -p 3010 -H 0.0.0.0",
     "lint": "eslint . --ext .js,.mjs,.ts,.tsx --max-warnings=0",

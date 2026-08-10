@@ -61,6 +61,15 @@ export default defineConfig({
    */
   projects: [
     /*
+     * Contrato del agente: evalúa la plantilla de n8n con datos de prueba. No usa navegador,
+     * ni sesión, ni red, así que corre siempre — incluso en un checkout sin credenciales.
+     */
+    {
+      name: 'contrato',
+      testDir: './tests/contract',
+    },
+
+    /*
      * Inicio de sesión por rol (tests/e2e/auth.setup.ts): entra una sola vez por rol y guarda
      * la sesión en playwright/.auth/<rol>.json. Reutilizarla evita el bloqueo por intentos de
      * /api/auth/login (5 fallidos por correo en 15 minutos).
