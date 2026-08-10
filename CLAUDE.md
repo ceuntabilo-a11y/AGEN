@@ -549,5 +549,38 @@ por API, lo prueba, y recién ahí lo activa — el usuario solo se entera por e
 
 ## 11. Permisos generales
 
-- Fuera del push descrito arriba, todo comando (Bash, edición de archivos, migraciones,
-  etc.) sigue pidiendo permiso normal antes de ejecutarse. No hay modo "bypass" general.
+- **La autoridad técnica es `.claude/settings.local.json`** (`allow` / `ask` / `deny`). Es un
+  archivo local, fuera de git, y su precedencia es `deny` > `ask` > `allow`. Nada de lo que
+  diga este documento ni una skill puede saltarse esas reglas: si algo está en `deny`, no se
+  ejecuta, y punto.
+- **La política de comportamiento es la skill `safe-local-autonomy`**
+  (`.claude/skills/safe-local-autonomy/SKILL.md`), que decide *cómo* formular el trabajo local
+  para no interrumpir al usuario sin motivo. Regula criterio, no permisos.
+- **El trabajo local rutinario corre sin aprobación**: leer código, logs y salidas de tests;
+  esperar suites; `lint`, `typecheck`, `build`, `npm ci`, Playwright, `dev:restart`,
+  `dev:estado`; llamadas a `localhost` y a las APIs locales; scripts Node locales; y crear o
+  editar archivos del proyecto (`src/`, `tests/`, `scripts/`, `playwright/`,
+  `n8n-workflows/`). También la lectura de solo lectura de GitHub Actions de este repositorio.
+- **Requieren aprobación explícita en el chat**: `git add`, `git commit`, `git push`,
+  `git mv`, cambios de rama o de historia (`checkout`, `switch`, `merge`, `rebase`, `revert`,
+  `stash`, `tag`), cambios de `remote`, escrituras de `git config`, cualquier cambio del grafo
+  de dependencias (`npm install`, `npm uninstall`, `npm publish`, `npx` que descargue
+  paquetes), el deploy en EasyPanel, importar o modificar el n8n real, y cualquier otra
+  mutación externa o acción sobre producción.
+- **Están bloqueados, no se preguntan**: `git push --force` y todo lo que reescriba historia,
+  `git reset --hard`, `git clean`, `git restore`, `git filter-branch`, borrados destructivos
+  (`rm`, `rmdir`, `del`, `Remove-Item`, `truncate`, `shred`, `dd`), operaciones destructivas
+  de base de datos (`psql`, `supabase db reset|push`, `DROP`, `TRUNCATE`, `DELETE FROM`), la
+  impresión o extracción de secretos (mostrar `.env*`, volcar `process.env`), las mutaciones
+  directas de producción (`agen.synetia.site`, `n8n-agen.synetia.site`, `supabase.co`) y
+  cualquier operación sobre MediCore desde este repositorio.
+- **Prohibido envolver una acción para esquivar su categoría.** No se usa Node, un script
+  local, `npm run`, `npx` ni ninguna otra envoltura para ejecutar por dentro algo que está en
+  `ask` o `deny`: ni `child_process` lanzando `git push` o `rm`, ni un script que edite
+  `dependencies` o `package-lock.json`, ni Node borrando archivos del repositorio. Si una
+  acción pertenece a `ask`, se pide; si pertenece a `deny`, se dice que está bloqueada y por
+  qué. Reformular un comando **inocuo** que falló por su forma sí es correcto; disfrazar uno
+  sensible no lo es.
+- **Estar dentro de `E:\AGEN` no vuelve segura una operación.** Conservan sus barreras:
+  `.env*`, `.git/`, `.claude/settings.local.json` y las migraciones ya aplicadas de
+  `supabase/migrations/`.
