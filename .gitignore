@@ -19,6 +19,11 @@ npm-debug.log*
 # Artefactos de playwright-cli: snapshots, logs de consola y estado de sesión
 /.playwright/
 /.playwright-cli/
+# Pruebas desechables de diagnóstico. La convención está en la skill safe-local-autonomy:
+# se crean con el prefijo __tmp-, se ejecutan, y al terminar se mueven fuera del repositorio.
+# Esta línea es el cinturón por si alguna sobrevive: nunca puede colarse en un commit.
+tests/**/__tmp-*
+__tmp-*
 
 # Salida del monitor de salud (se regenera en cada ejecución, local o en CI)
 /monitor-salud.json
