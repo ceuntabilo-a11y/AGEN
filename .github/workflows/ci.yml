@@ -18,9 +18,36 @@ permissions:
   contents: read
 
 jobs:
+  # Señal rápida y sin secrets: el contrato del agente no necesita navegador, ni servidor, ni
+  # base de datos. Si esto falla, no vale la pena gastar el resto del CI.
+  contrato:
+    name: Contrato del agente (rápido)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v6
+
+      - name: Preparar Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Fijar npm 10.9.8
+        run: npm install -g npm@10.9.8
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Pruebas de contrato
+        run: npx playwright test --project=contrato
+
   verificar:
     name: Lint, typecheck, build y E2E
     runs-on: ubuntu-latest
+    needs: contrato
     timeout-minutes: 30
 
     env:
@@ -81,6 +108,11 @@ jobs:
 
       - name: Instalar dependencias
         run: npm ci
+
+      # Seguridad de la cadena de dependencias: una vulnerabilidad alta en algo que va a
+      # producción corta el CI. Las de desarrollo no bloquean un despliegue.
+      - name: Vulnerabilidades conocidas en dependencias de producción
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Lint
         run: npm run lint

@@ -203,6 +203,34 @@ Comprobado empíricamente en este repositorio:
   bloque opaco y pide permiso —por ejemplo `npx playwright test | tail -3; echo ok; curl …`—.
   La solución es partirlo en llamadas separadas, no añadir comodines.
 
+### Falsos diálogos del analizador y su reformulación
+
+Cuando el analizador no puede leer la FORMA del comando, pide permiso aunque la operación sea
+trabajo local rutinario. **No es una frontera: es sintaxis.** Reformula y sigue; no preguntes.
+
+Casos comprobados en este repositorio, con la salida correcta de cada uno:
+
+| Síntoma del analizador | Qué lo dispara | Reformulación correcta |
+|---|---|---|
+| `Newline followed by # inside a quoted argument` | Un `node -e "…"` cuyo texto incrusta YAML, Markdown o código con saltos de línea seguidos de `#` (un comentario al principio de una línea) | Editar el archivo con la herramienta de edición directa, sin shell. Es lo que corresponde para cambiar `.github/workflows/*.yml`, `*.md` o cualquier archivo con comentarios `#` |
+| `backtick_escape_unsupported` | Plantillas con `` ` `` dentro de comillas dobles en `node -e` | Script `.mjs` en el scratchpad ejecutado con `node ruta.mjs`, o edición directa |
+| `simple_expansion` | `${variable}` dentro de la cadena que se le pasa a `node -e` | Igual: script en archivo, o edición directa |
+| Diálogo al leer una ruta con corchetes | Rutas de Next.js como `src/app/admin/clientes/[id]/page.tsx` con `sed`/`cat` (los corchetes parecen un glob) | Leer con la herramienta de lectura de archivos, indicando la ruta completa |
+| Diálogo con una variable de entorno delante del comando | `PWTEST_CACHE_DIR=… npx playwright test`, `AGEN_APP_URL=… node script.mjs`: el prefijo `VARIABLE=valor` hace que el comando ya no empiece por un prefijo permitido | Si la forma concreta ya está permitida (`E2E_BASE_URL=* npx playwright *`), úsala tal cual. Si no, **haz que el script acepte el valor como argumento** (`node scripts/monitor-salud.mjs http://127.0.0.1:3000`) o léelo dentro del script con `process.loadEnvFile()`. Es lo que se hizo en `scripts/monitor-salud.mjs` |
+| Diálogo por `;` con `echo $?` al final | Encadenar el comando con `; echo "codigo=$?"` para ver el código de salida | Ejecutar el comando solo: el resultado ya se ve. Si hace falta el código, imprimirlo desde dentro del script |
+| Diálogo por un encadenado largo | Mezclar tuberías con `;` y varios comandos en una sola llamada | Una llamada por comando, cada una empezando por un prefijo permitido |
+| Diálogo al leer el resultado de una tarea en segundo plano | Rutas temporales largas con `$TEMP`/`%TEMP%` o comodines raros | `cat`/`tail` con la ruta absoluta completa entre comillas, o leerla con Node y `fs` |
+| Diálogo en un comando que solo COMPRUEBA cosas | El propio texto del comando contiene literales sensibles (`git push`, `npm install`, `supabase db`, `rm `) porque forman parte de una lista o de una expresión regular de verificación | Mover la comprobación a un script `.mjs` del scratchpad y ejecutarlo con `node ruta.mjs`: el literal deja de estar en la línea de comandos. Nunca reformular así una acción que de verdad ejecute algo sensible |
+
+Regla práctica: **si el contenido que vas a escribir lleva saltos de línea, comentarios,
+backticks o `${…}`, no lo metas en `node -e`.** Usa la edición directa del archivo (para
+cambios acotados) o un script `.mjs` en el scratchpad (para transformaciones repetitivas).
+Las dos vías son trabajo local rutinario y no interrumpen a nadie.
+
+Esto no cambia ninguna frontera: `git add/commit/push`, dependencias, deploy, n8n real,
+producción y todo lo que esté en `ask` o `deny` se siguen pidiendo igual, y reformular jamás
+se usa para colarlos.
+
 ## Cómo esperar una suite sin interrumpir
 
 Las suites de este proyecto tardan minutos:

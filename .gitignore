@@ -19,3 +19,6 @@ npm-debug.log*
 # Artefactos de playwright-cli: snapshots, logs de consola y estado de sesión
 /.playwright/
 /.playwright-cli/
+
+# Salida del monitor de salud (se regenera en cada ejecución, local o en CI)
+/monitor-salud.json

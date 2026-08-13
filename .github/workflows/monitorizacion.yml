@@ -1,0 +1,98 @@
+name: Monitorización
+
+# Vigilancia periódica de lo que ya está desplegado. No modifica NADA: solo consulta estados
+# de salud y vuelve a correr el contrato del agente contra el código de `main`.
+#
+# Qué hace ante un fallo: guarda la evidencia como artefacto y abre (o actualiza) una
+# incidencia con todo lo necesario para investigarla, incluido el comando exacto para
+# reproducirla en local. Nunca intenta reparar producción por su cuenta.
+
+on:
+  schedule:
+    # Cada 30 minutos. GitHub no garantiza el minuto exacto en horas de mucha carga.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: monitorizacion
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  salud:
+    name: Salud de producción y contrato
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      AGEN_APP_URL: ${{ secrets.AGEN_APP_URL }}
+      N8N_API_URL: ${{ secrets.N8N_API_URL }}
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v6
+
+      - name: Preparar Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Fijar npm 10.9.8
+        run: npm install -g npm@10.9.8
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Contrato del agente sobre el código de main: detecta que alguien rompió una garantía
+      # (identidad del mensaje, tiempo, validación de salida…) aunque nadie abra un PR.
+      - name: Contrato del agente
+        id: contrato
+        run: npx playwright test --project=contrato
+
+      # Solo lectura: /api/health y /api/status no exponen datos de negocio ni los modifican.
+      - name: Salud de la aplicación desplegada
+        id: salud
+        if: ${{ env.AGEN_APP_URL != '' }}
+        run: node scripts/monitor-salud.mjs
+
+      - name: Guardar la evidencia del fallo
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: monitorizacion-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+            monitor-salud.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # Una sola incidencia abierta por corte: si ya existe, se comenta en ella en vez de
+      # llenar el repositorio de duplicados.
+      - name: Abrir o actualizar la incidencia
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          titulo="Monitorización: fallo detectado"
+          cuerpo="Ejecución: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Commit vigilado: ${{ github.sha }}
+          Contrato del agente: ${{ steps.contrato.outcome }}
+          Salud de la app: ${{ steps.salud.outcome }}
+
+          Para reproducir en local:
+              npm ci
+              npx playwright test --project=contrato
+              node scripts/monitor-salud.mjs
+
+          La evidencia (informe de Playwright, trazas y monitor-salud.json) está adjunta al run."
+          existente=$(gh issue list --state open --label monitorizacion --limit 1 --json number --jq '.[0].number')
+          if [ -n "$existente" ]; then
+            gh issue comment "$existente" --body "$cuerpo"
+          else
+            gh issue create --title "$titulo" --body "$cuerpo" --label monitorizacion
+          fi
