@@ -64,6 +64,15 @@ jobs:
         if: ${{ env.AGEN_APP_URL != '' }}
         run: node scripts/monitor-salud.mjs
 
+      # Informativo: el veredicto del watchdog sobre el estado del TRABAJO (no de producción).
+      # Nunca hace fallar la vigilancia — sus códigos de salida son estados, no errores — pero
+      # deja en el log si quedó algo a medias o esperando a una persona.
+      - name: Estado del trabajo
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: npm run watchdog || true
+
       - name: Guardar la evidencia del fallo
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7

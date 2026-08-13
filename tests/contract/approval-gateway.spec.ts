@@ -1,12 +1,18 @@
 import { test, expect } from '@playwright/test'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { NUNCA, SIEMPRE_AUTO, auditar, clasificar, coincide, parsearPolitica } from '../../scripts/politica.mjs'
 import { contarBacklog, decidir } from '../../scripts/watchdog-logica.mjs'
 
-/** La política real del repositorio, leída como la lee el CLI. */
-const politicaVigente = () =>
-  parsearPolitica(readFileSync(path.resolve(__dirname, '..', '..', '.claude', 'settings.local.json'), 'utf8'))
+/**
+ * La política real de ESTA máquina.
+ *
+ * `.claude/settings.local.json` es local y no se versiona (CLAUDE.md §11), así que en CI no
+ * existe. La auditoría de la política vigente solo tiene sentido donde vive el archivo: en el
+ * equipo de quien trabaja, que es justo donde se puede romper editándolo.
+ */
+const ARCHIVO_VIGENTE = path.resolve(__dirname, '..', '..', '.claude', 'settings.local.json')
+const politicaVigente = () => parsearPolitica(readFileSync(ARCHIVO_VIGENTE, 'utf8'))
 
 /**
  * Approval Gateway y watchdog.
@@ -96,8 +102,9 @@ test.describe('El comodín se comporta como en el archivo de permisos', () => {
   })
 })
 
-test.describe('La política vigente del repositorio se audita sola', () => {
+test.describe('La política vigente de esta máquina se audita sola', () => {
   test('lo irreversible sigue bloqueado y el trabajo normal sigue corriendo solo', () => {
+    test.skip(!existsSync(ARCHIVO_VIGENTE), 'No hay .claude/settings.local.json: es un archivo local y en CI no existe.')
     const { ok, fallos } = auditar(politicaVigente())
     expect(fallos, JSON.stringify(fallos, null, 1)).toEqual([])
     expect(ok).toBe(true)
