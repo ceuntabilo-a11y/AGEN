@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test:contrato": "node ./node_modules/@playwright/test/cli.js test --project=contrato",
     "test:e2e": "node ./node_modules/@playwright/test/cli.js test",
-    "handoff": "node scripts/handoff.mjs"
+    "handoff": "node scripts/handoff.mjs",
+    "rollback": "node scripts/rollback.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
