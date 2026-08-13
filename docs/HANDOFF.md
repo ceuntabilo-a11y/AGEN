@@ -21,12 +21,12 @@ Cómo mantenerlo:
 | Dato | Valor |
 |---|---|
 | Rama | `cierre/agente-idempotencia-ci` |
-| HEAD local | `7c7e3bf` — feat: know which commit to roll back to, without guessing at 3am |
-| HEAD remoto | `7c7e3bf` (sincronizado) |
-| Commits por delante de `main` | 19 |
+| HEAD local | `0ff0890` — fix: the policy audit cannot run where the policy does not exist |
+| HEAD remoto | `0ff0890` (sincronizado) |
+| Commits por delante de `main` | 22 |
 | Árbol de trabajo | **sucio** — 3 archivo(s) |
 | PR abierto | [#1](https://github.com/ceuntabilo-a11y/AGEN/pull/1) — Cierre/agente idempotencia ci (listo) |
-| Último CI | in_progress / **en curso** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31751547693 |
+| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31754341917 |
 
 Archivos sin commitear:
 
@@ -39,12 +39,12 @@ M docs/HANDOFF.md
 Últimos commits:
 
 ```
+0ff0890 fix: the policy audit cannot run where the policy does not exist
+ea5b0e4 feat: an approval gateway for the technical automation, plus a watchdog
+13cc34a docs: record where each backlog item really stands
 7c7e3bf feat: know which commit to roll back to, without guessing at 3am
 e3d4493 feat: watch latency, and stop the monitor from failing when everything is fine
 8aac2ec feat: the agent's silent failures now leave a trace
-37cb9ba feat: a write test can no longer touch the wrong business
-ca2808b feat: the monitor stops crying wolf and closes its own alert
-fd523a4 fix: cancelling twice no longer warns twice nor drains the waitlist
 ```
 
 <!-- AUTO:FIN -->
@@ -139,10 +139,12 @@ credencial o una decisión que nadie más puede tomar).
        definición. `npm run watchdog` mira el estado real del trabajo y dice qué hacer ahora,
        con código de salida para encadenarlo (0 terminado · 10 esperando CI · 20 hay trabajo ·
        30 falta una persona · 40 atascado).
-- [!] 11. **Automatización 24/7 — en pie la mitad.** La monitorización corre cada 30 minutos en
-       GitHub Actions y los workflows de n8n atienden WhatsApp. Lo que falta es de infraestructura
-       y del dueño: activar y vigilar los workflows 02–04 en el n8n real, y decidir qué pasa
-       cuando la automatización detecta algo (hoy: abre una incidencia y espera a una persona).
+- [!] 11. **Automatización 24/7 — hecho el lado del repositorio.** La monitorización corre cada
+       30 minutos, reintenta antes de alarmar, cierra sola su incidencia cuando la salud vuelve
+       e imprime el veredicto del watchdog en cada ejecución. Con eso, el estado del trabajo y
+       el de producción quedan vigilados sin que nadie mire la pantalla.
+       **Falta lo que es del dueño:** activar y vigilar los workflows 02–04 en el n8n real, que
+       no se puede tocar desde este repositorio.
 
 ## Pendiente del dueño (nadie más puede hacerlo)
 
@@ -150,10 +152,14 @@ credencial o una decisión que nadie más puede tomar).
    Supabase del proyecto de AGEN → menú izquierdo **SQL Editor** → botón **New query** → pega
    el contenido completo del archivo → botón **Run**. Debería responder `Success. No rows
    returned`. Es reversible, no modifica datos y no borra nada. Hasta que se aplique, cancelar
-   dos veces sigue avisando dos veces.
-2. **Clave de DashScope** en `/plataforma/claves` si se quiere probar la voz de punta a punta.
-3. **Segundo proyecto de Supabase** para separar de verdad sandbox de producción.
-4. **Decidir el alcance del Approval Gateway** (punto 10 del backlog).
+   dos veces sigue avisando dos veces al cliente y ofreciendo el mismo cupo a otras cinco
+   personas de la lista de espera.
+2. **Correr `supabase/tests/booking_invariants.sql`** en ese mismo SQL Editor después de aplicar
+   la migración. Va dentro de una transacción con `rollback`, así que no deja nada.
+3. **Mergear el PR #1** y después desplegar en EasyPanel (servicio de la app → "Implementar").
+4. **Clave de DashScope** en `/plataforma/claves` si se quiere probar la voz de punta a punta.
+5. **Segundo proyecto de Supabase** para separar de verdad sandbox de producción.
+6. **Activar los workflows 02–04 en el n8n real**, que no se puede tocar desde este repositorio.
 
 ## Riesgos abiertos
 
@@ -170,14 +176,14 @@ credencial o una decisión que nadie más puede tomar).
 
 ## Siguiente comando exacto
 
-Para saber dónde está todo, empieza siempre por acá:
+Empieza siempre por acá: dice qué hacer ahora y si el trabajo se detuvo.
 
 ```bash
-npm run handoff
+npm run watchdog
+npm run handoff    # y esto refresca el bloque de arriba
 ```
 
-El backlog está en verde y sin nada a medias, así que el siguiente paso es **elegir el punto 2
-o el 3** y empezar. Verificación local obligatoria antes de cualquier push (§9 de CLAUDE.md):
+Verificación local obligatoria antes de cualquier push (§9 de CLAUDE.md):
 
 ```bash
 npm run lint
