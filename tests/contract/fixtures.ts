@@ -136,6 +136,46 @@ export const entrada = (mensaje: string, telefono = '56911112222') => ({
     sender: 'perfil de whatsapp',
   },
   messageKey: { id: 'MSG-1' },
+  messageId: 'MSG-1',
+})
+
+/**
+ * Item crudo del nodo "Webhook" tal como lo manda Evolution API (`messages.upsert`).
+ * El businessId viaja en la query porque cada negocio tiene su propia URL de webhook.
+ */
+export const webhookEvolution = (
+  mensaje: string,
+  opciones: { id?: string | null; jid?: string; fromMe?: boolean } = {},
+) => ({
+  query: { businessId: catalogo.business.id },
+  headers: { 'x-agen-secret': 'secreto' },
+  body: {
+    instance: 'Agen',
+    data: {
+      key: {
+        remoteJid: `${opciones.jid ?? '56911112222'}@s.whatsapp.net`,
+        fromMe: opciones.fromMe ?? false,
+        ...(opciones.id === null ? {} : { id: opciones.id ?? 'WA-MSG-1' }),
+      },
+      pushName: 'perfil de whatsapp',
+      message: { conversation: mensaje },
+    },
+  },
+})
+
+/**
+ * Item crudo del nodo "Webhook" cuando alguien llama ya normalizado (pruebas, otros canales).
+ * El nodo "Entrada" lo soporta a propósito y aquí NO existe `data.key.id`.
+ */
+export const webhookNormalizado = (mensaje: string) => ({
+  query: {},
+  headers: { 'x-agen-secret': 'secreto' },
+  body: {
+    businessId: catalogo.business.id,
+    phone: '+56911112222',
+    message: mensaje,
+    sender: 'perfil de whatsapp',
+  },
 })
 
 /** Salida del nodo "Agrupar" (mensajes fusionados tras el debounce). */

@@ -62,6 +62,46 @@ export function evaluarExpresion(expresion: string, datos: EntradaContexto): str
   return String(evaluar(datos.json, referencia))
 }
 
+/**
+ * Ejecuta el `jsCode` real de un nodo Code con los nodos referenciados simulados.
+ * `$execution` se pasa aparte para poder probar también el caso en que n8n no lo expone.
+ */
+export function ejecutarNodoCodigo(
+  nombre: string,
+  nodos: Record<string, Record<string, unknown>>,
+  ejecucion?: { id?: string },
+): Record<string, unknown> {
+  const { jsCode } = nodo(nombre).parameters as { jsCode?: string }
+  if (typeof jsCode !== 'string') throw new Error(`El nodo "${nombre}" no es un nodo Code`)
+
+  const referencia = (referido: string) => {
+    const valor = nodos[referido]
+    if (!valor) throw new Error(`El nodo "${nombre}" usa $('${referido}') y la prueba no lo definió`)
+    return { item: { json: valor }, first: () => ({ json: valor }) }
+  }
+
+  const ejecutar = new Function('$', '$execution', jsCode) as (
+    ref: typeof referencia,
+    execution: { id?: string } | undefined,
+  ) => Array<{ json: Record<string, unknown> }>
+
+  const salida = ejecutar(referencia, ejecucion)
+  if (!Array.isArray(salida) || !salida[0]?.json) throw new Error(`El nodo "${nombre}" no devolvió [{ json }]`)
+  return salida[0].json
+}
+
+/** Cuerpo JSON que un nodo HTTP le manda a la app, evaluado con datos de prueba. */
+export function cuerpoDelNodo<T = Record<string, unknown>>(nombre: string, datos: EntradaContexto): T {
+  const { body } = nodo(nombre).parameters as { body?: string }
+  if (typeof body !== 'string') throw new Error(`El nodo "${nombre}" no manda un cuerpo`)
+  const crudo = evaluarExpresion(body, datos)
+  try {
+    return JSON.parse(crudo) as T
+  } catch {
+    throw new Error(`El cuerpo de "${nombre}" no es JSON válido: ${crudo.slice(0, 120)}`)
+  }
+}
+
 /** Instrucciones de sistema del agente, tal como están en el workflow versionado. */
 export function promptDelSistema(): string {
   const opciones = nodo('Agente Agen').parameters.options as { systemMessage?: string } | undefined

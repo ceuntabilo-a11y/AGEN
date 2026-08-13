@@ -22,7 +22,9 @@ test.describe('Contexto del agente — base que ya funcionaba', () => {
   test('el mensaje agrupado, el negocio, el actor y la zona viajan al modelo', () => {
     const contexto = construir('Hola, quiero una hora', memoriaCliente)
     const campos = camposDelContexto(contexto)
-    expect(campos.MENSAJE).toBe('Hola, quiero una hora')
+    // El mensaje del cliente viaja codificado como JSON para que no pueda inventar campos
+    // del contexto (ver agente-mensaje.spec.ts, sección de inyección).
+    expect(JSON.parse(campos.MENSAJE)).toBe('Hola, quiero una hora')
     expect(campos.NEGOCIO).toBe(catalogo.business.id)
     expect(campos.ACTOR).toBe('CLIENT')
     expect(campos.ZONA).toBe(ZONA)

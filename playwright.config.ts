@@ -28,6 +28,13 @@ if (existsSync(ENV_FILE)) {
  */
 export default defineConfig({
   testDir: './tests',
+  /*
+   * Las pruebas de contrato importan rutas reales de `src/app/api/**` para ejecutarlas contra
+   * un doble de PostgREST (tests/support/supabase-fake.ts). Esos módulos usan el alias `@/`,
+   * y Playwright necesita un tsconfig con `baseUrl` para resolverlo; el de la app no lo
+   * declara y no conviene tocarlo. Este apunta al mismo `paths` con baseUrl explícito.
+   */
+  tsconfig: './tests/tsconfig.json',
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
