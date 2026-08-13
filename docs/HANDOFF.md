@@ -21,35 +21,34 @@ Cómo mantenerlo:
 | Dato | Valor |
 |---|---|
 | Rama | `cierre/agente-idempotencia-ci` |
-| HEAD local | `3350762` — ci: add a fast contract gate, a dependency audit and round-the-clock monitoring |
-| HEAD remoto | `3350762` (sincronizado) |
-| Commits por delante de `main` | 5 |
-| Árbol de trabajo | **sucio** — 8 archivo(s) |
+| HEAD local | `b66e2f9` — fix: the fast contract gate no longer needs a production build |
+| HEAD remoto | `b66e2f9` (sincronizado) |
+| Commits por delante de `main` | 6 |
+| Árbol de trabajo | **sucio** — 7 archivo(s) |
 | PR abierto | [#1](https://github.com/ceuntabilo-a11y/AGEN/pull/1) — Cierre/agente idempotencia ci (listo) |
-| Último CI | completed / **failure** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31734600608 |
+| Último CI | completed / **failure** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31738576461 |
 
 Archivos sin commitear:
 
 ```
 M .claude/skills/safe-local-autonomy/SKILL.md
  M CLAUDE.md
+ M package-lock.json
  M package.json
- M playwright.config.ts
+ M scripts/dev-restart.mjs
 ?? .claude/skills/playwright-cli/
-?? docs/HANDOFF.md
 ?? public/brand/synetia-logo.png
-?? scripts/handoff.mjs
 ```
 
 Últimos commits:
 
 ```
+b66e2f9 fix: the fast contract gate no longer needs a production build
 3350762 ci: add a fast contract gate, a dependency audit and round-the-clock monitoring
 cbb97be fix: make notices and campaign sends impossible to duplicate
 18c7c30 fix: one identity and one truth for every agent message
 b6fca04 chore: add safe local autonomy policy
 111639b fix: harden agent context and time handling
-95fb810 fix: align npm lockfile and CI runtime
 ```
 
 <!-- AUTO:FIN -->

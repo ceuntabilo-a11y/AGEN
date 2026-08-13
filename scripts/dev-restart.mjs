@@ -8,8 +8,14 @@
  * Cualquier otro proceso —incluido el servidor de MediCore, que corre en la misma máquina—
  * queda fuera por construcción.
  *
- *   node scripts/dev-restart.mjs          reinicia y espera a que /api/health responda
- *   node scripts/dev-restart.mjs --estado solo informa, no toca nada
+ *   node scripts/dev-restart.mjs           reinicia y espera a que /api/health responda
+ *   node scripts/dev-restart.mjs --estado  solo informa, no toca nada
+ *   node scripts/dev-restart.mjs --detener detiene y NO vuelve a levantar
+ *
+ * `--detener` existe porque en Windows el dev deja abierto
+ * `node_modules/@next/swc-win32-x64-msvc/next-swc.win32-x64-msvc.node`, y mientras esté
+ * abierto `npm ci` falla con EPERM al intentar reemplazarlo. El alcance es el mismo: solo
+ * procesos node de Next de ESTE repositorio.
  */
 import { execFileSync, spawn } from 'node:child_process'
 import { closeSync, mkdirSync, openSync } from 'node:fs'
@@ -20,6 +26,16 @@ const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SALUD = 'http://localhost:3000/api/health'
 const LOG = path.join(RAIZ, '.next', 'dev-restart.log')
 const soloEstado = process.argv.includes('--estado')
+const soloDetener = process.argv.includes('--detener')
+
+/**
+ * Puertos que este repositorio se reserva: 3000 el servidor de desarrollo, 3010 el de
+ * producción local. Sirven como segunda forma de identificar un proceso de AGEN cuando la
+ * línea de comando trae el binario de Next por ruta relativa (`node ./node_modules/next/...`)
+ * y por tanto no contiene la ruta del repositorio.
+ */
+const PUERTOS = ['-p 3000', '-p 3010']
+const BIN_RELATIVO = 'node_modules/next/dist/bin/next'
 
 /** Procesos de Next que pertenecen a este repositorio. Nunca devuelve nada de fuera. */
 function procesosDeAgen() {
@@ -47,12 +63,16 @@ function procesosDeAgen() {
     .filter((fila) => {
       const linea = String(fila?.CommandLine ?? '').replace(/\\/g, '/').toLowerCase()
       if (!linea) return false
-      // Doble condición: tiene que ser de esta carpeta Y ser Next.
-      if (!linea.includes(raizNormalizada)) return false
-      if (!linea.includes('next')) return false
-      // Cinturón extra: jamás tocar MediCore, que vive en la misma máquina.
+      // Cinturón extra, antes que nada: jamás tocar MediCore, que vive en la misma máquina.
       if (linea.includes('medicore')) return false
-      return true
+      if (!linea.includes('next')) return false
+
+      // Caso normal: la línea de comando trae la ruta de este repositorio.
+      if (linea.includes(raizNormalizada)) return true
+
+      // Caso del binario por ruta relativa: entonces exigimos el binario EXACTO de Next y uno
+      // de los puertos reservados de AGEN. Sin las dos cosas a la vez no se toca el proceso.
+      return linea.includes(BIN_RELATIVO) && PUERTOS.some((puerto) => linea.includes(puerto))
     })
     .map((fila) => Number(fila.ProcessId))
     .filter((pid) => Number.isInteger(pid) && pid > 0)
@@ -83,6 +103,13 @@ if (soloEstado) {
     } catch (error) {
       console.log(`no se pudo detener ${pid}: ${error.code ?? 'error'}`)
     }
+  }
+
+  if (soloDetener) {
+    // Windows tarda un instante en soltar el .node nativo de Next.
+    await new Promise((listo) => setTimeout(listo, 1500))
+    console.log('detenido sin reiniciar (--detener)')
+    process.exit(0)
   }
 
   mkdirSync(path.dirname(LOG), { recursive: true })

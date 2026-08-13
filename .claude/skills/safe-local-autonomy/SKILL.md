@@ -249,7 +249,7 @@ Esto no cambia ninguna frontera: `git add/commit/push`, dependencias, deploy, n8
 producción y todo lo que esté en `ask` o `deny` se siguen pidiendo igual, y reformular jamás
 se usa para colarlos.
 
-## En Windows, `npx playwright` está roto: usa los scripts de npm
+## En Windows hay dos cajas: usa los scripts de npm, no `npx`
 
 Comprobado el 2026-08-13 en `E:\agen` con evidencia directa (`require.cache` del worker):
 
@@ -258,17 +258,26 @@ E:\AGEN\node_modules\playwright\lib\globals.js     <- lo carga el runner
 E:\agen\node_modules\playwright\lib\globals.js     <- lo carga el archivo de prueba
 ```
 
-`npx` resuelve el binario por una ruta con la letra de unidad y el nombre de carpeta en
-**otra caja** (`E:\AGEN`) que la del `cwd` (`E:\agen`). La caché de módulos de Node en Windows
-distingue mayúsculas, así que se cargan **dos copias** de Playwright y ninguna prueba encuentra
-su suite: todas fallan con *"Playwright Test did not expect test.describe() to be called
-here"*. No es un fallo del repositorio ni de las pruebas — en Linux (el CI) no ocurre.
+Los atajos de `node_modules/.bin` resuelven el binario por una ruta con la letra de unidad y el
+nombre de carpeta en **otra caja** (`E:\AGEN`) que la del `cwd` (`E:\agen`). La caché de módulos
+de Node distingue mayúsculas, así que se cargan **dos copias** de la misma librería. Síntomas
+comprobados:
 
-Usa siempre los scripts, que invocan el CLI por ruta relativa al `cwd` y cargan una sola copia:
+- Playwright: las 172 pruebas de contrato fallan con *"Playwright Test did not expect
+  test.describe() to be called here"*.
+- `next build`: revienta en el prerender con `Cannot read properties of null (reading
+  'useContext')` o `Expected workUnitAsyncStorage to have a store`.
+
+No es un fallo del repositorio ni de las pruebas — en Linux (el CI) no ocurre.
+
+Usa siempre los scripts, que invocan el binario por ruta relativa al `cwd` y cargan una sola
+copia:
 
 - solo contrato (rápida, sin navegador, sin red, sin servidor): `npm run test:contrato`
 - completa: `npm run test:e2e`
 - por rol: `npm run test:e2e -- --project=admin` (o `platform`, `professional`, `client`)
+
+- build de producción: `npm run build` (ya invoca el binario por ruta relativa)
 
 Para reproducir el job rápido del CI tal cual: `CI=1 npm run test:contrato`.
 
@@ -301,11 +310,18 @@ apretado.
 
 ## Servidor de desarrollo
 
-Reinícialo con `npm run dev:restart` y consulta su estado con `npm run dev:estado`. Ambos
-usan `scripts/dev-restart.mjs`, cuyo alcance está grabado en el código: solo detiene procesos
-`node.exe` que pertenezcan a este repositorio **y** sean de Next, con exclusión explícita de
-MediCore. **No abras PowerShell ni `Stop-Process` por tu cuenta**: si hace falta más alcance,
-amplía el script y explícalo, no el permiso.
+Reinícialo con `npm run dev:restart`, consúltalo con `npm run dev:estado` y **deténlo sin
+volver a levantarlo** con `npm run dev:detener`. Los tres usan `scripts/dev-restart.mjs`, cuyo
+alcance está grabado en el código: solo detiene procesos `node.exe` que sean de Next **y** o
+bien traigan la ruta de este repositorio en su línea de comando, o bien usen el binario exacto
+`node_modules/next/dist/bin/next` con uno de los puertos reservados de AGEN (3000, 3010), con
+exclusión explícita de MediCore. **No abras PowerShell ni `Stop-Process` por tu cuenta**: si
+hace falta más alcance, amplía el script y explícalo, no el permiso.
+
+`dev:detener` existe por una razón concreta: en Windows el servidor deja abierto
+`node_modules/@next/swc-win32-x64-msvc/next-swc.win32-x64-msvc.node`, y mientras lo tenga
+abierto `npm ci` falla con `EPERM: operation not permitted, unlink`. Si ves ese error, para el
+servidor y repite.
 
 Ten presente que `npm run build` sobrescribe `.next` y deja inservible un `npm run dev` que
 estuviera corriendo: después de un build, reinicia el dev.

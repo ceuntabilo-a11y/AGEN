@@ -376,11 +376,21 @@ Variables: copiar `.env.example` → `.env.local` (comentarios indican las del s
 | `npm run lint` / `npm run typecheck` | Verificación obligatoria |
 | `npm run test:contrato` | Contrato del agente: rápido, sin navegador, red ni servidor |
 | `npm run test:e2e` | Suite completa de Playwright (necesita credenciales y servidor) |
+| `npm run dev:detener` | Detiene el dev/producción local sin volver a levantarlo |
+| `npm run handoff` | Regenera `docs/HANDOFF.md` (rama, commits, PR y CI reales) |
 
-**Windows:** usa siempre estos scripts, nunca `npx playwright`. `npx` resuelve el binario por
-una ruta con otra caja (`E:\AGEN` frente a `E:\agen`) y, como la caché de módulos de Node
-distingue mayúsculas, se cargan dos copias de Playwright y **todas** las pruebas fallan con
-"Playwright Test did not expect test.describe() to be called here". En Linux (el CI) no pasa.
+**Trampa de Windows — resolución con dos cajas.** En esta máquina los binarios lanzados por
+los atajos de `node_modules/.bin` resuelven módulos por `E:\AGEN\...` mientras que el `cwd` es
+`E:\agen\...`. La caché de módulos de Node distingue mayúsculas, así que se cargan **dos
+copias** de la misma librería. Síntomas observados: las 172 pruebas de contrato fallando con
+"Playwright Test did not expect test.describe() to be called here", y `next build` reventando
+en el prerender con `Cannot read properties of null (reading 'useContext')` o
+`Expected workUnitAsyncStorage to have a store`. En Linux (el CI y EasyPanel) no ocurre.
+
+Por eso `build`, `test:contrato` y `test:e2e` invocan el binario con `node ./node_modules/...`
+—ruta relativa al `cwd`, una sola copia—. **No los cambies a `next build` / `npx playwright`.**
+`dev` y `start` siguen con el atajo a propósito: funcionan bien y así `scripts/dev-restart.mjs`
+los reconoce por la ruta del repositorio en su línea de comando.
 
 **Despliegue:** EasyPanel sin Docker (build `npm ci && npm run build`, start `npm start`)
 detrás del Worker Cloudflare `agen-web-router` (dominio `agen.synetia.site`, reescritura de
