@@ -21,17 +21,16 @@ Cómo mantenerlo:
 | Dato | Valor |
 |---|---|
 | Rama | `cierre/agente-idempotencia-ci` |
-| HEAD local | `9b2d46b` — test: pin the two guarantees of the agent's voice and media |
-| HEAD remoto | `9b2d46b` (sincronizado) |
-| Commits por delante de `main` | 8 |
-| Árbol de trabajo | **sucio** — 3 archivo(s) |
+| HEAD local | `496cbb1` — chore: keep throwaway diagnostic tests out of commits |
+| HEAD remoto | `496cbb1` (sincronizado) |
+| Commits por delante de `main` | 10 |
+| Árbol de trabajo | **sucio** — 2 archivo(s) |
 | PR abierto | [#1](https://github.com/ceuntabilo-a11y/AGEN/pull/1) — Cierre/agente idempotencia ci (listo) |
-| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31744437699 |
+| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31746522052 |
 
 Archivos sin commitear:
 
 ```
-M docs/HANDOFF.md
 ?? .claude/skills/playwright-cli/
 ?? public/brand/synetia-logo.png
 ```
@@ -39,12 +38,12 @@ M docs/HANDOFF.md
 Últimos commits:
 
 ```
+496cbb1 chore: keep throwaway diagnostic tests out of commits
+e15af1d docs: record the green state and how to resume it
 9b2d46b test: pin the two guarantees of the agent's voice and media
 8389cf2 fix: unblock the production job of the CI and the local build
 b66e2f9 fix: the fast contract gate no longer needs a production build
 3350762 ci: add a fast contract gate, a dependency audit and round-the-clock monitoring
-cbb97be fix: make notices and campaign sends impossible to duplicate
-18c7c30 fix: one identity and one truth for every agent message
 ```
 
 <!-- AUTO:FIN -->
