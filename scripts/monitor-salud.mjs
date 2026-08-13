@@ -3,7 +3,9 @@
  *
  * Consulta endpoints que no exponen datos de negocio ni los modifican, y escribe el resultado
  * en `monitor-salud.json` para que quede como evidencia del run. Sale con código 1 si algo
- * crítico está caído, que es lo que hace fallar la monitorización y abrir la incidencia.
+ * crítico está caído después de varios intentos, que es lo que hace fallar la monitorización y
+ * abrir la incidencia. Un fallo aislado que se arregla solo no abre nada: queda anotado como
+ * `seRecupero` en el informe.
  *
  * Nunca imprime credenciales: de las variables de entorno solo se informa si están o no.
  *
@@ -49,23 +51,52 @@ const consultar = async (ruta) => {
   }
 }
 
-const informe = { momento: new Date().toISOString(), destino: base, comprobaciones: [] }
+/**
+ * Reintentos antes de dar algo por caído.
+ *
+ * Un despliegue, un reinicio del contenedor o un microcorte de red producen un fallo aislado
+ * que se arregla solo en segundos. Sin reintentos, cada uno de esos abría una incidencia que
+ * al mirarla ya estaba sana — y una alarma que casi siempre es falsa deja de mirarse.
+ * Se reintenta solo lo que falla, con espera creciente.
+ */
+const INTENTOS = 3
+const ESPERA_ENTRE_INTENTOS_MS = 5000
+
+const espera = (ms) => new Promise((listo) => setTimeout(listo, ms))
+
+async function comprobar(comprobacion) {
+  const intentos = []
+  for (let intento = 1; intento <= INTENTOS; intento += 1) {
+    const resultado = await consultar(comprobacion.ruta)
+    const sano = resultado.ok && (comprobacion.espera ? comprobacion.espera(resultado.cuerpo) : true)
+    intentos.push({ intento, sano, httpEstado: resultado.estado, ms: resultado.ms, detalle: resultado.error ?? (sano ? null : 'respuesta inesperada') })
+    if (sano) return { sano, intentos, ultimo: resultado }
+    if (intento < INTENTOS) await espera(ESPERA_ENTRE_INTENTOS_MS * intento)
+  }
+  return { sano: false, intentos, ultimo: null }
+}
+
+const informe = { momento: new Date().toISOString(), destino: base, intentosPorComprobacion: INTENTOS, comprobaciones: [] }
 let hayFalloCritico = false
 
 for (const comprobacion of COMPROBACIONES) {
-  const resultado = await consultar(comprobacion.ruta)
-  const sano = resultado.ok && (comprobacion.espera ? comprobacion.espera(resultado.cuerpo) : true)
+  const { sano, intentos } = await comprobar(comprobacion)
+  const ultimo = intentos[intentos.length - 1]
   informe.comprobaciones.push({
     nombre: comprobacion.nombre,
     ruta: comprobacion.ruta,
     critico: comprobacion.critico,
     sano,
-    httpEstado: resultado.estado,
-    ms: resultado.ms,
-    detalle: resultado.error ?? (sano ? null : 'respuesta inesperada'),
+    // Se recuperó sola: interesa saberlo, es la señal de un corte breve y no de una caída.
+    seRecupero: sano && intentos.length > 1,
+    httpEstado: ultimo.httpEstado,
+    ms: ultimo.ms,
+    intentos,
+    detalle: ultimo.detalle,
   })
   if (!sano && comprobacion.critico) hayFalloCritico = true
-  console.log(`${sano ? '  OK  ' : ' FALLA'} ${comprobacion.nombre} (${comprobacion.ruta}) → HTTP ${resultado.estado} en ${resultado.ms} ms`)
+  const sufijo = sano && intentos.length > 1 ? ` (se recuperó en el intento ${intentos.length})` : ''
+  console.log(`${sano ? '  OK  ' : ' FALLA'} ${comprobacion.nombre} (${comprobacion.ruta}) → HTTP ${ultimo.httpEstado} en ${ultimo.ms} ms${sufijo}`)
 }
 
 // Configuración presente o ausente, sin revelar ningún valor.

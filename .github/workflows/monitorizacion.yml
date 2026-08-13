@@ -6,6 +6,11 @@ name: Monitorización
 # Qué hace ante un fallo: guarda la evidencia como artefacto y abre (o actualiza) una
 # incidencia con todo lo necesario para investigarla, incluido el comando exacto para
 # reproducirla en local. Nunca intenta reparar producción por su cuenta.
+#
+# Lo único que se repara solo es el aviso: un fallo aislado ya no abre incidencia (el monitor
+# reintenta antes de dar algo por caído) y, cuando la salud vuelve, la incidencia del corte
+# anterior se cierra sola. Así la etiqueta `monitorizacion` significa siempre "algo está mal
+# AHORA", que es la única forma de que se siga mirando.
 
 on:
   schedule:
@@ -51,7 +56,7 @@ jobs:
       # (identidad del mensaje, tiempo, validación de salida…) aunque nadie abra un PR.
       - name: Contrato del agente
         id: contrato
-        run: npx playwright test --project=contrato
+        run: npm run test:contrato
 
       # Solo lectura: /api/health y /api/status no exponen datos de negocio ni los modifican.
       - name: Salud de la aplicación desplegada
@@ -86,8 +91,8 @@ jobs:
 
           Para reproducir en local:
               npm ci
-              npx playwright test --project=contrato
-              node scripts/monitor-salud.mjs
+              npm run test:contrato
+              node scripts/monitor-salud.mjs https://TU-DOMINIO
 
           La evidencia (informe de Playwright, trazas y monitor-salud.json) está adjunta al run."
           existente=$(gh issue list --state open --label monitorizacion --limit 1 --json number --jq '.[0].number')
@@ -96,3 +101,27 @@ jobs:
           else
             gh issue create --title "$titulo" --body "$cuerpo" --label monitorizacion
           fi
+
+      # Autorreparación del propio aviso: si todo volvió a estar sano y quedó una incidencia
+      # abierta del corte anterior, se cierra sola. Sin esto, una caída de dos minutos dejaba
+      # una incidencia abierta para siempre y había que cerrarla a mano; con varias así, la
+      # etiqueta deja de significar "algo está mal ahora".
+      #
+      # Reparar producción sigue siendo manual a propósito: este workflow no toca el servicio.
+      - name: Cerrar la incidencia si la salud volvió
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          abierta=$(gh issue list --state open --label monitorizacion --limit 1 --json number --jq '.[0].number')
+          if [ -z "$abierta" ]; then
+            echo "Todo sano y no hay ninguna incidencia abierta."
+            exit 0
+          fi
+          gh issue comment "$abierta" --body "Recuperado. La monitorización volvió a pasar completa.
+
+          Ejecución: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Commit vigilado: ${{ github.sha }}
+
+          Se cierra automáticamente. Si vuelve a fallar se abrirá una incidencia nueva."
+          gh issue close "$abierta"
