@@ -7,6 +7,10 @@
  * abrir la incidencia. Un fallo aislado que se arregla solo no abre nada: queda anotado como
  * `seRecupero` en el informe.
  *
+ * Mide además la latencia contra un presupuesto por ruta. Ir lento NO abre incidencia —una web
+ * lenta sigue funcionando— pero queda marcado como `lento`, que es la señal que se ve ANTES de
+ * la caída.
+ *
  * Nunca imprime credenciales: de las variables de entorno solo se informa si están o no.
  *
  * Uso:
@@ -20,13 +24,24 @@ import { writeFileSync } from 'node:fs'
 
 const TIEMPO_LIMITE_MS = 15000
 
-/** Un chequeo crítico caído hace fallar la monitorización; uno informativo solo se registra. */
+/**
+ * Un chequeo crítico caído hace fallar la monitorización; uno informativo solo se registra.
+ *
+ * `presupuestoMs` es el techo de latencia aceptable para esa ruta. Superarlo NO hace fallar la
+ * monitorización —una web lenta sigue funcionando y no se levanta a nadie de madrugada por
+ * eso— pero queda marcado como `lento` en el informe. Sirve para ver la degradación antes de
+ * la caída: /api/health tardando 4 s no es un corte todavía, pero avisa de que algo se está
+ * yendo (la base saturada, el contenedor sin memoria, un despliegue a medias).
+ *
+ * Los números salen de lo que hace cada ruta: /api/health solo responde un JSON fijo, así que
+ * medio segundo ya es mucho; la portada y el login renderizan página, así que se les da más.
+ */
 const COMPROBACIONES = [
   // `service` se comprueba a propósito: en una máquina con varias apps en el mismo puerto,
   // un /api/health que responde 200 puede ser de OTRO proyecto.
-  { nombre: 'api', ruta: '/api/health', critico: true, espera: (cuerpo) => cuerpo?.ok === true && cuerpo?.service === 'agen' },
-  { nombre: 'portada', ruta: '/', critico: true },
-  { nombre: 'login', ruta: '/login', critico: false },
+  { nombre: 'api', ruta: '/api/health', critico: true, presupuestoMs: 800, espera: (cuerpo) => cuerpo?.ok === true && cuerpo?.service === 'agen' },
+  { nombre: 'portada', ruta: '/', critico: true, presupuestoMs: 2500 },
+  { nombre: 'login', ruta: '/login', critico: false, presupuestoMs: 2500 },
 ]
 
 const base = (process.argv[2] ?? process.env.AGEN_APP_URL ?? '').replace(/\/$/, '')
@@ -78,10 +93,12 @@ async function comprobar(comprobacion) {
 
 const informe = { momento: new Date().toISOString(), destino: base, intentosPorComprobacion: INTENTOS, comprobaciones: [] }
 let hayFalloCritico = false
+let hayLentitud = false
 
 for (const comprobacion of COMPROBACIONES) {
   const { sano, intentos } = await comprobar(comprobacion)
   const ultimo = intentos[intentos.length - 1]
+  const lento = sano && ultimo.ms > comprobacion.presupuestoMs
   informe.comprobaciones.push({
     nombre: comprobacion.nombre,
     ruta: comprobacion.ruta,
@@ -89,14 +106,25 @@ for (const comprobacion of COMPROBACIONES) {
     sano,
     // Se recuperó sola: interesa saberlo, es la señal de un corte breve y no de una caída.
     seRecupero: sano && intentos.length > 1,
+    lento,
+    presupuestoMs: comprobacion.presupuestoMs,
     httpEstado: ultimo.httpEstado,
     ms: ultimo.ms,
     intentos,
     detalle: ultimo.detalle,
   })
   if (!sano && comprobacion.critico) hayFalloCritico = true
+  if (lento) hayLentitud = true
   const sufijo = sano && intentos.length > 1 ? ` (se recuperó en el intento ${intentos.length})` : ''
-  console.log(`${sano ? '  OK  ' : ' FALLA'} ${comprobacion.nombre} (${comprobacion.ruta}) → HTTP ${ultimo.httpEstado} en ${ultimo.ms} ms${sufijo}`)
+  const marca = !sano ? ' FALLA' : lento ? ' LENTO' : '  OK  '
+  const presupuesto = lento ? ` — presupuesto ${comprobacion.presupuestoMs} ms` : ''
+  console.log(`${marca} ${comprobacion.nombre} (${comprobacion.ruta}) → HTTP ${ultimo.httpEstado} en ${ultimo.ms} ms${presupuesto}${sufijo}`)
+}
+
+informe.lentitud = hayLentitud
+if (hayLentitud && !hayFalloCritico) {
+  console.log('\nTodo responde, pero alguna ruta va por encima de su presupuesto de latencia.')
+  console.log('No se abre incidencia por esto: es degradación, no caída. Queda en monitor-salud.json.')
 }
 
 // Configuración presente o ausente, sin revelar ningún valor.
@@ -105,4 +133,15 @@ informe.configuracion = {
 }
 
 writeFileSync('monitor-salud.json', `${JSON.stringify(informe, null, 2)}\n`)
-process.exit(hayFalloCritico ? 1 : 0)
+
+/*
+ * `process.exitCode` en vez de `process.exit()`.
+ *
+ * `fetch` deja el pool de conexiones de undici vivo unos segundos. Cortar el proceso a la
+ * fuerza con esos sockets abiertos hace que libuv aborte en Windows:
+ *   Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c
+ * y entonces el monitor sale con 127 aunque todo esté sano — es decir, abre una incidencia
+ * falsa cada media hora. Con `exitCode` el proceso termina por su cuenta al cerrarse los
+ * sockets, conservando el código de salida.
+ */
+process.exitCode = hayFalloCritico ? 1 : 0
