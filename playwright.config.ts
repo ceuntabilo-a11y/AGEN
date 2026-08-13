@@ -24,6 +24,41 @@ if (existsSync(ENV_FILE)) {
 }
 
 /**
+ * Projects que NO necesitan la aplicación levantada.
+ *
+ * `contrato` corre contra dobles en memoria (tests/support/supabase-fake.ts): no abre
+ * navegador, no hace red y no toca la base de datos. El job rápido del CI lo ejecuta en un
+ * checkout sin build y sin secrets, así que levantar `npm start` ahí falla siempre con
+ * "Could not find a production build in the '.next' directory".
+ */
+const PROJECTS_SIN_SERVIDOR = new Set(['contrato']);
+
+/** Nombres de project pedidos en la línea de comandos (`--project=x`, `--project x`, `-p x`). */
+function projectsPedidos(argv: string[]): string[] {
+  const nombres: string[] = [];
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--project' || arg === '-p') {
+      const valor = argv[i + 1];
+      if (valor && !valor.startsWith('-')) nombres.push(valor);
+    } else if (arg.startsWith('--project=')) {
+      nombres.push(arg.slice('--project='.length));
+    }
+  }
+  return nombres;
+}
+
+/**
+ * Solo se levanta el servidor si la ejecución incluye algún project que lo necesite.
+ * Sin `--project` se ejecutan todos, así que hace falta. Ante cualquier duda (por ejemplo un
+ * comodín como `--project=contr*`) se levanta igual: equivocarse hacia "lo levanto" solo
+ * cuesta tiempo; equivocarse hacia "no lo levanto" rompe las pruebas E2E.
+ */
+const seleccionados = projectsPedidos(process.argv.slice(2));
+const necesitaServidor =
+  seleccionados.length === 0 || seleccionados.some((nombre) => !PROJECTS_SIN_SERVIDOR.has(nombre));
+
+/**
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
@@ -122,15 +157,17 @@ export default defineConfig({
 
   /*
    * En CI la suite levanta ella misma el build de producción (`npm start`, puerto 3010) y
-   * espera a que /api/health responda. En local no se toca nada: se usa el servidor que ya
+   * espera a que /api/health responda — salvo que la ejecución sea solo de projects sin
+   * servidor (ver PROJECTS_SIN_SERVIDOR). En local no se toca nada: se usa el servidor que ya
    * tengas corriendo, según E2E_BASE_URL.
    */
-  webServer: process.env.CI
-    ? {
-        command: 'npm start',
-        url: 'http://localhost:3010/api/health',
-        reuseExistingServer: false,
-        timeout: 120000,
-      }
-    : undefined,
+  webServer:
+    process.env.CI && necesitaServidor
+      ? {
+          command: 'npm start',
+          url: 'http://localhost:3010/api/health',
+          reuseExistingServer: false,
+          timeout: 120000,
+        }
+      : undefined,
 });

@@ -10,7 +10,10 @@
     "build": "next build",
     "start": "next start -p 3010 -H 0.0.0.0",
     "lint": "eslint . --ext .js,.mjs,.ts,.tsx --max-warnings=0",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:contrato": "node ./node_modules/@playwright/test/cli.js test --project=contrato",
+    "test:e2e": "node ./node_modules/@playwright/test/cli.js test",
+    "handoff": "node scripts/handoff.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

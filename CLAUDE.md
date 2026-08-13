@@ -374,6 +374,13 @@ Variables: copiar `.env.example` → `.env.local` (comentarios indican las del s
 | `npm run dev` | Desarrollo en localhost:3000 |
 | `npm run build` / `npm start` | Producción puerto 3010; health check `/api/health` |
 | `npm run lint` / `npm run typecheck` | Verificación obligatoria |
+| `npm run test:contrato` | Contrato del agente: rápido, sin navegador, red ni servidor |
+| `npm run test:e2e` | Suite completa de Playwright (necesita credenciales y servidor) |
+
+**Windows:** usa siempre estos scripts, nunca `npx playwright`. `npx` resuelve el binario por
+una ruta con otra caja (`E:\AGEN` frente a `E:\agen`) y, como la caché de módulos de Node
+distingue mayúsculas, se cargan dos copias de Playwright y **todas** las pruebas fallan con
+"Playwright Test did not expect test.describe() to be called here". En Linux (el CI) no pasa.
 
 **Despliegue:** EasyPanel sin Docker (build `npm ci && npm run build`, start `npm start`)
 detrás del Worker Cloudflare `agen-web-router` (dominio `agen.synetia.site`, reescritura de
@@ -531,10 +538,15 @@ por API, lo prueba, y recién ahí lo activa — el usuario solo se entera por e
 
 ## 10. Commit y push a este repositorio
 
-- **Nada se commitea ni se sube sin aprobación explícita.** `git commit` y `git push` piden
-  confirmación siempre, incluso en `main` y sin `--force` (reglas `ask` en
-  `.claude/settings.local.json`). Tampoco se preparan cambios por iniciativa propia: `git add`
-  y `git mv` también preguntan.
+- **El ciclo normal de trabajo no interrumpe** (actualizado el 2026-08-13): `git add`,
+  `git commit`, `git push` sin `--force`, crear ramas con `git switch -c`, y abrir o
+  actualizar PR y leer GitHub Actions con `gh pr` / `gh run` / `gh workflow` corren sin
+  preguntar. La red de seguridad no es el diálogo: es que `main` está protegida por regla de
+  repositorio (exige el check "Lint, typecheck, build y E2E"), así que nada llega a `main`
+  sin CI verde, y el deploy sigue siendo un paso aparte y autorizado.
+- **Lo destructivo sigue bloqueado, no preguntado:** `--force` en cualquiera de sus formas,
+  borrado de ramas o de refs remotas, `reset --hard`, `clean`, `restore`, `checkout -- `,
+  `gh repo delete`, `gh secret`, `gh pr merge` y todo lo de §11.
 - Regla que nunca se rompe, sin excepción:
   1. Nunca romper algo que ya funciona.
   2. Nunca subir un cambio de lógica que el usuario no haya autorizado explícitamente en el
@@ -557,18 +569,26 @@ por API, lo prueba, y recién ahí lo activa — el usuario solo se entera por e
   (`.claude/skills/safe-local-autonomy/SKILL.md`), que decide *cómo* formular el trabajo local
   para no interrumpir al usuario sin motivo. Regula criterio, no permisos.
 - **El trabajo local rutinario corre sin aprobación**: leer código, logs y salidas de tests;
-  esperar suites; `lint`, `typecheck`, `build`, `npm ci`, Playwright, `dev:restart`,
-  `dev:estado`; llamadas a `localhost` y a las APIs locales; scripts Node locales; y crear o
-  editar archivos del proyecto (`src/`, `tests/`, `scripts/`, `playwright/`,
-  `n8n-workflows/`). También la lectura de solo lectura de GitHub Actions de este repositorio.
-- **Requieren aprobación explícita en el chat**: `git add`, `git commit`, `git push`,
-  `git mv`, cambios de rama o de historia (`checkout`, `switch`, `merge`, `rebase`, `revert`,
-  `stash`, `tag`), cambios de `remote`, escrituras de `git config`, cualquier cambio del grafo
-  de dependencias (`npm install`, `npm uninstall`, `npm publish`, `npx` que descargue
+  esperar suites; `lint`, `typecheck`, `build`, `npm ci`, `npm ls`, Playwright
+  (`test:contrato`, `test:e2e`), `dev:restart`, `dev:estado`; llamadas a `localhost` y a las
+  APIs locales; scripts Node locales; comandos de diagnóstico temporales; variables temporales
+  delante del comando (`CI=1`, `NODE_OPTIONS=…`, `PWTEST_CACHE_DIR=…`, `E2E_*`, `AGEN_*`,
+  `TZ=…`); y crear o editar archivos del proyecto (`src/`, `tests/`, `scripts/`, `playwright/`,
+  `n8n-workflows/`).
+- **El ciclo git y el CI tampoco preguntan** (2026-08-13): `git add`, `git commit`,
+  `git push` sin `--force`, `git branch`, `git switch`, `git fetch`, y `gh` de lectura y
+  gestión no destructiva (`gh run view/list/watch`, `gh pr view/checks/status/create/edit`,
+  `gh workflow view/list/run`). La protección real es la regla de repositorio sobre `main`
+  (exige el check "Lint, typecheck, build y E2E") más el deploy manual, no el diálogo.
+- **Requieren aprobación explícita en el chat**: `git mv`, `checkout`, `merge`, `rebase`,
+  `revert`, `stash`, `tag`, cambios de `remote`, `git config --global`, cualquier cambio del
+  grafo de dependencias (`npm install`, `npm uninstall`, `npm publish`, `npx` que descargue
   paquetes), el deploy en EasyPanel, importar o modificar el n8n real, y cualquier otra
   mutación externa o acción sobre producción.
 - **Están bloqueados, no se preguntan**: `git push --force` y todo lo que reescriba historia,
-  `git reset --hard`, `git clean`, `git restore`, `git filter-branch`, borrados destructivos
+  `git reset --hard`, `git clean`, `git restore`, `git filter-branch`, el borrado de ramas o
+  de refs remotas, `gh repo delete`, `gh secret`, `gh pr merge` y todo lo que saltee el CI,
+  borrados destructivos
   (`rm`, `rmdir`, `del`, `Remove-Item`, `truncate`, `shred`, `dd`), operaciones destructivas
   de base de datos (`psql`, `supabase db reset|push`, `DROP`, `TRUNCATE`, `DELETE FROM`), la
   impresión o extracción de secretos (mostrar `.env*`, volcar `process.env`), las mutaciones

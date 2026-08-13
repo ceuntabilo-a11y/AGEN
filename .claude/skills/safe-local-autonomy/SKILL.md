@@ -62,10 +62,14 @@ protegidas definidas arriba siguen excluidas—; `sleep` y sondeos; bucles `unti
 cuyo único fin sea esperar y leer un resultado.
 
 Ejecución local: `node` y `node -e` para leer, analizar, validar y modificar archivos
-controlados del repositorio; scripts `.mjs` locales; `npm ci`; Playwright
-(`npx playwright *`, `playwright-cli *`); health checks y llamadas a `localhost`, incluidas
-las APIs `/api/agent/*`, `/api/admin/*` y `/api/health`; consultas de solo lectura a GitHub
-Actions del repositorio `ceuntabilo-a11y/AGEN` ya autorizadas.
+controlados del repositorio; scripts `.mjs` locales; `npm ci`; Playwright por los scripts de
+npm (ver más abajo por qué `npx playwright` no sirve en Windows); health checks y llamadas a
+`localhost`, incluidas las APIs `/api/agent/*`, `/api/admin/*` y `/api/health`; el ciclo git
+normal y la lectura del CI con `gh`.
+
+Las variables temporales delante del comando (`CI=1 …`, `NODE_OPTIONS=… `, `PWTEST_CACHE_DIR=…`,
+`E2E_*=…`, `AGEN_*=…`, `TZ=…`) están autorizadas explícitamente desde el 2026-08-13: ya no hay
+que reescribir el comando para evitarlas.
 
 Escritura local: crear y editar archivos dentro de `E:\AGEN` —código en `src/`, tests,
 fixtures, `scripts/`, `playwright/`, `n8n-workflows/`— y en el scratchpad de la sesión.
@@ -87,12 +91,15 @@ Rutinarios una vez comprobados que son locales y no destructivos:
 | `dev` | `next dev -p 3000` |
 | `dev:restart` | reinicio acotado del dev (ver más abajo) |
 | `dev:estado` | solo informa |
+| `test:contrato` | `playwright test --project=contrato` por el CLI local |
+| `test:e2e` | `playwright test` por el CLI local |
 
 Si aparece un script de **deploy, migración, reset, publicación, importación a n8n o
 cualquier mutación externa**, no es rutinario: queda sujeto a aprobación o bloqueado, aunque
 se invoque con `npm run`. Un script nuevo que no hayas leído se trata como desconocido.
 
-En AGEN **no existe un script `test`**: la suite se ejecuta con `npx playwright test`.
+En AGEN **no existe un script `test`**: la suite se ejecuta con `npm run test:e2e` y la rápida
+con `npm run test:contrato`.
 
 ## Node no es una puerta trasera
 
@@ -116,14 +123,25 @@ hacer por dentro lo que está en `ask` o `deny`. Un script local nunca debe:
 Si necesitas una de esas acciones, pídela por el canal normal. Envolverla en Node para que no
 aparezca el diálogo es exactamente lo que no se debe hacer.
 
+## El ciclo git y el CI no interrumpen (desde el 2026-08-13)
+
+`git add`, `git commit`, `git push` sin `--force`, `git branch`, `git switch`, `git fetch`,
+y la lectura y gestión no destructiva del CI con `gh` (`gh run view/list/watch`,
+`gh pr view/checks/status/create/edit`, `gh workflow view/list/run`) **corren sin diálogo**.
+
+La red de seguridad no es la pregunta: es que `main` está protegida por regla de repositorio
+—exige el check "Lint, typecheck, build y E2E"— y que el deploy en EasyPanel sigue siendo un
+paso manual, aparte y posterior. Sigue vigente el orden de CLAUDE.md §9: **local → probado al
+100% → commit → push**, y la regla de que un push solo puede contener lo que se pidió y se
+conversó.
+
 ## Lo que sí hay que preguntar
 
-`git add` · `git commit` · `git push` · `git mv` · `checkout` / `switch` / `merge` /
-`rebase` / `revert` / `stash` / `tag` · cambios de `remote` · escrituras de `git config` ·
-`npm install` / `uninstall` · cualquier cambio de dependencias · `npx` que descargue paquetes ·
-`npm publish` · deploy · EasyPanel · importar o modificar el n8n real · `mv` cuando pueda
-sobrescribir o sacar un archivo del repositorio · cualquier mutación externa o acción sobre
-producción.
+`git mv` · `checkout` / `merge` / `rebase` / `revert` / `stash` / `tag` · añadir o cambiar un
+`remote` · `git config --global` · `npm install` / `uninstall` · cualquier cambio de
+dependencias · `npx` que descargue paquetes · `npm publish` · deploy · EasyPanel · importar o
+modificar el n8n real · `mv` cuando pueda sobrescribir o sacar un archivo del repositorio ·
+cualquier mutación externa o acción sobre producción.
 
 En estos casos **no reformules para esquivar el diálogo**: pertenecen legítimamente a `ask`.
 
@@ -231,13 +249,44 @@ Esto no cambia ninguna frontera: `git add/commit/push`, dependencias, deploy, n8
 producción y todo lo que esté en `ask` o `deny` se siguen pidiendo igual, y reformular jamás
 se usa para colarlos.
 
+## En Windows, `npx playwright` está roto: usa los scripts de npm
+
+Comprobado el 2026-08-13 en `E:\agen` con evidencia directa (`require.cache` del worker):
+
+```
+E:\AGEN\node_modules\playwright\lib\globals.js     <- lo carga el runner
+E:\agen\node_modules\playwright\lib\globals.js     <- lo carga el archivo de prueba
+```
+
+`npx` resuelve el binario por una ruta con la letra de unidad y el nombre de carpeta en
+**otra caja** (`E:\AGEN`) que la del `cwd` (`E:\agen`). La caché de módulos de Node en Windows
+distingue mayúsculas, así que se cargan **dos copias** de Playwright y ninguna prueba encuentra
+su suite: todas fallan con *"Playwright Test did not expect test.describe() to be called
+here"*. No es un fallo del repositorio ni de las pruebas — en Linux (el CI) no ocurre.
+
+Usa siempre los scripts, que invocan el CLI por ruta relativa al `cwd` y cargan una sola copia:
+
+- solo contrato (rápida, sin navegador, sin red, sin servidor): `npm run test:contrato`
+- completa: `npm run test:e2e`
+- por rol: `npm run test:e2e -- --project=admin` (o `platform`, `professional`, `client`)
+
+Para reproducir el job rápido del CI tal cual: `CI=1 npm run test:contrato`.
+
+## Pruebas temporales: se mueven, no se borran
+
+Para una prueba desechable usa el prefijo `__tmp-` (`tests/contract/__tmp-loquesea.spec.ts`).
+Al terminar **no la borres**: `rm` sigue en `deny` y Node tampoco es la puerta de atrás. Muévela
+al scratchpad de la sesión, que es lo que `settings.local.json` autoriza:
+
+```
+mv tests/contract/__tmp-*.spec.ts "$SCRATCHPAD/probes/"
+```
+
+Así el repositorio queda limpio (`git status` sin restos) sin tocar ninguna regla de borrado.
+
 ## Cómo esperar una suite sin interrumpir
 
 Las suites de este proyecto tardan minutos:
-
-- completa: `npx playwright test`
-- solo contrato (rápida, sin navegador ni red): `npx playwright test --project=contrato`
-- por rol: `npx playwright test --project=admin` (o `platform`, `professional`, `client`)
 
 Patrón recomendado:
 
@@ -265,7 +314,7 @@ estuviera corriendo: después de un build, reinicia el dev.
 
 `CLAUDE.md` manda sobre arquitectura, calidad, verificación y modo de trabajo; esta skill solo
 decide **cómo ejecutar** lo local. En particular siguen intactas: no inventar resultados ni
-verificaciones (§0), verificar antes de entregar con `lint` y `typecheck` (§9), el orden
-local → probado → commit → push (§9), y que commit y push requieren aprobación explícita
-(§10, actualizado en este proyecto). Nada de lo que hay aquí autoriza a subir, desplegar ni
-tocar producción.
+verificaciones (§0), verificar antes de entregar con `lint` y `typecheck` (§9) y el orden
+local → probado al 100% → commit → push (§9). Que el push ya no pida confirmación no relaja
+nada de eso: sube solo lo probado y solo lo conversado. Nada de lo que hay aquí autoriza a
+desplegar ni a tocar producción.
