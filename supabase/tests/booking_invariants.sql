@@ -16,6 +16,10 @@ declare
   v_overlap_rejected boolean := false;
   v_wrong_professional_rejected boolean := false;
   v_resize_rejected boolean := false;
+  v_cancelada_otra_vez public.appointments;
+  v_avisos_cancelacion integer;
+  v_contactados_antes integer;
+  v_contactados_despues integer;
 begin
   select count(*) into v_hair_count
   from public.find_available_professionals(
@@ -99,6 +103,38 @@ begin
     v_wrong_professional_rejected:=true;
   end;
   if not v_wrong_professional_rejected then raise exception 'Se movió una reserva a una profesional incompatible'; end if;
+
+  -- Cancelar dos veces no puede avisar dos veces ni volver a ofrecer el cupo.
+  -- Antes de 20260813000001, la segunda llamada reescribía CANCELLED, encolaba otro aviso
+  -- CHANGED y le ofrecía el mismo hueco a otras cinco personas de la lista de espera.
+  perform public.cancel_safe_appointment(v_held_appointment.id, 'El cliente no puede', 'Prueba');
+  select count(*) into v_avisos_cancelacion
+    from public.notification_outbox
+    where appointment_id = v_held_appointment.id and event_type = 'CHANGED';
+  if v_avisos_cancelacion <> 1 then
+    raise exception 'La primera cancelación dejó % avisos CHANGED, esperaba 1', v_avisos_cancelacion;
+  end if;
+  select count(*) into v_contactados_antes
+    from public.waitlist_entries where status = 'CONTACTED';
+
+  v_cancelada_otra_vez := public.cancel_safe_appointment(v_held_appointment.id, 'Reintento', 'Prueba');
+  if v_cancelada_otra_vez.status <> 'CANCELLED' then
+    raise exception 'La segunda cancelación devolvió el estado %', v_cancelada_otra_vez.status;
+  end if;
+
+  select count(*) into v_avisos_cancelacion
+    from public.notification_outbox
+    where appointment_id = v_held_appointment.id and event_type = 'CHANGED';
+  if v_avisos_cancelacion <> 1 then
+    raise exception 'Cancelar dos veces dejó % avisos CHANGED, esperaba 1', v_avisos_cancelacion;
+  end if;
+
+  select count(*) into v_contactados_despues
+    from public.waitlist_entries where status = 'CONTACTED';
+  if v_contactados_despues <> v_contactados_antes then
+    raise exception 'La segunda cancelación contactó a % personas más de la lista de espera',
+      v_contactados_despues - v_contactados_antes;
+  end if;
 end;
 $$;
 
