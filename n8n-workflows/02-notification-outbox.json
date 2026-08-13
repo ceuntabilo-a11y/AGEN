@@ -58,6 +58,41 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/automation/agent/replies'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-agen-secret",
+              "value": "={{$env.AGEN_WEBHOOK_SECRET}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "reintentar-respuestas-agente",
+      "name": "Reintentar respuestas del agente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        460
+      ]
     }
   ],
   "connections": {
@@ -66,6 +101,17 @@
         [
           {
             "node": "Enviar avisos pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar avisos pendientes": {
+      "main": [
+        [
+          {
+            "node": "Reintentar respuestas del agente",
             "type": "main",
             "index": 0
           }

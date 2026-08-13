@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { buildNotification } from '@/lib/notification-templates'
 import { sendWhatsApp } from '@/lib/whatsapp'
 import { sendMarketingEmail } from '@/lib/resend'
+import { claimNotifications, contarAvisosAmbiguos, descartarAviso, marcarAvisoEnviado, reintentarAviso, type AvisoReclamado } from '@/lib/notification-dispatch'
 
 /**
  * Envía de verdad los avisos pendientes de la cola.
@@ -41,9 +42,11 @@ export async function POST(request: Request) {
   if (!isAuthorizedAgent(request)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   const db = createAdminClient()
 
-  const { data: claimed, error: claimError } = await db.rpc('claim_due_notifications', { p_limit: 50 })
+  // Reclamar consume el intento: la fila queda procesada antes de intentar el envío, así un
+  // envío exitoso cuya escritura de cierre falle no se repite (ver @/lib/notification-dispatch).
+  const { avisos, error: claimError } = await claimNotifications(db, 50)
   if (claimError) return NextResponse.json({ error: 'No se pudo reclamar la cola' }, { status: 500 })
-  const rows = (claimed ?? []) as OutboxRow[]
+  const rows = avisos as unknown as OutboxRow[]
   if (!rows.length) return NextResponse.json({ sent: 0, skipped: 0, failed: 0 })
 
   const businessIds = Array.from(new Set(rows.map((row) => row.business_id)))
@@ -68,7 +71,6 @@ export async function POST(request: Request) {
   let sent = 0
   let skipped = 0
   let failed = 0
-  const now = new Date().toISOString()
 
   for (const row of rows) {
     const business = businessById.get(row.business_id)
@@ -77,7 +79,7 @@ export async function POST(request: Request) {
 
     const discard = async (reason: string) => {
       skipped += 1
-      await db.from('notification_outbox').update({ processed_at: now, claimed_at: null, last_error: reason }).eq('id', row.id)
+      await descartarAviso(db, row as unknown as AvisoReclamado, reason)
     }
 
     if (!business || !client) { await discard('sin_negocio_o_cliente'); continue }
@@ -117,12 +119,15 @@ export async function POST(request: Request) {
 
     if (result.success) {
       sent += 1
-      await db.from('notification_outbox').update({ processed_at: new Date().toISOString(), claimed_at: null, last_error: null }).eq('id', row.id)
+      await marcarAvisoEnviado(db, row.id)
     } else {
       failed += 1
-      await db.from('notification_outbox').update({ claimed_at: null, last_error: (result.error ?? 'error_desconocido').slice(0, 1000) }).eq('id', row.id)
+      await reintentarAviso(db, row as unknown as AvisoReclamado, result.error ?? 'error_desconocido')
     }
   }
 
-  return NextResponse.json({ sent, skipped, failed })
+  // Avisos que quedaron con la marca de entrega en vuelo: no se sabe si salieron. No se
+  // reenvían solos (duplicaría), pero se informan para que el fallo no quede invisible.
+  const ambiguos = await contarAvisosAmbiguos(db, new Date(Date.now() - 15 * 60000))
+  return NextResponse.json({ sent, skipped, failed, ambiguous: ambiguos })
 }
