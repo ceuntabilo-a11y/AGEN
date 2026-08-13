@@ -21,34 +21,32 @@ Cómo mantenerlo:
 | Dato | Valor |
 |---|---|
 | Rama | `cierre/agente-idempotencia-ci` |
-| HEAD local | `b66e2f9` — fix: the fast contract gate no longer needs a production build |
-| HEAD remoto | `b66e2f9` (sincronizado) |
-| Commits por delante de `main` | 6 |
-| Árbol de trabajo | **sucio** — 7 archivo(s) |
+| HEAD local | `8389cf2` — fix: unblock the production job of the CI and the local build |
+| HEAD remoto | `8389cf2` (sincronizado) |
+| Commits por delante de `main` | 7 |
+| Árbol de trabajo | **sucio** — 5 archivo(s) |
 | PR abierto | [#1](https://github.com/ceuntabilo-a11y/AGEN/pull/1) — Cierre/agente idempotencia ci (listo) |
-| Último CI | completed / **failure** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31738576461 |
+| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31740001443 |
 
 Archivos sin commitear:
 
 ```
-M .claude/skills/safe-local-autonomy/SKILL.md
- M CLAUDE.md
- M package-lock.json
- M package.json
- M scripts/dev-restart.mjs
+M docs/HANDOFF.md
 ?? .claude/skills/playwright-cli/
 ?? public/brand/synetia-logo.png
+?? tests/contract/agente-multimedia.spec.ts
+?? tests/contract/agente-voz.spec.ts
 ```
 
 Últimos commits:
 
 ```
+8389cf2 fix: unblock the production job of the CI and the local build
 b66e2f9 fix: the fast contract gate no longer needs a production build
 3350762 ci: add a fast contract gate, a dependency audit and round-the-clock monitoring
 cbb97be fix: make notices and campaign sends impossible to duplicate
 18c7c30 fix: one identity and one truth for every agent message
 b6fca04 chore: add safe local autonomy policy
-111639b fix: harden agent context and time handling
 ```
 
 <!-- AUTO:FIN -->
@@ -57,7 +55,19 @@ b6fca04 chore: add safe local autonomy policy
 
 ## Qué está hecho
 
-- **Fallo del CI del PR #1 corregido.** El job "Contrato del agente (rápido)" fallaba con
+- **CI del PR #1 en verde por primera vez** (run 31740001443, commit `8389cf2`): los dos jobs
+  pasan y las 261 pruebas E2E corren de verdad contra el build de producción — 172 de contrato
+  + 4 de login por rol + 85 por rol.
+- **Segundo fallo del CI corregido:** `npm audit --omit=dev --audit-level=high` cortaba por
+  nanoid 3.3.16 (GHSA-2v37-7h3g-55p8), que llega a producción por `next → postcss`. Subido a
+  3.3.18 solo en `package-lock.json` (entra en el `^3.3.16` que ya declaraba postcss, así que
+  `package.json` no cambia).
+- **Multimedia y voz con pruebas de contrato** (`tests/contract/agente-voz.spec.ts`,
+  `agente-multimedia.spec.ts`, 19 pruebas): queda fijado que la voz nunca devuelve
+  `speak:false` + `sendText:false` (el agente no puede quedarse mudo), que en modo equipo jamás
+  habla, y que `feature_image` / `feature_voice` son opt-in por negocio y sin clave el agente
+  sigue como si el mensaje fuera solo texto. Ninguna toca la red.
+- **Primer fallo del CI corregido.** El job "Contrato del agente (rápido)" fallaba con
   `Could not find a production build in the '.next' directory`: `playwright.config.ts` levantaba
   el `webServer` (`npm start`) con solo mirar `process.env.CI`, y ese job corre sin build y sin
   secrets a propósito. Ahora el servidor solo se levanta si la ejecución incluye algún project
@@ -78,8 +88,11 @@ b6fca04 chore: add safe local autonomy policy
 
 En orden acordado. Ninguno empezado salvo donde se indique.
 
-1. Multimedia y voz del agente (`/api/agent/media`, `/api/agent/voice/reply`) — probar de punta
-   a punta con WhatsApp real.
+1. Multimedia y voz del agente — la lógica de decisión ya está cubierta por contrato (ver
+   arriba). **Falta la prueba de punta a punta con WhatsApp real**, y para eso hace falta una
+   clave de DashScope cargada en `/plataforma/claves` o en el negocio, y encender
+   `feature_image` / `feature_voice` en el negocio de pruebas. Eso es una decisión y una
+   credencial del usuario, no algo que se pueda resolver desde el repositorio.
 2. Batería conversacional del agente (casos reales, no solo contrato).
 3. Auditoría Playwright completa por roles (`platform`, `admin`, `professional`, `client`).
 4. Idempotencia global del portal.
@@ -93,10 +106,15 @@ En orden acordado. Ninguno empezado salvo donde se indique.
 
 ## Riesgos abiertos
 
-- El job `verificar` del CI (lint, typecheck, build y E2E) **nunca ha llegado a correr** en el
-  PR #1: dependía del job de contrato, que fallaba antes. La primera vez que corra puede
-  destapar fallos propios (secrets, E2E contra el build de producción).
+- **Las pruebas E2E locales no arrancan solas**: `auth.setup.ts` se queda esperando
+  `input[type="email"]` en `/login`. Pasa porque `.env.test.local` define un `E2E_BASE_URL` que
+  no es el servidor local. Ejecutar siempre
+  `CI=1 E2E_BASE_URL=http://localhost:3010 npm run test:e2e`. En CI no ocurre: allí el valor
+  viene del workflow.
 - `DIALOG360` sigue sin verificarse con un envío real (ver `CLAUDE.md` §6.1).
+- El token de `gh` de esta máquina (el de Git Credential Manager) tiene `gist`, `repo` y
+  `workflow` pero **no `read:org`**, así que `gh pr view` / `gh pr checks` fallan por GraphQL.
+  Usar la API REST: `gh api repos/ceuntabilo-a11y/AGEN/...`.
 
 ## Siguiente comando exacto
 
