@@ -15,7 +15,9 @@
     "test:contrato": "node ./node_modules/@playwright/test/cli.js test --project=contrato",
     "test:e2e": "node ./node_modules/@playwright/test/cli.js test",
     "handoff": "node scripts/handoff.mjs",
-    "rollback": "node scripts/rollback.mjs"
+    "rollback": "node scripts/rollback.mjs",
+    "gateway": "node scripts/gateway.mjs",
+    "watchdog": "node scripts/watchdog.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

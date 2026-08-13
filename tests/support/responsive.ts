@@ -24,6 +24,20 @@ export const MOVIL = { width: 390, height: 844 }
 /** Cuántos píxeles de desborde se toleran (redondeos de layout del navegador). */
 const TOLERANCIA = 2
 
+/**
+ * Espera a que el vídeo de bienvenida se vaya.
+ *
+ * `AgenSplash` se pinta sobre todo al entrar y, mientras se desvanece, se come los clics: en el
+ * CI esto dejó una prueba reintentando 221 veces contra un botón que estaba tapado. Medir el
+ * ancho sí se puede hacer con el splash puesto; hacer clic, no.
+ */
+async function esperarSinSplash(page: Page) {
+  const splash = page.getByRole('status', { name: 'Iniciando Agen' })
+  await splash.waitFor({ state: 'detached', timeout: 30000 }).catch(() => {
+    // En la mayoría de las cargas ni siquiera aparece: no es un fallo que no esté.
+  })
+}
+
 async function desbordeHorizontal(page: Page) {
   return page.evaluate(() => {
     const raiz = document.documentElement
@@ -55,6 +69,8 @@ export function auditoriaResponsive(rol: E2ERoleId, etiqueta: string) {
       await page.goto(path)
       await expect(page.getByRole('heading', { name: heading, level: 1 })).toBeVisible({ timeout: 30000 })
 
+      await esperarSinSplash(page)
+
       // En escritorio el menú está siempre visible; en móvil aparece este botón.
       const abrir = page.getByRole('button', { name: 'Abrir menú' })
       await expect(abrir).toBeVisible()
@@ -73,8 +89,14 @@ export function auditoriaResponsive(rol: E2ERoleId, etiqueta: string) {
       )
       expect(visibles, 'el menú abierto no muestra los enlaces del rol').toBeGreaterThan(1)
 
-      await page.getByRole('button', { name: 'Cerrar menú' }).first().click()
+      // Hay dos botones "Cerrar menú": el fondo oscuro que cubre la pantalla y la X dentro del
+      // menú. Se pulsa la X — el fondo queda POR DEBAJO del menú, así que un clic en su centro
+      // aterriza sobre los enlaces y no cierra nada.
+      await page.locator('aside').getByRole('button', { name: 'Cerrar menú' }).click()
       await expect(abrir).toBeVisible()
+      // Cerrado = el menú se va a la izquierda. Se comprueba `-translate-x-full` y no la
+      // ausencia de `translate-x-0`, porque `lg:translate-x-0` está siempre en la clase.
+      await expect(page.locator('aside')).toHaveClass(/-translate-x-full/)
     })
   })
 }

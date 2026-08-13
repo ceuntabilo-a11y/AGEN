@@ -378,6 +378,9 @@ Variables: copiar `.env.example` → `.env.local` (comentarios indican las del s
 | `npm run test:e2e` | Suite completa de Playwright (necesita credenciales y servidor) |
 | `npm run dev:detener` | Detiene el dev/producción local sin volver a levantarlo |
 | `npm run handoff` | Regenera `docs/HANDOFF.md` (rama, commits, PR y CI reales) |
+| `npm run watchdog` | Qué hay que hacer ahora, y si el trabajo se detuvo |
+| `npm run gateway -- "<acción>"` | Clasifica una acción: auto / bloqueado / humano |
+| `npm run rollback` | A qué commit volver (el último con CI verde) y cómo |
 
 **Trampa de Windows — resolución con dos cajas.** En esta máquina los binarios lanzados por
 los atajos de `node_modules/.bin` resuelven módulos por `E:\AGEN\...` mientras que el `cwd` es
@@ -568,6 +571,34 @@ por API, lo prueba, y recién ahí lo activa — el usuario solo se entera por e
 - `git push --force` (o cualquier variante que reescriba historia) está **prohibido**: no es
   que pregunte, está bloqueado por regla `deny`. Lo mismo `git reset --hard`, `git clean` y
   `git restore`. Si de verdad hiciera falta, lo ejecuta el usuario a mano.
+
+## 10.1 Approval Gateway y watchdog: trabajar sin que nadie mire la pantalla
+
+Añadido el 2026-08-13. Es la puerta de la **automatización técnica** del repositorio, no del
+negocio: acá no se aprueban reservas, ni cancelaciones de clientes, ni campañas.
+
+- **`npm run gateway -- "<acción>"`** clasifica cualquier acción en tres:
+  `auto` (normal, segura y reversible → se ejecuta sin preguntar), `bloqueado` (destructiva o
+  irreversible → ni se ejecuta ni se pregunta) y `humano` (ambigua o de riesgo, y no la
+  resuelve el CI, ni Playwright, ni las pruebas, ni el monitor, ni el rollback). Un encadenado
+  vale lo que su parte más restrictiva, y lo que no está en ninguna lista es `humano`: ante la
+  duda se pregunta.
+- La **fuente de verdad sigue siendo `.claude/settings.local.json`**, no una segunda copia:
+  `deny` → bloqueado, `ask` → humano, `allow` → auto, con precedencia deny > ask > allow. El
+  Gateway solo lo hace consultable y probable.
+- **`npm run gateway -- --auditar`** comprueba que la política sigue cumpliendo su propia
+  definición: que lo irreversible siga bloqueado y que el trabajo normal siga corriendo solo.
+  Si alguien borra una regla de `deny` sin querer, esto lo dice.
+- **`npm run watchdog`** mira el estado real —árbol, commits sin subir, CI del commit actual y
+  el backlog de `docs/HANDOFF.md`— y dice qué hacer ahora, con el comando exacto. Códigos de
+  salida para encadenarlo: `0` terminado · `10` esperando al CI · `20` hay trabajo · `30` hace
+  falta una persona · `40` atascado. Guarda la observación anterior en `.agen-watchdog.json`
+  (ignorado por git): si hay trabajo pendiente y **nada se movió** desde la última mirada,
+  declara `ATASCADO` en vez de repetir "hay trabajo".
+- El watchdog no puede ver si un asistente está esperando un diálogo —eso pasa en una interfaz,
+  no en el disco—, pero sí ve la consecuencia, que es lo que importa.
+- El backlog se marca en `docs/HANDOFF.md` con `- [x]` hecho, `- [ ]` pendiente y `- [!]`
+  esperando al dueño. Esas marcas son las que cuenta el watchdog.
 
 ## 11. Permisos generales
 

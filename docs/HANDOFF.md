@@ -84,59 +84,65 @@ fd523a4 fix: cancelling twice no longer warns twice nor drains the waitlist
 
 ## Backlog maestro — estado real
 
-Los puntos 1 a 9 están hechos hasta donde se puede llegar desde el repositorio. Lo que queda
-de cada uno, y los dos que no se pueden empezar, está detallado abajo con el motivo exacto.
+Esta lista la lee `npm run watchdog`, así que las marcas importan:
+`- [x]` hecho · `- [ ]` pendiente y se puede seguir solo · `- [!]` esperando al dueño (una
+credencial o una decisión que nadie más puede tomar).
 
-1. Multimedia y voz del agente — la lógica de decisión ya está cubierta por contrato (ver
-   arriba). **Falta la prueba de punta a punta con WhatsApp real**, y para eso hace falta una
-   clave de DashScope cargada en `/plataforma/claves` o en el negocio, y encender
-   `feature_image` / `feature_voice` en el negocio de pruebas. Eso es una decisión y una
-   credencial del usuario, no algo que se pueda resolver desde el repositorio.
-2. **Batería conversacional — hecha.** `tests/contract/agente-conversacion.spec.ts`: seis
-   conversaciones completas contra las rutas reales (reserva de punta a punta, cupo ocupado,
-   el modelo saltándose el apartado, equipo, grupo de WhatsApp, cliente repetido) más once
-   pruebas que fijan las reglas del prompt del workflow 01. Falta la batería contra el modelo
-   de verdad, que necesita OpenAI y n8n reales.
-3. **Auditoría por roles — ampliada.** Ya había 85 pruebas por rol (carga de páginas, límites
-   de acceso cruzados, agenda, catálogo, configuración y el flujo de reserva del portal).
-   Ahora hay 43 más de responsive a 390×844 sobre las 35 páginas de los cuatro roles, que
-   destaparon el desborde de cabecera. **Falta**: flujos de escritura de punta a punta (crear
-   y mover una reserva de verdad), y para eso hace falta el punto 6 resuelto de verdad.
-4. **Idempotencia del portal — hecha donde había hueco.** `cancel_safe_appointment` no miraba
-   el estado, así que cancelar dos veces avisaba dos veces y ofrecía el mismo cupo a otras
-   cinco personas de la lista de espera. Corregido en
-   `supabase/migrations/20260813000001_cancelacion_idempotente.sql`. Confirmar, reservar y
-   `onboard` ya eran idempotentes; están revisados uno por uno.
-   **Pendiente del dueño: aplicar esa migración** (ver más abajo).
-5. **Health monitor con autorreparación — hecho.** El monitor reintenta 3 veces antes de dar
-   algo por caído (un microcorte ya no abre incidencia) y, cuando la salud vuelve, la
-   incidencia del corte anterior se cierra sola. Reparar el servicio sigue siendo manual: eso
-   es despliegue, no monitorización.
-6. **Aislamiento sandbox / producción — hecha la guarda, falta la infraestructura.**
-   `exigirSandbox()` impide que una prueba de escritura toque un negocio que no sea el de
-   pruebas. Pero sandbox y producción **comparten el proyecto de Supabase** y solo los separa
-   `business_id`. El aislamiento de verdad son dos proyectos, y crear el segundo y cargar sus
-   claves es del dueño.
-7. **Observabilidad — hecha.** `src/lib/observabilidad.ts` registra una línea JSON por evento
-   en los puntos donde el agente fallaba en silencio. Falta enviar esos logs a algún sitio con
-   búsqueda y retención (hoy quedan en los logs del contenedor de EasyPanel).
-8. **Latencia — hecha la medición.** Presupuesto por ruta en el monitor; superarlo se marca
-   como `lento` sin abrir incidencia. Falta medir el tiempo de respuesta del agente de punta a
-   punta, que se mide en n8n y no acá.
-9. **Rollback — hecha la parte que no necesita credenciales.** `npm run rollback` dice a qué
-   commit volver (el último con CI verde) y da los comandos exactos. **No puede revertir ni
-   desplegar solo**: el despliegue es un clic manual en EasyPanel, así que un rollback
-   automático de verdad exige antes automatizar el despliegue, y eso necesita credenciales de
-   EasyPanel.
-10. **Approval Gateway — no empezado, falta definirlo.** Es el único punto del backlog cuyo
-    alcance no se puede deducir del repositorio: no hay código, ni tabla, ni ruta que lo
-    insinúe. Hace falta que el dueño diga qué aprueba y quién: ¿los despliegues a producción?
-    ¿las acciones del agente por encima de cierto riesgo (cancelar, mover, cobrar)? ¿las
-    campañas de marketing antes de salir? Cada respuesta es un sistema distinto.
-11. **Automatización 24/7 — en pie la mitad.** La monitorización corre cada 30 minutos en
-    GitHub Actions y los workflows de n8n atienden WhatsApp. Lo que falta es de infraestructura
-    y del dueño: activar y vigilar los workflows 02–04 en el n8n real, y decidir qué pasa
-    cuando la automatización detecta algo (hoy: abre una incidencia y espera a una persona).
+- [!] 1. Multimedia y voz del agente — la lógica de decisión ya está cubierta por contrato (ver
+      arriba). **Falta la prueba de punta a punta con WhatsApp real**, y para eso hace falta una
+      clave de DashScope cargada en `/plataforma/claves` o en el negocio, y encender
+      `feature_image` / `feature_voice` en el negocio de pruebas. Eso es una decisión y una
+      credencial del usuario, no algo que se pueda resolver desde el repositorio.
+- [x] 2. **Batería conversacional — hecha.** `tests/contract/agente-conversacion.spec.ts`: seis
+      conversaciones completas contra las rutas reales (reserva de punta a punta, cupo ocupado,
+      el modelo saltándose el apartado, equipo, grupo de WhatsApp, cliente repetido) más once
+      pruebas que fijan las reglas del prompt del workflow 01. Falta la batería contra el modelo
+      de verdad, que necesita OpenAI y n8n reales.
+- [x] 3. **Auditoría por roles — ampliada.** Ya había 85 pruebas por rol (carga de páginas, límites
+      de acceso cruzados, agenda, catálogo, configuración y el flujo de reserva del portal).
+      Ahora hay 43 más de responsive a 390×844 sobre las 35 páginas de los cuatro roles, que
+      destaparon el desborde de cabecera. **Falta**: flujos de escritura de punta a punta (crear
+      y mover una reserva de verdad), y para eso hace falta el punto 6 resuelto de verdad.
+- [x] 4. **Idempotencia del portal — hecha donde había hueco.** `cancel_safe_appointment` no miraba
+      el estado, así que cancelar dos veces avisaba dos veces y ofrecía el mismo cupo a otras
+      cinco personas de la lista de espera. Corregido en
+      `supabase/migrations/20260813000001_cancelacion_idempotente.sql`. Confirmar, reservar y
+      `onboard` ya eran idempotentes; están revisados uno por uno.
+      **Pendiente del dueño: aplicar esa migración** (ver más abajo).
+- [x] 5. **Health monitor con autorreparación — hecho.** El monitor reintenta 3 veces antes de dar
+      algo por caído (un microcorte ya no abre incidencia) y, cuando la salud vuelve, la
+      incidencia del corte anterior se cierra sola. Reparar el servicio sigue siendo manual: eso
+      es despliegue, no monitorización.
+- [!] 6. **Aislamiento sandbox / producción — hecha la guarda, falta la infraestructura.**
+      `exigirSandbox()` impide que una prueba de escritura toque un negocio que no sea el de
+      pruebas. Pero sandbox y producción **comparten el proyecto de Supabase** y solo los separa
+      `business_id`. El aislamiento de verdad son dos proyectos, y crear el segundo y cargar sus
+      claves es del dueño.
+- [x] 7. **Observabilidad — hecha.** `src/lib/observabilidad.ts` registra una línea JSON por evento
+      en los puntos donde el agente fallaba en silencio. Falta enviar esos logs a algún sitio con
+      búsqueda y retención (hoy quedan en los logs del contenedor de EasyPanel).
+- [x] 8. **Latencia — hecha la medición.** Presupuesto por ruta en el monitor; superarlo se marca
+      como `lento` sin abrir incidencia. Falta medir el tiempo de respuesta del agente de punta a
+      punta, que se mide en n8n y no acá.
+- [x] 9. **Rollback — hecha la parte que no necesita credenciales.** `npm run rollback` dice a qué
+      commit volver (el último con CI verde) y da los comandos exactos. **No puede revertir ni
+      desplegar solo**: el despliegue es un clic manual en EasyPanel, así que un rollback
+      automático de verdad exige antes automatizar el despliegue, y eso necesita credenciales de
+      EasyPanel.
+- [x] 10. **Approval Gateway + watchdog — hecho.** Es la puerta de la automatización TÉCNICA,
+       no del negocio: acá no se aprueban reservas, cancelaciones de clientes ni campañas.
+       `npm run gateway -- "<acción>"` clasifica en `auto` (normal, segura, reversible),
+       `bloqueado` (destructiva o irreversible: ni se ejecuta ni se pregunta) y `humano` (nada
+       lo resuelve solo). La fuente de verdad es `.claude/settings.local.json`, no una segunda
+       copia: `deny`→bloqueado, `ask`→humano, `allow`→auto, con precedencia deny > ask > allow.
+       `npm run gateway -- --auditar` comprueba que la política sigue cumpliendo su propia
+       definición. `npm run watchdog` mira el estado real del trabajo y dice qué hacer ahora,
+       con código de salida para encadenarlo (0 terminado · 10 esperando CI · 20 hay trabajo ·
+       30 falta una persona · 40 atascado).
+- [!] 11. **Automatización 24/7 — en pie la mitad.** La monitorización corre cada 30 minutos en
+       GitHub Actions y los workflows de n8n atienden WhatsApp. Lo que falta es de infraestructura
+       y del dueño: activar y vigilar los workflows 02–04 en el n8n real, y decidir qué pasa
+       cuando la automatización detecta algo (hoy: abre una incidencia y espera a una persona).
 
 ## Pendiente del dueño (nadie más puede hacerlo)
 
