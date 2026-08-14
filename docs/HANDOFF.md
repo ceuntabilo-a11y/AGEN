@@ -21,30 +21,37 @@ Cómo mantenerlo:
 | Dato | Valor |
 |---|---|
 | Rama | `cierre/agente-idempotencia-ci` |
-| HEAD local | `0ff0890` — fix: the policy audit cannot run where the policy does not exist |
-| HEAD remoto | `0ff0890` (sincronizado) |
-| Commits por delante de `main` | 22 |
-| Árbol de trabajo | **sucio** — 3 archivo(s) |
+| HEAD local | `361b0e0` — docs: close the backlog and point every session at the watchdog |
+| HEAD remoto | `361b0e0` (sincronizado) |
+| Commits por delante de `main` | 23 |
+| Árbol de trabajo | **sucio** — 10 archivo(s) |
 | PR abierto | [#1](https://github.com/ceuntabilo-a11y/AGEN/pull/1) — Cierre/agente idempotencia ci (listo) |
-| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31754341917 |
+| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31754700222 |
 
 Archivos sin commitear:
 
 ```
-M docs/HANDOFF.md
+M CLAUDE.md
+ M docs/HANDOFF.md
+ M package.json
 ?? .claude/skills/playwright-cli/
+?? .github/workflows/autonomia.yml
 ?? public/brand/synetia-logo.png
+?? scripts/autonomia-logica.d.mts
+?? scripts/autonomia-logica.mjs
+?? scripts/autonomia.mjs
+?? tests/contract/autonomia.spec.ts
 ```
 
 Últimos commits:
 
 ```
+361b0e0 docs: close the backlog and point every session at the watchdog
 0ff0890 fix: the policy audit cannot run where the policy does not exist
 ea5b0e4 feat: an approval gateway for the technical automation, plus a watchdog
 13cc34a docs: record where each backlog item really stands
 7c7e3bf feat: know which commit to roll back to, without guessing at 3am
 e3d4493 feat: watch latency, and stop the monitor from failing when everything is fine
-8aac2ec feat: the agent's silent failures now leave a trace
 ```
 
 <!-- AUTO:FIN -->
@@ -139,12 +146,16 @@ credencial o una decisión que nadie más puede tomar).
        definición. `npm run watchdog` mira el estado real del trabajo y dice qué hacer ahora,
        con código de salida para encadenarlo (0 terminado · 10 esperando CI · 20 hay trabajo ·
        30 falta una persona · 40 atascado).
-- [!] 11. **Automatización 24/7 — hecho el lado del repositorio.** La monitorización corre cada
-       30 minutos, reintenta antes de alarmar, cierra sola su incidencia cuando la salud vuelve
-       e imprime el veredicto del watchdog en cada ejecución. Con eso, el estado del trabajo y
-       el de producción quedan vigilados sin que nadie mire la pantalla.
-       **Falta lo que es del dueño:** activar y vigilar los workflows 02–04 en el n8n real, que
-       no se puede tocar desde este repositorio.
+- [!] 11. **Automatización 24/7 — el ciclo autónomo ya vive fuera de cualquier PC.**
+       `.github/workflows/autonomia.yml` corre cada 15 minutos en GitHub Actions:
+       detecta (salud de producción con reintentos + CI de main), actúa (revierte al último
+       commit verde si main se puso en rojo), **valida antes de proponer** (lint, typecheck y
+       contrato sobre el árbol revertido), recupera (empuja la rama y abre el PR, sin mergear
+       nunca) y alerta (incidencia con etiqueta `autonomia`, que se cierra sola al recuperarse).
+       La monitorización sigue aparte, cada 30 minutos, con el veredicto del watchdog en el log.
+       **Falta para darlo por probado de punta a punta:** que el PR #1 esté mergeado, porque
+       `workflow_dispatch` solo se puede lanzar sobre workflows que ya existan en `main`. Ver
+       "Pendiente del dueño".
 
 ## Pendiente del dueño (nadie más puede hacerlo)
 
@@ -157,6 +168,10 @@ credencial o una decisión que nadie más puede tomar).
 2. **Correr `supabase/tests/booking_invariants.sql`** en ese mismo SQL Editor después de aplicar
    la migración. Va dentro de una transacción con `rollback`, así que no deja nada.
 3. **Mergear el PR #1** y después desplegar en EasyPanel (servicio de la app → "Implementar").
+   En cuanto esté en `main`, el ciclo autónomo se puede probar de punta a punta sin tocar nada
+   real: pestaña **Actions** del repositorio → workflow **Autonomía** → botón **Run workflow**
+   → dejar **simular** en `true` → **Run workflow**. El log muestra el estado detectado y la
+   decisión, sin escribir nada. Con `simular` en `false` actúa de verdad.
 4. **Clave de DashScope** en `/plataforma/claves` si se quiere probar la voz de punta a punta.
 5. **Segundo proyecto de Supabase** para separar de verdad sandbox de producción.
 6. **Activar los workflows 02–04 en el n8n real**, que no se puede tocar desde este repositorio.

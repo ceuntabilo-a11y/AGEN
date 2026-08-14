@@ -516,6 +516,28 @@ Siempre usar exactamente este formato al terminar una tarea:
 (Solo si aplica: qué, por qué, qué falta)
 ```
 
+## 9.2 Modo silencioso (obligatorio, sin excepciones)
+
+Añadido el 2026-08-13 a petición explícita del dueño. Manda sobre cualquier otra indicación de
+estilo de este documento.
+
+**No se emite nada mientras se trabaja.** Prohibido: avisos de progreso, mensajes de espera
+("sigo esperando el CI", "el monitor avisará"), estados repetidos, narración de acciones,
+informes intermedios y repetir información que el dueño ya tiene. Mientras una tarea, el CI, el
+monitor o un agente estén corriendo, se espera **en silencio** y se sigue automáticamente con el
+siguiente trabajo disponible.
+
+Solo se comunican dos cosas:
+
+1. **Un bloqueo humano real**: una decisión o una credencial que solo el dueño puede dar. Se
+   dice en cuanto se sabe, en pocas líneas, con qué falta exactamente y por qué no se puede
+   resolver desde el repositorio.
+2. **El informe final**, cuando el objetivo completo está terminado, con el formato de §9.
+
+Entre esos dos momentos, silencio. Si hay que esperar, se espera sin escribir. Si una espera
+termina, se continúa sin anunciarlo. Minimizar tokens de salida es parte del requisito, no una
+sugerencia.
+
 ## 9.1 n8n: Claude administra, el usuario nunca entra a tocar nada
 
 El usuario no debe abrir n8n para importar, editar ni configurar workflows — eso es trabajo de
@@ -599,6 +621,31 @@ negocio: acá no se aprueban reservas, ni cancelaciones de clientes, ni campaña
   no en el disco—, pero sí ve la consecuencia, que es lo que importa.
 - El backlog se marca en `docs/HANDOFF.md` con `- [x]` hecho, `- [ ]` pendiente y `- [!]`
   esperando al dueño. Esas marcas son las que cuenta el watchdog.
+
+### El ciclo autónomo corre fuera de esta máquina
+
+`.github/workflows/autonomia.yml` ejecuta cada 15 minutos
+`node scripts/autonomia.mjs --aplicar` en GitHub Actions, así que **no depende de que ningún
+PC esté encendido**. El ciclo completo es detección → actuación → validación → recuperación →
+alerta:
+
+1. **Detecta**: salud de producción (con reintentos, el mismo `monitor-salud.mjs`), conclusión
+   del CI del `main` actual y cuál fue el último commit verde.
+2. **Actúa**, y solo hacia adelante: si `main` está en rojo, revierte hasta el último verde.
+3. **Valida antes de proponer**: corre `lint`, `typecheck` y `test:contrato` sobre el árbol ya
+   revertido. Si la reversión tampoco pasa, **no** la propone: avisa de que revertir no arregla
+   el problema.
+4. **Recupera**: empuja la rama `rollback/auto-<sha>` y abre el PR. **Nunca mergea** — `main`
+   exige el check completo y un PR abierto por el token de Actions no dispara workflows, así
+   que mergear sin ese check sería el atajo que el CI existe para impedir.
+5. **Alerta**: abre o comenta la incidencia con la etiqueta `autonomia`, y la cierra sola
+   cuando todo vuelve a estar sano.
+
+Lo que este ciclo **nunca** hace: mergear, reescribir historia, desplegar, tocar producción o
+borrar nada. Producción caída con el código en verde no se revierte: no es una regresión del
+repositorio, así que avisa y para.
+
+`node scripts/autonomia.mjs` sin `--aplicar` simula: detecta, decide y explica sin escribir.
 
 ## 11. Permisos generales
 

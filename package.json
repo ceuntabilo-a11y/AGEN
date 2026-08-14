@@ -17,7 +17,8 @@
     "handoff": "node scripts/handoff.mjs",
     "rollback": "node scripts/rollback.mjs",
     "gateway": "node scripts/gateway.mjs",
-    "watchdog": "node scripts/watchdog.mjs"
+    "watchdog": "node scripts/watchdog.mjs",
+    "autonomia": "node scripts/autonomia.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
