@@ -201,6 +201,15 @@ switch (orden) {
     break
   }
 
+  case 'medir-prompt': {
+    const { spawnSync } = await import('node:child_process')
+    const resultado = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'n8n-medir-prompt.mjs'), ...resto], {
+      cwd: RAIZ, stdio: 'inherit',
+    })
+    process.exitCode = resultado.status ?? 1
+    break
+  }
+
   case 'probar-programado': {
     const { spawnSync } = await import('node:child_process')
     const resultado = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'n8n-probar-programado.mjs'), ...resto], {
