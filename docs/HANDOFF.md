@@ -20,13 +20,13 @@ Cómo mantenerlo:
 
 | Dato | Valor |
 |---|---|
-| Rama | `cierre/agente-idempotencia-ci` |
-| HEAD local | `055cc0a` — test: make the booking invariants self-contained |
-| HEAD remoto | `055cc0a` (sincronizado) |
-| Commits por delante de `main` | 28 |
+| Rama | `cierre/espera-ci-sin-dialogos` |
+| HEAD local | `a45a91c` — feat: wait for CI without tripping the security analyzer |
+| HEAD remoto | `a45a91c` (sincronizado) |
+| Commits por delante de `main` | 30 |
 | Árbol de trabajo | **sucio** — 3 archivo(s) |
-| PR abierto | [#1](https://github.com/ceuntabilo-a11y/AGEN/pull/1) — Cierre/agente idempotencia ci (listo) |
-| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31759960694 |
+| PR abierto | [#2](https://github.com/ceuntabilo-a11y/AGEN/pull/2) — feat: wait for CI without tripping the security analyzer (listo) |
+| Último CI | ninguna ejecución |
 
 Archivos sin commitear:
 
@@ -39,12 +39,12 @@ M docs/HANDOFF.md
 Últimos commits:
 
 ```
+a45a91c feat: wait for CI without tripping the security analyzer
+798905f docs: the idempotency migration is applied and verified in production
 055cc0a test: make the booking invariants self-contained
 b6deb1f feat: classify sensitive actions without tripping the security analyzer
 662a794 docs: refresh the handoff state block
 9080c08 docs: silent mode in the local autonomy policy too
-9ff8055 feat: an autonomous cycle that runs without anyone's computer on
-361b0e0 docs: close the backlog and point every session at the watchdog
 ```
 
 <!-- AUTO:FIN -->
@@ -148,20 +148,30 @@ credencial o una decisión que nadie más puede tomar).
        contrato sobre el árbol revertido), recupera (empuja la rama y abre el PR, sin mergear
        nunca) y alerta (incidencia con etiqueta `autonomia`, que se cierra sola al recuperarse).
        La monitorización sigue aparte, cada 30 minutos, con el veredicto del watchdog en el log.
-       **Falta para darlo por probado de punta a punta:** que el PR #1 esté mergeado, porque
-       `workflow_dispatch` solo se puede lanzar sobre workflows que ya existan en `main`. Ver
-       "Pendiente del dueño".
+       **Probado corriendo de verdad el 2026-08-14**, ya en `main`: ejecución 31761876293 en
+       simulación y 31762436097 en modo real (`aplicar: true`). Detectó `main` en `ca5567a` con
+       CI `success`, sin alerta ni PR de reversión abiertos, y decidió `NADA` — ni PR espurio ni
+       alerta espuria. Sin tocar ningún PC.
+       **Lo que todavía no se ha visto correr:** la pierna de reversión. Solo se dispara si
+       `main` se pone en rojo, y la regla de rama impide empujar un commit roto a `main` a
+       propósito, así que esa parte está cubierta por las 13 pruebas de contrato y no por una
+       ejecución real. Es la protección funcionando, no un hueco.
+       **Falta un secreto:** `AGEN_APP_URL` no está configurado en el repositorio, así que
+       `produccionSana` llega `null` y la pierna de salud nunca se evalúa. Ver "Pendiente del
+       dueño".
 
 ## Pendiente del dueño (nadie más puede hacerlo)
 
 1. ~~Aplicar `20260813000001_cancelacion_idempotente.sql`~~ — **hecho el 2026-08-13**, con
    `booking_invariants.sql` ejecutado después sin errores contra la base real.
-2. **Mergear el PR #1** y después desplegar en EasyPanel (servicio de la app → "Implementar").
-   En cuanto esté en `main`, el ciclo autónomo se puede probar de punta a punta sin tocar nada
-   real: pestaña **Actions** del repositorio → workflow **Autonomía** → botón **Run workflow**
-   → dejar **simular** en `true` → **Run workflow**. El log muestra el estado detectado y la
-   decisión, sin escribir nada. Con `simular` en `false` actúa de verdad.
-3. **Clave de DashScope** en `/plataforma/claves` si se quiere probar la voz de punta a punta.
+2. ~~Mergear el PR #1~~ — **hecho el 2026-08-14** (`ca5567a`), con los dos checks en verde.
+   **Falta desplegar en EasyPanel**: servicio de la app → botón "Implementar". Hasta ese clic,
+   producción sigue con el código anterior.
+3. **Crear el secret `AGEN_APP_URL`** en el repositorio: pestaña **Settings** → **Secrets and
+   variables** → **Actions** → **New repository secret** → nombre `AGEN_APP_URL`, valor la URL
+   pública de la app. Sin él, la monitorización y el ciclo autónomo no comprueban la salud de
+   producción: `produccionSana` llega `null` y esa pierna del ciclo no se evalúa nunca.
+4. **Clave de DashScope** en `/plataforma/claves` si se quiere probar la voz de punta a punta.
 4. **Segundo proyecto de Supabase** para separar de verdad sandbox de producción.
 5. **Activar los workflows 02–04 en el n8n real**, que no se puede tocar desde este repositorio.
 

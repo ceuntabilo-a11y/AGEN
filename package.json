@@ -18,7 +18,8 @@
     "rollback": "node scripts/rollback.mjs",
     "gateway": "node scripts/gateway.mjs",
     "watchdog": "node scripts/watchdog.mjs",
-    "autonomia": "node scripts/autonomia.mjs"
+    "autonomia": "node scripts/autonomia.mjs",
+    "ci:esperar": "node scripts/ci-esperar.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
