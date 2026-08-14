@@ -91,13 +91,41 @@ async function comprobar(comprobacion) {
   return { sano: false, intentos, ultimo: null }
 }
 
-const informe = { momento: new Date().toISOString(), destino: base, intentosPorComprobacion: INTENTOS, comprobaciones: [] }
+/**
+ * Una petición de calentamiento antes de medir, y no se cuenta.
+ *
+ * Por qué: el monitor arranca un proceso nuevo cada media hora, así que su PRIMERA petición
+ * paga resolución DNS, apretón TCP y apretón TLS contra un destino que nunca ha visto.
+ * Perfilando producción, esa primera petición se iba a 2556 ms de los cuales 811 eran DNS y
+ * 261 TLS, mientras la ruta en sí (medida en local contra el mismo build) tarda 4 ms de
+ * mediana. Es decir: se estaba marcando como "lento" el coste de abrir la conexión, no la
+ * salud de la aplicación — y una señal que apunta al sitio equivocado es peor que no tenerla.
+ *
+ * El calentamiento se registra igual en el informe (`msConexionFria`), porque sí interesa
+ * saber si el camino hasta producción se degrada; simplemente no es lo que decide "lento".
+ */
+const calentamiento = await consultar(COMPROBACIONES[0].ruta)
+
+const informe = {
+  momento: new Date().toISOString(),
+  destino: base,
+  intentosPorComprobacion: INTENTOS,
+  msConexionFria: calentamiento.ms,
+  comprobaciones: [],
+}
+console.log(`(conexión fría: ${calentamiento.ms} ms — DNS + TLS + primer viaje, no cuenta para el presupuesto)`)
 let hayFalloCritico = false
 let hayLentitud = false
 
 for (const comprobacion of COMPROBACIONES) {
-  const { sano, intentos } = await comprobar(comprobacion)
+  const { sano, intentos, ultimo: respuesta } = await comprobar(comprobacion)
   const ultimo = intentos[intentos.length - 1]
+  // Qué versión está viva. Sin esto no se distingue "el arreglo está desplegado" de "el
+  // arreglo está en main y producción sigue con el código anterior" (el despliegue es manual).
+  if (comprobacion.nombre === 'api' && respuesta?.cuerpo?.commit) {
+    informe.commitDesplegado = respuesta.cuerpo.commit
+    console.log(`  commit vivo en el destino: ${respuesta.cuerpo.commitCorto ?? respuesta.cuerpo.commit}`)
+  }
   const lento = sano && ultimo.ms > comprobacion.presupuestoMs
   informe.comprobaciones.push({
     nombre: comprobacion.nombre,

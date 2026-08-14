@@ -20,7 +20,8 @@
     "watchdog": "node scripts/watchdog.mjs",
     "autonomia": "node scripts/autonomia.mjs",
     "ci:esperar": "node scripts/ci-esperar.mjs",
-    "gh": "node scripts/gh-agen.mjs"
+    "gh": "node scripts/gh-agen.mjs",
+    "app": "node scripts/servicio.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

@@ -29,3 +29,6 @@ __tmp-*
 /monitor-salud.json
 # Observación anterior del watchdog: es estado de una máquina concreta, no del proyecto
 /.agen-watchdog.json
+# Borradores del cuerpo de un PR (npm run gh -- pr-crear-md). Son texto de trabajo, no del
+# repositorio: el markdown vive acá para que el comando no lleve texto multilínea dentro.
+/.pr/

@@ -112,6 +112,17 @@ export default defineConfig({
     },
 
     /*
+     * Salud del build: comprueba `/api/health` contra el servidor ya construido. Necesita el
+     * servidor pero NO credenciales — la ruta es pública y no devuelve datos de negocio —, así
+     * que no depende del `setup` ni de que haya roles configurados.
+     */
+    {
+      name: 'salud',
+      testDir: './tests/salud',
+      use: { ...devices['Desktop Chrome'] },
+    },
+
+    /*
      * Inicio de sesión por rol (tests/e2e/auth.setup.ts): entra una sola vez por rol y guarda
      * la sesión en playwright/.auth/<rol>.json. Reutilizarla evita el bloqueo por intentos de
      * /api/auth/login (5 fallidos por correo en 15 minutos).
