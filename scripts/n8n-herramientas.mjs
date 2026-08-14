@@ -25,8 +25,16 @@ const WORKFLOW = path.join(RAIZ, 'n8n-workflows', '01-agen-agent.json')
 const PREAMBULO = path.join(RAIZ, 'n8n-workflows', 'preambulo-herramientas.js')
 const CORTE = 'const ctx = '
 
+/**
+ * El preámbulo, siempre con saltos LF.
+ *
+ * En Windows el archivo llega del árbol de trabajo con CRLF, pero dentro del JSON del workflow
+ * el código va con LF. Sin normalizar, la comparación decía que las ocho herramientas tenían
+ * "su propia copia" cuando eran idénticas, y `herramientas` reescribía el workflow entero en
+ * cada ejecución solo por los saltos de línea.
+ */
 export function preambulo() {
-  return readFileSync(PREAMBULO, 'utf8').trimEnd()
+  return readFileSync(PREAMBULO, 'utf8').replace(/\r\n/g, '\n').trimEnd()
 }
 
 /** Devuelve el jsCode con el preámbulo actualizado, o `null` si el nodo no tiene el corte. */

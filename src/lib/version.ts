@@ -21,12 +21,24 @@
 export type Entorno = Record<string, string | undefined>
 
 export const COMMIT_DESCONOCIDO = 'desconocido'
+export const HUELLA_DESCONOCIDA = 'desconocida'
 
 export type VersionDelBuild = {
   /** SHA completo del commit compilado, o `desconocido` si no se pudo resolver. */
   commit: string
   /** SHA corto, el que se compara de un vistazo contra `git log --oneline`. */
   commitCorto: string
+  /**
+   * Huella del código compilado: hash del contenido de `src`, `package.json` y
+   * `next.config.mjs`.
+   *
+   * Es el respaldo del commit, y en este despliegue es **el único dato disponible**: el
+   * contenedor de compilación de EasyPanel no trae `.git` ni ninguna variable con el SHA, así
+   * que `commit` llega `desconocido`. La huella no depende del entorno y contesta la misma
+   * pregunta —si lo vivo es lo que hay en `main`—, porque se calcula igual desde los archivos
+   * del build y desde los blobs que git ya tiene. Ver `scripts/huella.mjs`.
+   */
+  huella: string
   /** ISO-8601 del momento del build, o `null` si no se pudo resolver. */
   compiladoEn: string | null
 }
@@ -48,6 +60,7 @@ function esSha(valor: string): boolean {
 const ENTORNO_DEL_BUILD: Entorno = {
   AGEN_COMMIT: process.env.AGEN_COMMIT,
   AGEN_COMPILADO: process.env.AGEN_COMPILADO,
+  AGEN_HUELLA: process.env.AGEN_HUELLA,
 }
 
 /**
@@ -58,9 +71,13 @@ export function versionDelBuild(entorno: Entorno = ENTORNO_DEL_BUILD): VersionDe
   const crudo = (entorno.AGEN_COMMIT ?? '').trim()
   const commit = esSha(crudo) ? crudo.toLowerCase() : COMMIT_DESCONOCIDO
   const compilado = (entorno.AGEN_COMPILADO ?? '').trim()
+  // La huella es hexadecimal de 16 caracteres (ver `scripts/huella.mjs`). Cualquier otra cosa
+  // es basura y se descarta, igual que con el commit: nunca se inventa un valor.
+  const huellaCruda = (entorno.AGEN_HUELLA ?? '').trim().toLowerCase()
   return {
     commit,
     commitCorto: commit === COMMIT_DESCONOCIDO ? COMMIT_DESCONOCIDO : commit.slice(0, 7),
+    huella: /^[0-9a-f]{16}$/.test(huellaCruda) ? huellaCruda : HUELLA_DESCONOCIDA,
     compiladoEn: compilado && !Number.isNaN(Date.parse(compilado)) ? compilado : null,
   }
 }

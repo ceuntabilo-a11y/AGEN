@@ -70,89 +70,6 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{$env.AGEN_APP_URL + '/api/agent/memory'}}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-agen-secret",
-              "value": "={{$env.AGEN_WEBHOOK_SECRET}}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{JSON.stringify({businessId: $('Entrada').first().json.body.businessId, phone: $('Entrada').first().json.body.phone})}}",
-        "options": {
-          "timeout": 15000
-        }
-      },
-      "id": "load-memory",
-      "name": "Cargar memoria",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 1500,
-      "onError": "continueRegularOutput",
-      "position": [
-        -680,
-        -100
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{$env.AGEN_APP_URL + '/api/agent/catalog'}}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-agen-secret",
-              "value": "={{$env.AGEN_WEBHOOK_SECRET}}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{JSON.stringify({businessId: $('Entrada').first().json.body.businessId})}}",
-        "options": {
-          "timeout": 15000
-        }
-      },
-      "id": "load-catalog",
-      "name": "Cargar catálogo",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 1500,
-      "onError": "continueRegularOutput",
-      "position": [
-        -680,
-        100
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "combineBy": "combineByPosition",
-        "options": {}
-      },
-      "id": "merge-context",
-      "name": "Unir contexto",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        -440,
-        0
-      ]
-    },
-    {
-      "parameters": {
         "promptType": "define",
         "text": "={{'MENSAJE: ' + JSON.stringify(String(($('Agrupar').first().json.message || $('Entrada').first().json.body.message) || '').slice(0, 2000)) + '\\nNEGOCIO: ' + $('Entrada').first().json.body.businessId + '\\nACTOR: ' + ($json.actorType || 'CLIENT') + '\\nFICHA: ' + JSON.stringify((function () { var b = $json.business || {}; var s = b.settings || {}; return { nombre: b.name || null, telefono: b.phone || null, direccion: typeof b.address === 'string' ? b.address : null, mapsUrl: typeof b.maps_url === 'string' ? b.maps_url : null, zona: b.timezone || 'America/Santiago', sucursales: ($json.branches || []).map(function (x) { return { nombre: x.name, direccion: x.address || null, telefono: x.phone || null } }), horario: s.business_hours || null } })()) + '\\nCLIENTE: ' + JSON.stringify($json.client || null) + '\\nSERVICIOS: ' + JSON.stringify(($json.services || []).map(function (s) { return { id: s.id, nombre: s.name, min: s.duration_minutes, precio: s.price, especialidad: s.specialty ? { id: s.specialty.id, nombre: s.specialty.name, slug: s.specialty.slug } : null } })) + '\\nRESERVAS: ' + JSON.stringify($json.appointments || []) + ($json.actorType === 'TEAM' ? ('\\nEQUIPO: ' + JSON.stringify($json.teamMember || null) + '\\nAGENDA_HOY: ' + JSON.stringify(($json.today || []).map(function (a) { var zona = $json.timezone || ($json.business && $json.business.timezone) || 'America/Santiago'; var ini = String(a.service_period || '').replace(/[\\[\\]()\"]/g, '').split(',')[0]; return { hora: ini ? new Date(ini).toLocaleTimeString('es-CL', { timeZone: zona, hour: '2-digit', minute: '2-digit', hour12: false }) : null, cliente: a.client && a.client.full_name ? a.client.full_name : null, servicio: a.service && a.service.name ? a.service.name : null, profesional: a.professional && a.professional.display_name ? a.professional.display_name : null, estado: a.status } })) + '\\nESPERA: ' + (typeof $json.waiting === 'number' ? $json.waiting : 0) + '\\nSEGUIMIENTOS: ' + (typeof $json.followups === 'number' ? $json.followups : 0)) : '') + '\\nTIEMPO: ' + JSON.stringify($json.time || null) + '\\nZONA: ' + ($json.business && $json.business.timezone ? $json.business.timezone : 'America/Santiago')}}",
         "options": {
@@ -448,7 +365,7 @@
     },
     {
       "parameters": {
-        "amount": 3,
+        "amount": 1.5,
         "unit": "seconds"
       },
       "id": "esperar-mas-mensajes",
@@ -694,6 +611,40 @@
         440,
         560
       ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AGEN_APP_URL + '/api/agent/context'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-agen-secret",
+              "value": "={{$env.AGEN_WEBHOOK_SECRET}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({businessId: $('Entrada').first().json.body.businessId, phone: $('Entrada').first().json.body.phone})}}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "load-context",
+      "name": "Cargar contexto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput",
+      "position": [
+        -560,
+        0
+      ]
     }
   ],
   "connections": {
@@ -709,39 +660,6 @@
         [
           {
             "node": "Rechazar",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Cargar memoria": {
-      "main": [
-        [
-          {
-            "node": "Unir contexto",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Cargar catálogo": {
-      "main": [
-        [
-          {
-            "node": "Unir contexto",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Unir contexto": {
-      "main": [
-        [
-          {
-            "node": "Agente Agen",
             "type": "main",
             "index": 0
           }
@@ -917,12 +835,7 @@
       "main": [
         [
           {
-            "node": "Cargar memoria",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Cargar catálogo",
+            "node": "Cargar contexto",
             "type": "main",
             "index": 0
           }
@@ -1004,6 +917,17 @@
           {
             "node": "Agente Agen",
             "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar contexto": {
+      "main": [
+        [
+          {
+            "node": "Agente Agen",
+            "type": "main",
             "index": 0
           }
         ]

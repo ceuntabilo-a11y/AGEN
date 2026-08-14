@@ -60,11 +60,25 @@ test.describe('El cuerpo de /api/health', () => {
     expect(cuerpo.timestamp).toBe('2026-08-14T12:00:00.000Z')
   })
 
-  test('no expone ningún campo más que los seis acordados', () => {
+  test('no expone ningún campo más que los siete acordados', () => {
     const cuerpo = cuerpoDeSalud(entorno)
     expect(Object.keys(cuerpo).sort()).toEqual(
-      ['commit', 'commitCorto', 'compiladoEn', 'ok', 'service', 'timestamp'].sort(),
+      ['commit', 'commitCorto', 'huella', 'compiladoEn', 'ok', 'service', 'timestamp'].sort(),
     )
+  })
+
+  test('la huella sobrevive aunque el commit no se pueda resolver', () => {
+    // Es el caso real de EasyPanel: sin `.git` ni SHA en el entorno, la huella es el ÚNICO
+    // dato con el que se puede saber si lo desplegado es lo que hay en main.
+    const soloHuella = cuerpoDeSalud({ AGEN_HUELLA: '5235c41433dbc129' })
+    expect(soloHuella.commit).toBe(COMMIT_DESCONOCIDO)
+    expect(soloHuella.huella).toBe('5235c41433dbc129')
+  })
+
+  test('una huella con mala forma se descarta en vez de propagarse', () => {
+    for (const basura of ['', 'no-es-una-huella', '5235c414', `${'a'.repeat(17)}`]) {
+      expect(cuerpoDeSalud({ AGEN_HUELLA: basura }).huella).toBe('desconocida')
+    }
   })
 
   test('no filtra ninguna variable de entorno sensible', () => {

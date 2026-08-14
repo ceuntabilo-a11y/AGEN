@@ -1,4 +1,7 @@
 import { execFileSync } from 'node:child_process'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { huellaDelDisco } from './scripts/huella.mjs'
 
 /**
  * Commit desplegado, resuelto EN EL BUILD.
@@ -31,12 +34,34 @@ function commitDelBuild() {
 const COMMIT = commitDelBuild()
 const COMPILADO = new Date().toISOString()
 
+/**
+ * Huella del código compilado. Es el respaldo cuando el commit no se puede resolver.
+ *
+ * En EasyPanel el contenedor de compilación no trae `.git` ni ninguna variable con el SHA, así
+ * que `commitDelBuild()` devuelve `desconocido` justo donde más falta hace. Comprobado contra
+ * producción tras desplegar: la ruta nueva estaba viva y el commit vacío.
+ *
+ * La huella no depende de nada del entorno —es un hash del contenido de `src`, `package.json`
+ * y este archivo— y contesta la misma pregunta: si lo que corre es lo que hay en `main`.
+ * Ver `scripts/huella.mjs`.
+ */
+function huellaDelBuild() {
+  try {
+    return huellaDelDisco(path.dirname(fileURLToPath(import.meta.url)))
+  } catch {
+    return 'desconocida'
+  }
+}
+
+const HUELLA = huellaDelBuild()
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   env: {
     AGEN_COMMIT: COMMIT,
     AGEN_COMPILADO: COMPILADO,
+    AGEN_HUELLA: HUELLA,
   },
   async headers() {
     return [{source:'/:path*',headers:[
