@@ -21,16 +21,17 @@ Cómo mantenerlo:
 | Dato | Valor |
 |---|---|
 | Rama | `cierre/agente-idempotencia-ci` |
-| HEAD local | `9080c08` — docs: silent mode in the local autonomy policy too |
-| HEAD remoto | `9ff8055` (**difiere del local**) |
-| Commits por delante de `main` | 25 |
-| Árbol de trabajo | **sucio** — 2 archivo(s) |
+| HEAD local | `055cc0a` — test: make the booking invariants self-contained |
+| HEAD remoto | `055cc0a` (sincronizado) |
+| Commits por delante de `main` | 28 |
+| Árbol de trabajo | **sucio** — 3 archivo(s) |
 | PR abierto | [#1](https://github.com/ceuntabilo-a11y/AGEN/pull/1) — Cierre/agente idempotencia ci (listo) |
-| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31756496872 |
+| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31759960694 |
 
 Archivos sin commitear:
 
 ```
+M docs/HANDOFF.md
 ?? .claude/skills/playwright-cli/
 ?? public/brand/synetia-logo.png
 ```
@@ -38,12 +39,12 @@ Archivos sin commitear:
 Últimos commits:
 
 ```
+055cc0a test: make the booking invariants self-contained
+b6deb1f feat: classify sensitive actions without tripping the security analyzer
+662a794 docs: refresh the handoff state block
 9080c08 docs: silent mode in the local autonomy policy too
 9ff8055 feat: an autonomous cycle that runs without anyone's computer on
 361b0e0 docs: close the backlog and point every session at the watchdog
-0ff0890 fix: the policy audit cannot run where the policy does not exist
-ea5b0e4 feat: an approval gateway for the technical automation, plus a watchdog
-13cc34a docs: record where each backlog item really stands
 ```
 
 <!-- AUTO:FIN -->
@@ -107,7 +108,9 @@ credencial o una decisión que nadie más puede tomar).
       cinco personas de la lista de espera. Corregido en
       `supabase/migrations/20260813000001_cancelacion_idempotente.sql`. Confirmar, reservar y
       `onboard` ya eran idempotentes; están revisados uno por uno.
-      **Pendiente del dueño: aplicar esa migración** (ver más abajo).
+      **Migración aplicada en producción el 2026-08-13** y `booking_invariants.sql` ejecutado
+      sin errores contra la base real: las ocho invariantes pasan, incluida la que prueba que
+      cancelar dos veces deja un solo aviso y contacta a una sola persona de la lista de espera.
 - [x] 5. **Health monitor con autorreparación — hecho.** El monitor reintenta 3 veces antes de dar
       algo por caído (un microcorte ya no abre incidencia) y, cuando la salud vuelve, la
       incidencia del corte anterior se cierra sola. Reparar el servicio sigue siendo manual: eso
@@ -151,22 +154,16 @@ credencial o una decisión que nadie más puede tomar).
 
 ## Pendiente del dueño (nadie más puede hacerlo)
 
-1. **Aplicar la migración `20260813000001_cancelacion_idempotente.sql`.** Entra en el panel de
-   Supabase del proyecto de AGEN → menú izquierdo **SQL Editor** → botón **New query** → pega
-   el contenido completo del archivo → botón **Run**. Debería responder `Success. No rows
-   returned`. Es reversible, no modifica datos y no borra nada. Hasta que se aplique, cancelar
-   dos veces sigue avisando dos veces al cliente y ofreciendo el mismo cupo a otras cinco
-   personas de la lista de espera.
-2. **Correr `supabase/tests/booking_invariants.sql`** en ese mismo SQL Editor después de aplicar
-   la migración. Va dentro de una transacción con `rollback`, así que no deja nada.
-3. **Mergear el PR #1** y después desplegar en EasyPanel (servicio de la app → "Implementar").
+1. ~~Aplicar `20260813000001_cancelacion_idempotente.sql`~~ — **hecho el 2026-08-13**, con
+   `booking_invariants.sql` ejecutado después sin errores contra la base real.
+2. **Mergear el PR #1** y después desplegar en EasyPanel (servicio de la app → "Implementar").
    En cuanto esté en `main`, el ciclo autónomo se puede probar de punta a punta sin tocar nada
    real: pestaña **Actions** del repositorio → workflow **Autonomía** → botón **Run workflow**
    → dejar **simular** en `true` → **Run workflow**. El log muestra el estado detectado y la
    decisión, sin escribir nada. Con `simular` en `false` actúa de verdad.
-4. **Clave de DashScope** en `/plataforma/claves` si se quiere probar la voz de punta a punta.
-5. **Segundo proyecto de Supabase** para separar de verdad sandbox de producción.
-6. **Activar los workflows 02–04 en el n8n real**, que no se puede tocar desde este repositorio.
+3. **Clave de DashScope** en `/plataforma/claves` si se quiere probar la voz de punta a punta.
+4. **Segundo proyecto de Supabase** para separar de verdad sandbox de producción.
+5. **Activar los workflows 02–04 en el n8n real**, que no se puede tocar desde este repositorio.
 
 ## Riesgos abiertos
 
