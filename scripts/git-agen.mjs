@@ -98,8 +98,27 @@ switch (orden) {
     break
 
   case 'crear-rama': {
-    const nombre = ramaValida(resto[0] ?? '')
-    console.log(git(['switch', '-c', nombre]) || `en ${nombre}`)
+    /*
+     * Por defecto se ramifica desde `origin/main`, no desde donde estés.
+     *
+     * Encadenar ramas una detrás de otra es lo que provoca el conflicto de siempre: el PR
+     * anterior se mergea con squash, main queda con el mismo contenido y otra historia, y la
+     * rama nueva —que arrastra los commits originales— choca con él. Partiendo de origin/main
+     * eso no pasa. `--desde=aqui` conserva el comportamiento antiguo cuando de verdad se
+     * quiere seguir encima de lo que hay sin subir.
+     */
+    const argumentos = resto.filter((valor) => !valor.startsWith('--'))
+    const desdeAqui = resto.includes('--desde=aqui')
+    const nombre = ramaValida(argumentos[0] ?? '')
+    if (desdeAqui) { console.log(git(['switch', '-c', nombre]) || `en ${nombre}`); break }
+
+    if (git(['status', '--porcelain', '--untracked-files=no'])) {
+      console.error('Hay cambios sin commitear: se arrastrarían a una rama nacida de origin/main.')
+      console.error('Commitéalos, o crea la rama sobre lo que hay con: crear-rama <nombre> --desde=aqui')
+      process.exit(2)
+    }
+    git(['fetch', 'origin', '--prune'])
+    console.log(git(['switch', '-c', nombre, 'origin/main']) || `en ${nombre}, desde origin/main`)
     break
   }
 
@@ -117,6 +136,22 @@ switch (orden) {
       console.error('El árbol tiene cambios sin commitear. Commitéalos antes de cambiar de rama:')
       console.error(sucio)
       process.exit(2)
+    }
+    /*
+     * `main` local se queda viejo enseguida: los PR se mergean con squash en GitHub y aquí
+     * nadie actualiza esa rama. Cambiarse a ella deja el árbol en una versión antigua del
+     * repositorio —incluido `package.json`, así que hasta `npm run git` deja de existir— y
+     * parece que se ha perdido trabajo cuando no ha pasado nada. Se avisa antes.
+     */
+    if (nombre === 'main') {
+      git(['fetch', 'origin', '--prune'])
+      const detras = git(['rev-list', '--count', 'main..origin/main'], { silencioso: true })
+      if (detras && detras !== '0') {
+        console.error(`El "main" local está ${detras} commit(s) por detrás de origin/main.`)
+        console.error('Cambiarte a él te deja en una versión vieja del repositorio.')
+        console.error('Para empezar algo nuevo sobre lo último: npm run git -- crear-rama <nombre>')
+        process.exit(2)
+      }
     }
     console.log(git(['switch', nombre]) || `en ${nombre}`)
     break
