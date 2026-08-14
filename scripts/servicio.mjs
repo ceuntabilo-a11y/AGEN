@@ -40,7 +40,7 @@
  * - No lee `.env*` ni imprime ninguna credencial.
  */
 import { execFileSync, spawn } from 'node:child_process'
-import { closeSync, existsSync, mkdirSync, openSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, renameSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -262,6 +262,34 @@ switch (orden) {
     break
   }
 
+  case 'limpiar-temporales': {
+    /*
+     * Las pruebas desechables de diagnóstico se crean con el prefijo `__tmp-` y, al terminar,
+     * se sacan del repositorio en vez de borrarse (la convención está en la skill
+     * `safe-local-autonomy`: nada se borra, se mueve). Acá se hace de una vez y sin comodines
+     * de shell, que es lo que obligaba a escribir un `mv` distinto por cada carpeta.
+     */
+    const destino = path.join(RAIZ, '..', 'agen-temporales')
+    mkdirSync(destino, { recursive: true })
+    const movidos = []
+    const recorrer = (carpeta) => {
+      for (const entrada of readdirSync(carpeta, { withFileTypes: true })) {
+        if (entrada.name === 'node_modules' || entrada.name === '.git' || entrada.name === '.next') continue
+        const completa = path.join(carpeta, entrada.name)
+        if (entrada.isDirectory()) { recorrer(completa); continue }
+        if (!entrada.name.startsWith('__tmp-')) continue
+        const fuera = path.join(destino, `${Date.now()}-${entrada.name}`)
+        renameSync(completa, fuera)
+        movidos.push(path.relative(RAIZ, completa).replace(/\\/g, '/'))
+      }
+    }
+    recorrer(path.join(RAIZ, 'tests'))
+    recorrer(path.join(RAIZ, 'scripts'))
+    console.log(movidos.length ? `movidos fuera del repositorio:\n  ${movidos.join('\n  ')}` : 'no había temporales')
+    console.log(`destino: ${destino}`)
+    break
+  }
+
   case 'verificar-version': {
     // Guarda contra una regresión que ya ocurrió: la opción `env` de Next sustituye
     // TEXTUALMENTE `process.env.AGEN_COMMIT` al compilar, así que un acceso dinámico deja el
@@ -372,9 +400,12 @@ switch (orden) {
   }
 
   case 'e2e': {
-    const proyecto = resto[0]
+    // Primer argumento: el project. El resto se pasa tal cual a Playwright (`--grep`, un
+    // fichero suelto…), para no tener que salir de la envoltura para filtrar una prueba.
+    const [proyecto, ...extras] = resto
     const args = ['./node_modules/@playwright/test/cli.js', 'test']
-    if (proyecto) args.push(`--project=${proyecto}`)
+    if (proyecto && proyecto !== '-') args.push(`--project=${proyecto}`)
+    args.push(...extras)
     const hijo = spawn(process.execPath, args, {
       cwd: RAIZ,
       stdio: 'inherit',
@@ -388,14 +419,23 @@ switch (orden) {
        * («http://localhost:3010/api/health is already used»). En local el servidor lo maneja
        * `npm run app -- arrancar`; en GitHub Actions lo maneja el propio CI.
        */
-      env: { ...process.env, E2E_BASE_URL: process.env.E2E_BASE_URL || `http://127.0.0.1:${PUERTO_POR_DEFECTO}` },
+      /*
+       * `localhost`, no `127.0.0.1`, aunque el servidor escuche en la IP.
+       *
+       * Next construye las redirecciones del middleware con el host que él tiene resuelto
+       * (`localhost`), no con el de la petición. Entrando por `127.0.0.1`, un redirect de
+       * `/plataforma` mandaba a `http://localhost:3010/profesional` — otro origen, así que la
+       * cookie de sesión no viajaba y acababa en `/login`. Tres pruebas de control de acceso
+       * fallaban por eso y el bug no existía: era el destino de la suite.
+       */
+      env: { ...process.env, E2E_BASE_URL: process.env.E2E_BASE_URL || `http://localhost:${PUERTO_POR_DEFECTO}` },
     })
     await new Promise((listo) => hijo.on('exit', (codigo) => { process.exitCode = codigo ?? 1; listo() }))
     break
   }
 
   default:
-    console.log('Órdenes: estado · construir · arrancar · detener · reiniciar · salud · esperar · medir · verificar-version · prod · version · e2e')
+    console.log('Órdenes: estado · construir · arrancar · detener · reiniciar · salud · esperar · medir · limpiar-temporales · verificar-version · prod · version · e2e')
     console.log('Ejemplo: npm run app -- arrancar   y luego   npm run app -- medir /api/health 30')
     process.exitCode = orden ? 2 : 0
 }

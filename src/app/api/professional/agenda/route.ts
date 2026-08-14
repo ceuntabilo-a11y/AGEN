@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { readAvailability } from '@/lib/availability'
+import { loadBusinessHours } from '@/lib/business-hours'
 import { apiError } from '@/lib/http-errors'
 import { requireProfessionalContext } from '@/lib/professional-context'
 import { createAdminClient } from '@/lib/supabase-admin'
@@ -28,13 +30,18 @@ export async function GET(request:Request){
     const url=new URL(request.url)
     const from=url.searchParams.get('from')??new Date().toISOString()
     const until=url.searchParams.get('until')??new Date(Date.now()+7*86400000).toISOString()
-    const [appointments,business,blocks]=await Promise.all([
+    // El horario propio y el del negocio viajan con la agenda a propósito: el calendario los
+    // necesita para dibujar la jornada, los descansos y los días cerrados, y pedirlos en una
+    // llamada aparte obligaría a la pantalla a esperar dos veces para poder pintar una sola vez.
+    const [appointments,business,blocks,availability,businessHours]=await Promise.all([
       db.from('appointments').select('id,status,service_period,quoted_price,deposit_paid,notes,client_confirmed_at,client:clients(id,full_name,phone,notes),service:services(id,name,duration_minutes)').eq('business_id',businessId).eq('professional_id',professional.id).overlaps('service_period',`[${from},${until})`).order('service_period'),
       db.from('businesses').select('timezone').eq('id',businessId).single(),
       db.from('schedule_blocks').select('id,period,reason').eq('business_id',businessId).eq('professional_id',professional.id).overlaps('period',`[${from},${until})`).order('period').limit(100),
+      readAvailability(db,professional.id),
+      loadBusinessHours(db,businessId),
     ])
     if(appointments.error||business.error||blocks.error)throw appointments.error||business.error||blocks.error
-    return NextResponse.json({professional,appointments:appointments.data,blocks:blocks.data,timezone:business.data.timezone})
+    return NextResponse.json({professional,appointments:appointments.data,blocks:blocks.data,timezone:business.data.timezone,availability,businessHours})
   }catch(error){return apiError(error)}
 }
 
