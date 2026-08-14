@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { isAuthorizedAgent } from '@/lib/agent-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import {rejectTeamActor} from '@/lib/agent-actor'
+import { registrarAviso } from '@/lib/observabilidad'
 
 type BookingRequest = {
   businessId?: string
@@ -31,20 +32,47 @@ export async function POST(request: Request) {
   const supabase = createAdminClient()
   if(await rejectTeamActor(supabase,body.businessId,body.actorPhone))return NextResponse.json({error:'El equipo solo puede consultar; usa el panel para gestionar reservas'},{status:403})
   const branchId=!body.branchId||body.branchId==='null'?null:body.branchId
-  if(body.holdId){
+  let holdId=body.holdId
+  if(holdId){
     const {data:hold,error:holdError}=await supabase.from('appointment_holds')
       .select('id,business_id,professional_id,service_id,period,expires_at')
-      .eq('id',body.holdId).eq('business_id',body.businessId)
+      .eq('id',holdId).eq('business_id',body.businessId)
       .eq('professional_id',body.professionalId).eq('service_id',body.serviceId).maybeSingle()
     if(holdError)return NextResponse.json({error:'No se pudo validar el apartado'},{status:500})
-    if(!hold||new Date(hold.expires_at).getTime()<=Date.now())return NextResponse.json({error:'El apartado no existe o ya venció',conflict:true},{status:409})
-    const {data:service}=await supabase.from('services').select('buffer_before_minutes').eq('id',body.serviceId).eq('business_id',body.businessId).maybeSingle()
-    const occupiedStart=hold.period.replace(/[\[\]()"]/g,'').split(',')[0]
-    const heldStart=new Date(new Date(occupiedStart).getTime()+Number(service?.buffer_before_minutes??0)*60000)
-    if(Math.abs(heldStart.getTime()-desiredStart.getTime())>1000)return NextResponse.json({error:'El horario no corresponde al apartado',conflict:true},{status:409})
+
+    /*
+     * Apartado vencido: NO es motivo para fallar por sí solo.
+     *
+     * El apartado dura 15 minutos y una conversación de WhatsApp puede tardar más — el cliente
+     * responde cuando puede. Antes, decir "sí, confirmo" pasados esos 15 minutos devolvía 409 y
+     * el agente contestaba "hay un problema técnico" aunque el horario siguiera perfectamente
+     * libre. Ahora se intenta apartar de nuevo el MISMO horario: si sigue libre, se reserva; si
+     * de verdad se lo llevó otra persona, `create_slot_hold` no lo concede y ahí sí es 409.
+     *
+     * La garantía transaccional no cambia: se sigue reservando contra un apartado real, y
+     * `confirm_held_appointment` revalida la disponibilidad dentro de su transacción.
+     */
+    if(!hold||new Date(hold.expires_at).getTime()<=Date.now()){
+      const renovado=await supabase.rpc('create_slot_hold',{
+        p_business_id:body.businessId,p_professional_id:body.professionalId,p_service_id:body.serviceId,
+        p_desired_start:desiredStart.toISOString(),p_client_id:body.clientId,
+        p_contact_key:body.actorPhone?.trim()||null,p_minutes:15,p_origin:'AI_AGENT',
+      })
+      if(renovado.error||!renovado.data){
+        registrarAviso('agente_reserva_apartado_perdido',{businessId:body.businessId,motivo:hold?'vencido':'inexistente'})
+        return NextResponse.json({error:'Ese horario acaba de ocuparse',conflict:true},{status:409})
+      }
+      registrarAviso('agente_reserva_apartado_renovado',{businessId:body.businessId})
+      holdId=renovado.data.id
+    }else{
+      const {data:service}=await supabase.from('services').select('buffer_before_minutes').eq('id',body.serviceId).eq('business_id',body.businessId).maybeSingle()
+      const occupiedStart=hold.period.replace(/[\[\]()"]/g,'').split(',')[0]
+      const heldStart=new Date(new Date(occupiedStart).getTime()+Number(service?.buffer_before_minutes??0)*60000)
+      if(Math.abs(heldStart.getTime()-desiredStart.getTime())>1000)return NextResponse.json({error:'El horario no corresponde al apartado',conflict:true},{status:409})
+    }
   }
   const { data, error } = await supabase.rpc('confirm_held_appointment',{
-    p_hold_id:body.holdId,p_client_id:body.clientId,p_branch_id:branchId,p_notes:body.notes?.slice(0,1000)??null,
+    p_hold_id:holdId,p_client_id:body.clientId,p_branch_id:branchId,p_notes:body.notes?.slice(0,1000)??null,
   })
 
   if (error?.code === '23P01') {
