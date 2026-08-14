@@ -158,6 +158,42 @@ test.describe('Conversación 2 — el cupo se ocupó mientras el cliente pensaba
     expect(vecesQueSeReservo()).toBe(0)
   })
 
+  test('si el horario sigue libre, un apartado vencido se renueva y la reserva SALE', async () => {
+    // El fallo real que se vio por WhatsApp: la conversación tardó más de 15 minutos, el
+    // apartado venció y decir "sí, confirmo" devolvía "problema técnico" con el horario libre.
+    falso.tablas.appointment_holds = [holdVigente({ expires_at: new Date(Date.now() - 60000).toISOString() })]
+    falso.respuestasRpc.create_slot_hold = (argumentos: any, tablas: Tablas) => {
+      const nuevo = holdVigente({ id: 'hold-renovado', period: `["${argumentos.p_desired_start}","${FIN}")` })
+      tablas.appointment_holds = [...(tablas.appointment_holds ?? []), nuevo]
+      return { id: nuevo.id, expires_at: nuevo.expires_at }
+    }
+    falso.respuestasRpc.confirm_held_appointment = (argumentos: any) => ({ id: 'reserva-renovada', hold: argumentos.p_hold_id })
+
+    const { estado, cuerpo } = await reservar({
+      businessId: NEGOCIO, clientId: CLIENTE, professionalId: PROFESIONAL, serviceId: SERVICIO,
+      desiredStart: INICIO, holdId: 'hold-1', actorPhone: TELEFONO,
+    })
+
+    expect(estado).toBe(201)
+    expect(cuerpo.booked).toBe(true)
+    // Y se confirma contra el apartado NUEVO, no contra el vencido.
+    expect(cuerpo.appointment.hold).toBe('hold-renovado')
+  })
+
+  test('si el horario ya se lo llevó otra persona, sigue siendo 409', async () => {
+    falso.tablas.appointment_holds = [holdVigente({ expires_at: new Date(Date.now() - 60000).toISOString() })]
+    falso.respuestasRpc.create_slot_hold = () => null
+
+    const { estado, cuerpo } = await reservar({
+      businessId: NEGOCIO, clientId: CLIENTE, professionalId: PROFESIONAL, serviceId: SERVICIO,
+      desiredStart: INICIO, holdId: 'hold-1', actorPhone: TELEFONO,
+    })
+
+    expect(estado).toBe(409)
+    expect(cuerpo.conflict).toBe(true)
+    expect(vecesQueSeReservo()).toBe(0)
+  })
+
   test('un apartado que ya no existe se trata igual que uno vencido', async () => {
     falso.tablas.appointment_holds = []
     const { estado, cuerpo } = await reservar({
