@@ -381,6 +381,24 @@ Variables: copiar `.env.example` → `.env.local` (comentarios indican las del s
 | `npm run watchdog` | Qué hay que hacer ahora, y si el trabajo se detuvo |
 | `npm run gateway -- "<acción>"` | Clasifica una acción: auto / bloqueado / humano |
 | `npm run rollback` | A qué commit volver (el último con CI verde) y cómo |
+| `npm run gh -- <orden>` | Operaciones de GitHub sin sintaxis de shell (PR, CI, merge con checks verdes) |
+| `npm run app -- <orden>` | Ciclo local del servicio sin sintaxis de shell (ver abajo) |
+
+**`npm run app` — levantar y comprobar la app sin disparar diálogos.** Escrito a mano, ese
+ciclo era `npm start … &` + `sleep` + `curl` en bucle, y el analizador de seguridad no puede
+analizar `&`, ni el encadenado, ni el sondeo: pedía autorización para algo rutinario. Igual que
+`npm run gh` para GitHub, `scripts/servicio.mjs` lo reduce a argumentos simples:
+`estado` · `construir` · `arrancar` · `detener` · `reiniciar` · `salud <ruta>` ·
+`esperar <ruta>` · `medir <ruta> [n]` · `verificar-version` · `prod <ruta>` · `prod-perfil [n]` ·
+`version` · `e2e [proyecto]`. Las rutas se pasan **sin barra inicial** (`api/health`): Git Bash
+convierte `/api/health` en una ruta de disco antes de que Node la vea. `detener` solo mata
+procesos Next de ESTE repositorio (nunca MediCore) y `prod`/`prod-perfil`/`version` hacen
+exclusivamente GET sobre una lista blanca de rutas públicas de diagnóstico — no hay forma de
+convertirlos en una mutación de producción.
+
+**`npm run app -- version`** contesta la pregunta que antes no se podía contestar: si el commit
+de `main` es el que está vivo en producción, o si falta el clic de despliegue. Lo hace con el
+campo `commit` de `/api/health` (ver `src/lib/version.ts`).
 
 **Trampa de Windows — resolución con dos cajas.** En esta máquina los binarios lanzados por
 los atajos de `node_modules/.bin` resuelven módulos por `E:\AGEN\...` mientras que el `cwd` es
