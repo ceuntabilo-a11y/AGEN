@@ -29,7 +29,7 @@
  * dice. Nunca resuelve un conflicto por su cuenta.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -248,8 +248,48 @@ switch (orden) {
     break
   }
 
+  case 'quedarme-con-lo-mio': {
+    /*
+     * Resuelve un archivo en conflicto quedándose con ESTA rama.
+     *
+     * El caso rutinario y frecuente: el PR anterior se mergeó con squash, así que main trae el
+     * mismo contenido con otra historia y cualquier archivo que se haya seguido tocando
+     * después choca — con la versión de la rama siendo un superconjunto de la de main.
+     *
+     * Solo toca archivos que git marca como en conflicto, y solo quita los marcadores dejando
+     * el lado de esta rama. No decide nada más: si el conflicto es real (las dos ramas
+     * cambiaron lo mismo de forma distinta), esto NO es lo que hay que usar — hay que leerlo.
+     */
+    const enConflicto = (git(['diff', '--name-only', '--diff-filter=U'], { silencioso: true }) ?? '')
+      .split('\n').map((linea) => linea.trim()).filter(Boolean)
+    if (!enConflicto.length) { console.log('No hay archivos en conflicto.'); break }
+
+    const pedidos = resto.length ? resto.map(rutaValida) : enConflicto
+    for (const relativa of pedidos) {
+      if (!enConflicto.includes(relativa)) { console.error(`${relativa} no está en conflicto.`); process.exit(2) }
+      const absoluta = path.join(RAIZ, relativa)
+      const original = readFileSync(absoluta, 'utf8')
+      // <<<<<<< HEAD  (lo mío)  =======  (lo de la otra rama)  >>>>>>> …
+      // `\r?` en cada salto: en Windows el árbol de trabajo lleva CRLF y sin esto el patrón
+      // no casaba con ninguna sección y el archivo quedaba con los marcadores puestos.
+      const resuelto = original.replace(
+        /^<<<<<<< [^\n]*\r?\n([\s\S]*?)^=======\r?\n[\s\S]*?^>>>>>>> [^\n]*\r?\n/gm,
+        '$1',
+      )
+      if (/^(<<<<<<<|=======|>>>>>>>)/m.test(resuelto)) {
+        console.error(`${relativa}: quedaron marcadores. Revísalo a mano.`)
+        process.exit(1)
+      }
+      writeFileSync(absoluta, resuelto)
+      git(['add', '--', relativa])
+      console.log(`resuelto con lo de esta rama: ${relativa}`)
+    }
+    console.log('\nRevisa el resultado y cierra el merge con: npm run git -- commit .pr/commit.md')
+    break
+  }
+
   default:
-    console.log('Órdenes: estado · rama · crear-rama · cambiar · traer · log · diff · staged · add · add-todo · commit · subir · sincronizar · probar-integracion · integrar-main')
+    console.log('Órdenes: estado · rama · crear-rama · cambiar · traer · log · diff · staged · add · add-todo · commit · subir · sincronizar · probar-integracion · integrar-main · quedarme-con-lo-mio')
     console.log('Ejemplo: npm run git -- crear-rama fix/algo   y luego   npm run git -- add src/x.ts')
     process.exitCode = orden ? 2 : 0
 }
