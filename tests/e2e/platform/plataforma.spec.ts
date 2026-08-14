@@ -72,14 +72,40 @@ test.describe('Plataforma (super admin)', () => {
     await expect(page.getByText(/Supabase/i).first()).toBeVisible({ timeout: 60000 })
   })
 
-  test('claves: el formulario existe y no expone las claves guardadas', async ({ page }) => {
+  test('claves: ninguna credencial guardada llega al navegador', async ({ page }) => {
+    const respuesta = page.waitForResponse((r) => r.url().includes('/api/platform/settings') && r.request().method() === 'GET')
     await irA(page, '/plataforma/claves', 'Claves de plataforma')
-    // El formulario aparece cuando llegan las claves guardadas.
     await expect(page.getByRole('button', { name: 'Guardar' })).toBeVisible({ timeout: 60000 })
-    // Las claves ya guardadas nunca se devuelven en claro: los campos van vacíos o enmascarados.
+
+    // Ni en los campos…
     for (const campo of await page.locator('main input[type="password"], main input[type="text"]').all()) {
       const valor = await campo.inputValue()
       expect(valor.startsWith('sk-'), 'una clave real no debe llegar al navegador').toBe(false)
+      expect(valor.startsWith('re_'), 'una clave real no debe llegar al navegador').toBe(false)
     }
+
+    // …ni en la respuesta de la API, que es por donde se escapaban antes.
+    const cuerpo = await (await respuesta).text()
+    expect(cuerpo).not.toContain('sk-')
+    expect(cuerpo).not.toContain('re_')
+  })
+
+  test('claves: guardar avisa mientras trabaja y confirma el resultado', async ({ page }) => {
+    await irA(page, '/plataforma/claves', 'Claves de plataforma')
+    const guardar = page.getByRole('button', { name: 'Guardar' })
+    await expect(guardar).toBeVisible({ timeout: 60000 })
+
+    // Sin tocar nada no hay cambios que enviar: el servidor lo dice y la pantalla lo muestra.
+    // No se escribe ninguna credencial en esta prueba.
+    await guardar.click()
+    await expect(page.getByRole('alert')).toBeVisible({ timeout: 30000 })
+    await expect(guardar).toBeEnabled()
+  })
+
+  test('claves: las credenciales se piden como contraseña, no en claro', async ({ page }) => {
+    await irA(page, '/plataforma/claves', 'Claves de plataforma')
+    await expect(page.getByRole('button', { name: 'Guardar' })).toBeVisible({ timeout: 60000 })
+    // Las cuatro credenciales (OpenAI, DashScope, Evolution, Resend) van como password.
+    await expect(page.locator('main input[type="password"]')).toHaveCount(4)
   })
 })
