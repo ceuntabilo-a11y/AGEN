@@ -20,12 +20,12 @@ Cómo mantenerlo:
 
 | Dato | Valor |
 |---|---|
-| Rama | `cierre/espera-ci-sin-dialogos` |
-| HEAD local | `a45a91c` — feat: wait for CI without tripping the security analyzer |
-| HEAD remoto | `a45a91c` (sincronizado) |
-| Commits por delante de `main` | 30 |
+| Rama | `docs/estado-final` |
+| HEAD local | `6f18291` — fix: saving one key no longer touches the others nor shows two messages at once (#5) |
+| HEAD remoto | la rama no está en origin |
+| Commits por delante de `main` | 0 |
 | Árbol de trabajo | **sucio** — 3 archivo(s) |
-| PR abierto | [#2](https://github.com/ceuntabilo-a11y/AGEN/pull/2) — feat: wait for CI without tripping the security analyzer (listo) |
+| PR abierto | ninguno |
 | Último CI | ninguna ejecución |
 
 Archivos sin commitear:
@@ -39,12 +39,12 @@ M docs/HANDOFF.md
 Últimos commits:
 
 ```
-a45a91c feat: wait for CI without tripping the security analyzer
-798905f docs: the idempotency migration is applied and verified in production
-055cc0a test: make the booking invariants self-contained
-b6deb1f feat: classify sensitive actions without tripping the security analyzer
-662a794 docs: refresh the handoff state block
-9080c08 docs: silent mode in the local autonomy policy too
+6f18291 fix: saving one key no longer touches the others nor shows two messages at once (#5)
+ccd995d fix: platform keys could never be saved, and leaked when they were (#4)
+7c6c744 feat: wait for CI without tripping the security analyzer (#3)
+ca5567a Cierre/agente idempotencia ci (#1)
+95fb810 fix: align npm lockfile and CI runtime
+d9c192f fix: harden auth, UX and add production E2E CI
 ```
 
 <!-- AUTO:FIN -->
@@ -159,6 +159,37 @@ credencial o una decisión que nadie más puede tomar).
        **Falta un secreto:** `AGEN_APP_URL` no está configurado en el repositorio, así que
        `produccionSana` llega `null` y la pierna de salud nunca se evalúa. Ver "Pendiente del
        dueño".
+
+## Verificado contra producción desplegada (2026-08-14)
+
+Con el despliegue hecho y `AGEN_APP_URL` puesto, la vigilancia se ejecutó de verdad contra la
+app real, no contra localhost:
+
+- **Salud** (run 31772406225): `/api/health` 200 en 1331 ms, `/` 200 en 756 ms, `/login` 200 en
+  169 ms. Producción responde. `/api/health` va por encima de su presupuesto de 800 ms, así que
+  queda marcado como `lento` **sin abrir incidencia** — que es exactamente la conducta buscada:
+  degradación no es caída. Vale la pena mirar por qué tarda: es una ruta que solo devuelve un
+  JSON fijo.
+- **Ciclo autónomo** (run 31772458925, modo real): `produccionSana: true`, `ciDeMain: success`,
+  decisión `NADA`. La pierna de salud ya se evalúa; antes llegaba `null` por falta del secret.
+
+## Lo que falta probar de verdad (no está hecho)
+
+Estos puntos siguen sin verificarse en su entorno real. No están cubiertos por las pruebas
+actuales y **no se deben dar por buenos**:
+
+- **Auditoría funcional completa por roles.** Las E2E cubren carga de páginas, límites de
+  acceso, responsive y algunos flujos concretos, pero no el ciclo completo
+  (abrir → escribir → guardar → confirmar → recargar → verificar) de cada operación de
+  crear/editar/eliminar en agenda, clientes, servicios, equipo, campañas y seguimiento. El bug
+  de `/plataforma/claves` sobrevivió a cientos de pruebas justamente por eso.
+- **Voz real con DashScope.** La clave está almacenada, pero no se ha generado ni un audio.
+- **n8n 01–04 funcionando.** Publicados no es lo mismo que probados: faltan triggers, webhooks,
+  ida y vuelta con AGEN, reintentos e idempotencia.
+- **WhatsApp de punta a punta.** Mensaje entrante → agente → reserva → respuesta → estado
+  visible en AGEN, más duplicados y reintentos.
+- **Pierna de reversión del ciclo autónomo.** Solo se dispara con `main` en rojo y la
+  protección de rama impide provocarlo. Cubierta por pruebas de contrato, no por una ejecución.
 
 ## Pendiente del dueño (nadie más puede hacerlo)
 
