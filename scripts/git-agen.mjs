@@ -200,8 +200,56 @@ switch (orden) {
     break
   }
 
+  case 'probar-integracion': {
+    /*
+     * ¿Chocaría esta rama con main? Sin tocar absolutamente nada.
+     *
+     * `git merge-tree --write-tree` calcula la fusión en memoria y dice qué archivos
+     * chocarían. Es la respuesta que hace falta ANTES de decidir si integrar es rutina o si
+     * hace falta una persona — y no deja el árbol a medias si la respuesta es "sí choca".
+     */
+    git(['fetch', 'origin', '--prune'])
+    const salida = git(['merge-tree', '--write-tree', '--name-only', 'HEAD', 'origin/main'], { silencioso: true })
+    if (salida === null) {
+      // `merge-tree` sale con 1 cuando hay conflictos y con >1 cuando no pudo calcular.
+      console.log('Hay conflictos con origin/main. Ejecuta: npm run git -- integrar-main')
+      process.exitCode = 1
+      break
+    }
+    console.log('La rama se integra con origin/main sin conflictos.')
+    break
+  }
+
+  case 'integrar-main': {
+    /*
+     * Traer main a esta rama. Es lo rutinario cuando main avanzó mientras trabajabas —
+     * típicamente porque un PR anterior se mergeó con squash, que deja el mismo contenido con
+     * otra historia.
+     *
+     * Es un merge normal, no una reescritura: no puede perder trabajo. Si hay conflictos, se
+     * dice qué archivos y se para; resolverlos es editar y volver a commitear, no un comando.
+     */
+    if (git(['status', '--porcelain', '--untracked-files=no'])) {
+      console.error('Commitea lo que tengas antes de integrar main.')
+      process.exit(2)
+    }
+    git(['fetch', 'origin', '--prune'])
+    const salida = git(['merge', 'origin/main', '--no-edit'], { silencioso: true })
+    if (salida === null) {
+      const chocan = git(['diff', '--name-only', '--diff-filter=U'], { silencioso: true }) ?? ''
+      console.error('Conflictos al integrar main en estos archivos:')
+      console.error(chocan || '(no se pudo listar)')
+      console.error('\nResuélvelos editando los archivos y luego:')
+      console.error('  npm run git -- add <rutas>')
+      console.error('  npm run git -- commit .pr/commit.md')
+      process.exit(1)
+    }
+    console.log(salida)
+    break
+  }
+
   default:
-    console.log('Órdenes: estado · rama · crear-rama · cambiar · traer · log · diff · staged · add · add-todo · commit · subir · sincronizar')
+    console.log('Órdenes: estado · rama · crear-rama · cambiar · traer · log · diff · staged · add · add-todo · commit · subir · sincronizar · probar-integracion · integrar-main')
     console.log('Ejemplo: npm run git -- crear-rama fix/algo   y luego   npm run git -- add src/x.ts')
     process.exitCode = orden ? 2 : 0
 }
