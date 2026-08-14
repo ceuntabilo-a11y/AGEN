@@ -98,7 +98,9 @@ test.describe('Plataforma (super admin)', () => {
     // Sin tocar nada no hay cambios que enviar: el servidor lo dice y la pantalla lo muestra.
     // No se escribe ninguna credencial en esta prueba.
     await guardar.click()
-    await expect(page.getByRole('alert')).toBeVisible({ timeout: 30000 })
+    // Acotado a `main`: Next inyecta su propio `role="alert"` (el anunciador de rutas) y sin
+    // acotar el localizador coincide con dos elementos.
+    await expect(page.locator('main').getByRole('alert')).toBeVisible({ timeout: 30000 })
     await expect(guardar).toBeEnabled()
   })
 
