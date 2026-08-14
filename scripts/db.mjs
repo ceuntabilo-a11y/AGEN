@@ -70,7 +70,48 @@ const tabla = (nombre) => {
   return nombre
 }
 
-const imprimir = (filas) => console.log(JSON.stringify(filas, null, 1))
+/**
+ * Nada que parezca una credencial se imprime, aunque se haya pedido.
+ *
+ * Pasó: `ver platform_settings` volcó en pantalla las claves de OpenAI y DashScope enteras.
+ * Esta herramienta existe para VER estado, no para extraer secretos, y la política del
+ * repositorio lo prohíbe explícitamente. Se enmascara acá, en la salida, para que no dependa
+ * de que quien la usa se acuerde.
+ */
+const COLUMNAS_SECRETAS = /(key|token|secret|password|clave|apikey|authorization)/i
+const VALORES_SECRETOS = [/^sk-/i, /^eyJ[A-Za-z0-9_-]{10,}/, /^gh[pousr]_/]
+
+/** `platform_settings` guarda pares clave/valor: el secreto está en `value`, no en el nombre. */
+const filaDeAjuste = (fila) =>
+  fila && typeof fila === 'object' && typeof fila.key === 'string' && 'value' in fila
+
+function enmascarar(valor) {
+  const texto = String(valor)
+  if (texto.length <= 8) return '[oculto]'
+  return `[oculto: ${texto.length} caracteres, empieza por ${texto.slice(0, 4)}…]`
+}
+
+function ocultarSecretos(valor) {
+  if (Array.isArray(valor)) return valor.map(ocultarSecretos)
+  if (!valor || typeof valor !== 'object') return valor
+  const ajuste = filaDeAjuste(valor)
+  const salida = {}
+  for (const [clave, contenido] of Object.entries(valor)) {
+    // En una tabla clave/valor, la columna `key` es el NOMBRE del ajuste, no un secreto:
+    // ocultarla dejaría la consulta inservible sin proteger nada.
+    const esNombreDeAjuste = ajuste && clave === 'key'
+    if (!esNombreDeAjuste && COLUMNAS_SECRETAS.test(clave) && typeof contenido === 'string') { salida[clave] = enmascarar(contenido); continue }
+    if (ajuste && clave === 'value' && (COLUMNAS_SECRETAS.test(String(valor.key)) || VALORES_SECRETOS.some((patron) => patron.test(String(contenido))))) {
+      salida[clave] = enmascarar(contenido)
+      continue
+    }
+    if (typeof contenido === 'string' && VALORES_SECRETOS.some((patron) => patron.test(contenido))) { salida[clave] = enmascarar(contenido); continue }
+    salida[clave] = ocultarSecretos(contenido)
+  }
+  return salida
+}
+
+const imprimir = (filas) => console.log(JSON.stringify(ocultarSecretos(filas), null, 1))
 
 const [orden, ...resto] = process.argv.slice(2)
 
