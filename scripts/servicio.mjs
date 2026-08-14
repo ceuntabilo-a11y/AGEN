@@ -376,25 +376,87 @@ switch (orden) {
     break
   }
 
+  case 'prod-sondeo': {
+    /*
+     * Qué versión está viva, cuando el build no supo decir su commit.
+     *
+     * Truco sin efectos secundarios: una ruta que solo exporta `POST` responde **405** a un
+     * GET si existe, y **404** si no existe. Con eso se acota qué cambios están desplegados
+     * sin mandar un solo dato ni tocar nada. Todas las sondas son GET y ninguna lleva cuerpo,
+     * cabeceras ni credenciales: la respuesta llega antes de que la ruta haga nada.
+     */
+    const SONDAS = [
+      { ruta: '/api/agent/escalate', desde: 'escalación humana real (bace75d)' },
+      { ruta: '/api/agent/media', desde: 'multimedia del agente (ya existía)' },
+      { ruta: '/api/agent/voice/reply', desde: 'voz del agente (ya existía)' },
+    ]
+    for (const sonda of SONDAS) {
+      const r = await pedir(`${PRODUCCION}${sonda.ruta}`, { limiteMs: 10000 })
+      const veredicto = r.estado === 404 ? 'NO existe' : r.estado === 0 ? `sin respuesta (${r.error})` : 'existe'
+      console.log(`${sonda.ruta.padEnd(26)} HTTP ${String(r.estado).padStart(3)}  ${veredicto.padEnd(12)} ${sonda.desde}`)
+    }
+    break
+  }
+
   case 'version': {
-    // La pregunta que esto contesta: ¿el arreglo que mergeé está VIVO, o producción sigue con
-    // el código anterior porque falta el clic de despliegue?
+    /*
+     * La pregunta que esto contesta: ¿el arreglo que mergeé está VIVO, o producción sigue con
+     * el código anterior porque falta el clic de despliegue?
+     *
+     * Se compara por commit cuando el build pudo resolverlo, y **por huella cuando no** — que
+     * es el caso de EasyPanel, cuyo contenedor de compilación no trae `.git` ni el SHA en
+     * ninguna variable. La huella se calcula aquí desde los blobs que git ya tiene de
+     * `origin/main`, sin sacar nada a disco, con el mismo algoritmo que usa el build
+     * (`scripts/huella.mjs`).
+     */
     git('fetch', 'origin', 'main')
     const main = git('rev-parse', 'origin/main') ?? git('rev-parse', 'main')
     const r = await pedir(`${PRODUCCION}/api/health`)
     let vivo = null
     let compilado = null
+    let huellaViva = null
     try {
       const cuerpo = JSON.parse(r.texto)
       vivo = cuerpo?.commit ?? null
       compilado = cuerpo?.compiladoEn ?? null
+      huellaViva = cuerpo?.huella ?? null
     } catch {}
+
     console.log(`main (origin):  ${main ?? 'desconocido'}`)
     console.log(`producción:     ${vivo ?? 'sin dato — ¿versión anterior de /api/health?'}`)
     if (compilado) console.log(`compilado en:   ${compilado}`)
-    if (!vivo || !main) { console.log('\nNo se puede comparar todavía.'); process.exitCode = 2; break }
-    const igual = vivo === main
-    console.log(igual ? '\nProducción está al día con main.' : '\nProducción NO tiene el último main: falta desplegar.')
+
+    // Camino normal: el build supo su commit.
+    if (vivo && main && vivo !== 'desconocido') {
+      const igual = vivo === main
+      console.log(igual ? '\nProducción está al día con main.' : '\nProducción NO tiene el último main: falta desplegar.')
+      process.exitCode = igual ? 0 : 1
+      break
+    }
+
+    if (!huellaViva || huellaViva === 'desconocida') {
+      console.log('\nNo se puede comparar: el build no supo ni su commit ni su huella.')
+      process.exitCode = 2
+      break
+    }
+
+    const { huellaDeEntradas, RUTAS_DE_LA_HUELLA } = await import('./huella.mjs')
+    // `ls-tree -r` da una línea `modo tipo hash\truta` por archivo del árbol de origin/main.
+    const listado = git('ls-tree', '-r', 'origin/main', '--', ...RUTAS_DE_LA_HUELLA)
+    if (!listado) { console.log('\nNo pude leer el árbol de origin/main.'); process.exitCode = 2; break }
+    const entradas = listado.split('\n').map((linea) => {
+      const [meta, ruta] = linea.split('\t')
+      const [, tipo, hash] = meta.trim().split(/\s+/)
+      return tipo === 'blob' && ruta && !ruta.endsWith('.md') ? [ruta, hash] : null
+    }).filter(Boolean)
+    const huellaDeMain = huellaDeEntradas(entradas)
+
+    console.log(`huella viva:    ${huellaViva}`)
+    console.log(`huella de main: ${huellaDeMain}`)
+    const igual = huellaViva === huellaDeMain
+    console.log(igual
+      ? '\nProducción está al día con main (comparado por huella: el build no pudo resolver el commit).'
+      : '\nProducción NO tiene el último main: falta desplegar.')
     process.exitCode = igual ? 0 : 1
     break
   }

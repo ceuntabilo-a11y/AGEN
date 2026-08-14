@@ -3,9 +3,16 @@ import path from 'node:path'
 import { test, expect } from '@playwright/test'
 import { cargarWorkflow, nodo } from '../support/n8n'
 
-/** La única copia del preámbulo, la misma que inyecta `npm run n8n -- herramientas`. */
+/**
+ * La única copia del preámbulo, la misma que inyecta `npm run n8n -- herramientas`.
+ *
+ * Normalizado a LF: en Windows el archivo llega con CRLF y dentro del JSON del workflow el
+ * código va con LF, así que sin esto la comparación fallaba por los saltos de línea y no por
+ * el contenido.
+ */
 const preambulo = () =>
-  readFileSync(path.resolve(__dirname, '..', '..', 'n8n-workflows', 'preambulo-herramientas.js'), 'utf8').trimEnd()
+  readFileSync(path.resolve(__dirname, '..', '..', 'n8n-workflows', 'preambulo-herramientas.js'), 'utf8')
+    .replace(/\r\n/g, '\n').trimEnd()
 
 /**
  * Dos fallos que dejaban al cliente sin respuesta, encontrados midiendo ejecuciones reales del
