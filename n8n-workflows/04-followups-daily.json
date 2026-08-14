@@ -1,4 +1,5 @@
 {
+  "//": "saveDataSuccessExecution va en 'all' a propósito. Con 'none' este workflow llevaba horas corriendo bien y desde fuera era indistinguible de uno que nunca se disparó: cero ejecuciones registradas. Para una automatización que nadie mira, 'ha funcionado' tiene que poder comprobarse. Verificable sin esperar una hora con: npm run n8n -- probar-programado <id>",
   "name": "AGEN 04 - Seguimiento y resumen diario",
   "nodes": [
     {
@@ -47,7 +48,7 @@
   },
   "settings": {
     "executionOrder": "v1",
-    "saveDataSuccessExecution": "none",
+    "saveDataSuccessExecution": "all",
     "saveDataErrorExecution": "all",
     "timezone": "America/Santiago"
   }

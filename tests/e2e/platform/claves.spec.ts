@@ -15,7 +15,13 @@ import { irA } from '../../support/pages'
  *
  * Estas pruebas usan el endpoint dedicado de DashScope como campo de trabajo —no es una
  * credencial— y restauran su valor original al terminar.
+ *
+ * En serie, y no por gusto: todas escriben y restauran el MISMO campo, así que en paralelo el
+ * `finally` de una borra la marca que otra acaba de escribir y la prueba falla por una carrera
+ * entre pruebas, no por un fallo del producto. Un fallo que no significa nada es peor que no
+ * tener la prueba: enseña a ignorar el rojo.
  */
+test.describe.configure({ mode: 'serial' })
 
 type Secreto = { configurada: boolean; pista: string | null }
 

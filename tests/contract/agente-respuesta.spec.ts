@@ -204,12 +204,12 @@ test.describe('El workflow no puede saltarse la revisión', () => {
   test('el envío manda el messageId: es la fila donde se guarda la respuesta pendiente', () => {
     // Sin messageId no hay rescate posible: la respuesta no se puede asociar a ninguna fila.
     expect(String((nodo('Enviar a WhatsApp').parameters as { body?: string }).body))
-      .toContain("messageId: $('Entrada').item.json.messageId")
+      .toContain("messageId: $('Entrada').first().json.messageId")
   })
 
   test('se persiste el texto que se entregó, no el que quiso decir el modelo', () => {
     expect(String((nodo('Persistir interacción').parameters as { body?: string }).body))
-      .toContain("$('Enviar a WhatsApp').item.json.text")
+      .toContain("$('Enviar a WhatsApp').first().json.text")
   })
 
   test('un fallo de la bandeja no deja seguir el pipeline', () => {

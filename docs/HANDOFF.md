@@ -20,18 +20,18 @@ Cómo mantenerlo:
 
 | Dato | Valor |
 |---|---|
-| Rama | `docs/estado-final` |
-| HEAD local | `6f18291` — fix: saving one key no longer touches the others nor shows two messages at once (#5) |
-| HEAD remoto | la rama no está en origin |
-| Commits por delante de `main` | 0 |
+| Rama | `fix/agente-sin-respuesta` |
+| HEAD local | `2b85d82` — fix: workflow 04 looked dead for hours, and a new service could not be created |
+| HEAD remoto | `2b85d82` (sincronizado) |
+| Commits por delante de `main` | 9 |
 | Árbol de trabajo | **sucio** — 3 archivo(s) |
-| PR abierto | ninguno |
-| Último CI | ninguna ejecución |
+| PR abierto | [#9](https://github.com/ceuntabilo-a11y/AGEN/pull/9) — fix: el agente no le contestaba a nadie, y nada acotaba cuánto podía tardar (listo) |
+| Último CI | in_progress / **en curso** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31841230903 |
 
 Archivos sin commitear:
 
 ```
-M docs/HANDOFF.md
+M CLAUDE.md
 ?? .claude/skills/playwright-cli/
 ?? public/brand/synetia-logo.png
 ```
@@ -39,15 +39,90 @@ M docs/HANDOFF.md
 Últimos commits:
 
 ```
-6f18291 fix: saving one key no longer touches the others nor shows two messages at once (#5)
-ccd995d fix: platform keys could never be saved, and leaked when they were (#4)
-7c6c744 feat: wait for CI without tripping the security analyzer (#3)
-ca5567a Cierre/agente idempotencia ci (#1)
-95fb810 fix: align npm lockfile and CI runtime
-d9c192f fix: harden auth, UX and add production E2E CI
+2b85d82 fix: workflow 04 looked dead for hours, and a new service could not be created
+c0c2056 fix: the platform monitor blocked on n8n before answering anything
+d873dc9 Merge origin/main into fix/agente-sin-respuesta
+3ceeede chore: the git wrapper can now bring main into a branch
+bace75d fix: the agent could not book, and leaked its own reasoning to the client
+8c8bb36 feat: "Mi agenda" is a real calendar now, not a list of the next seven days
 ```
 
 <!-- AUTO:FIN -->
+
+---
+
+## Sesión del 2026-08-14 (tarde): el agente no le contestaba a nadie
+
+Lo más importante de esta sesión, y lo que cambia el veredicto de venta.
+
+### Lo que estaba roto y ahora está arreglado
+
+1. **El agente no contestaba a NINGÚN cliente.** En las 100 ejecuciones más recientes del
+   workflow 01 —siete horas seguidas— cero llegaron al modelo. Después del nodo `Esperar` (la
+   pausa de 3 s que agrupa mensajes), n8n pierde el emparejado de items y `$('Entrada').item`
+   deja de resolver: `Agrupar` mandaba un cuerpo vacío a `/api/agent/inbox`, recibía 400 y el
+   flujo se iba por "Ya respondió otro". Corregido con `.first()` en los 36 sitios.
+2. **Reservar fallaba aunque el modelo lo hiciera todo bien.** n8n entrega los argumentos del
+   modelo de cuatro formas distintas y la herramienta leía una. Ahora el preámbulo común vive
+   en `n8n-workflows/preambulo-herramientas.js` y se inyecta con
+   `npm run n8n -- herramientas`.
+3. **Nada acotaba el tiempo.** Ningún HTTP Request tenía `timeout` y el defecto de n8n son
+   300 s; `Enviar a WhatsApp` reintentaba 3 veces → hasta 15 minutos. De ahí salían las
+   interacciones de ~8 minutos. Ahora todo tiene techo.
+4. **El modelo pensó en voz alta delante del cliente** (en inglés, citando sus reglas y sus
+   herramientas). `revisarRespuesta` lo bloquea y manda la respuesta de respaldo.
+5. **"¿Quieres que avise al equipo?" no avisaba a nadie.** Ahora `/api/agent/escalate` marca
+   el hilo como `HUMAN`, deja un mensaje de sistema y crea un aviso por persona de recepción.
+6. **"Mi agenda" no era una agenda**, era una lista. Ahora es un calendario con vista Día y
+   Semana, eje de horas, citas a escala, descansos, bloqueos y huecos libres.
+7. **AGEN 04 parecía muerto**: `saveDataSuccessExecution: "none"` hacía que sus ejecuciones
+   correctas no se registraran. Llevaba horas funcionando y era imposible saberlo.
+8. **Crear un servicio dependía de ganarle una carrera a la red**: el modal no contaba que
+   estaba cargando el catálogo ni avisaba si fallaba.
+
+### Verificado de punta a punta con WhatsApp REAL (no simulado)
+
+Conversación completa contra el número del dueño, con entrega confirmada (`sent:true`) y
+estado comprobado en la base después de cada paso:
+
+| Paso | Resultado |
+|---|---|
+| Consultar servicios | catálogo real con precios, entregado |
+| Consultar disponibilidad | 3 horarios con apartado, entregado |
+| Reservar | `booked=true`, fila en `appointments`, `source=AI_AGENT` |
+| Ver en la agenda del profesional | aparece el lunes 17 a las 09:00, en su hora |
+| Confirmar | `CONFIRMED` + `client_confirmed_at` |
+| Liberar | `CANCELLED` y ofrece horarios nuevos |
+| Escalar sin endpoint desplegado | dice la verdad: "no pude avisar al equipo" |
+
+### Latencia del agente, medida por nodo (no estimada)
+
+Turno con reserva, 38 s en total: modelo 4,5 s + 13,3 s · `buscar_horarios` 3,5 s · espera de
+agrupación 3 s (por diseño) · primer nodo de código 2 s (arranque del task runner de n8n,
+infraestructura) · cada llamada a la app ~0,6 s. **Lo que queda por bajar es el modelo**, que
+es la mitad del tiempo: el prompt del sistema son ~9 000 caracteres más el catálogo completo
+en cada turno.
+
+`/api/health` en producción: 235 ms en caliente. Los 1331 ms que se veían eran DNS + TLS de un
+proceso recién arrancado, no la ruta (4 ms de mediana contra el build local). El monitor ahora
+hace una petición de calentamiento que no cuenta para el presupuesto.
+
+### Voz (DashScope), probada de verdad
+
+`/api/admin/agent/voice-preview` devuelve un WAV real: 142 124 bytes, cabecera `RIFF`/`WAVE`,
+en 4,7 s la primera vez y 2,9 s la segunda. Texto vacío → 400 con mensaje en español.
+
+### Autonomía: tres envolturas nuevas
+
+Cada popup que apareció se trató como una regresión y se cerró de raíz, no comando a comando:
+
+- `npm run git -- <orden>` — ciclo git rutinario con lista blanca. No existe orden destructiva.
+- `npm run n8n -- <orden>` — administrar el n8n real, ver latencia por nodo, ver qué contestó
+  el agente, probar un disparador programado sin esperar a su hora.
+- `npm run db -- <orden>` — consultas de solo lectura, con enmascarado de credenciales.
+
+Y en las que ya existían: `pr-crear-md` (cuerpo del PR por archivo),
+`app -- limpiar-temporales`, `app -- prod-perfil`, `git -- integrar-main`.
 
 ---
 
@@ -178,42 +253,75 @@ app real, no contra localhost:
 Estos puntos siguen sin verificarse en su entorno real. No están cubiertos por las pruebas
 actuales y **no se deben dar por buenos**:
 
-- **Auditoría funcional completa por roles.** Las E2E cubren carga de páginas, límites de
-  acceso, responsive y algunos flujos concretos, pero no el ciclo completo
-  (abrir → escribir → guardar → confirmar → recargar → verificar) de cada operación de
-  crear/editar/eliminar en agenda, clientes, servicios, equipo, campañas y seguimiento. El bug
-  de `/plataforma/claves` sobrevivió a cientos de pruebas justamente por eso.
-- **Voz real con DashScope.** La clave está almacenada, pero no se ha generado ni un audio.
-- **n8n 01–04 funcionando.** Publicados no es lo mismo que probados: faltan triggers, webhooks,
-  ida y vuelta con AGEN, reintentos e idempotencia.
-- **WhatsApp de punta a punta.** Mensaje entrante → agente → reserva → respuesta → estado
-  visible en AGEN, más duplicados y reintentos.
+- **Auditoría funcional completa por roles — hecha en parte.** Ya existe la primera prueba del
+  ciclo completo (`tests/e2e/admin/ciclo-servicio.spec.ts`: crear → verlo → recargar → editar →
+  persiste → eliminar), y encontró un fallo real de camino. **Falta el mismo ciclo** para
+  clientes, equipo, especialidades, campañas, seguimiento, finanzas y agenda desde el panel.
+  Ojo: esas pruebas ESCRIBEN, así que exigen `E2E_SANDBOX_BUSINESS_NAME` y hoy se saltan (ver
+  "Pendiente del dueño": hay un solo negocio y es el de producción).
+- ~~**Voz real con DashScope**~~ — **hecha el 2026-08-14**: WAV real de 142 124 bytes,
+  cabecera `RIFF`/`WAVE`, 4,7 s en frío y 2,9 s después. Texto vacío responde 400 en español.
+- ~~**n8n 01–04 funcionando**~~ — **comprobado el 2026-08-14**. 01 de punta a punta con
+  WhatsApp real (ver arriba); 02 cada 2 minutos y 03 cada 5, con ejecuciones registradas; 04
+  se disparaba bien pero no registraba nada (`saveDataSuccessExecution: "none"`), corregido y
+  verificado con `npm run n8n -- probar-programado` (ejecución 7159, correcta en 1,6 s).
+- ~~**WhatsApp de punta a punta**~~ — **hecho el 2026-08-14**, con entrega confirmada y estado
+  comprobado en la base tras cada paso. **Falta** la parte de robustez: mensaje duplicado,
+  reintento y dependencia caída siguen cubiertos solo por pruebas de contrato.
 - **Pierna de reversión del ciclo autónomo.** Solo se dispara con `main` en rojo y la
   protección de rama impide provocarlo. Cubierta por pruebas de contrato, no por una ejecución.
+- **Latencia del modelo.** Medida (4,5–13,3 s por llamada, la mitad del tiempo de un turno)
+  pero no reducida. Lo que hay que atacar es el tamaño del contexto: ~9 000 caracteres de
+  prompt del sistema más el catálogo completo en cada turno.
 
 ## Pendiente del dueño (nadie más puede hacerlo)
 
 1. ~~Aplicar `20260813000001_cancelacion_idempotente.sql`~~ — **hecho el 2026-08-13**, con
    `booking_invariants.sql` ejecutado después sin errores contra la base real.
-2. ~~Mergear el PR #1~~ — **hecho el 2026-08-14** (`ca5567a`), con los dos checks en verde.
-   **Falta desplegar en EasyPanel**: servicio de la app → botón "Implementar". Hasta ese clic,
-   producción sigue con el código anterior.
-3. **Crear el secret `AGEN_APP_URL`** en el repositorio: pestaña **Settings** → **Secrets and
-   variables** → **Actions** → **New repository secret** → nombre `AGEN_APP_URL`, valor la URL
-   pública de la app. Sin él, la monitorización y el ciclo autónomo no comprueban la salud de
-   producción: `produccionSana` llega `null` y esa pierna del ciclo no se evalúa nunca.
-4. **Clave de DashScope** en `/plataforma/claves` si se quiere probar la voz de punta a punta.
-4. **Segundo proyecto de Supabase** para separar de verdad sandbox de producción.
-5. **Activar los workflows 02–04 en el n8n real**, que no se puede tocar desde este repositorio.
+2. ~~Mergear el PR #1~~ — **hecho el 2026-08-14** (`ca5567a`).
+3. ~~Crear el secret `AGEN_APP_URL`~~ — **hecho**: la monitorización ya evalúa producción.
+4. ~~Clave de DashScope~~ — **hecha y probada** (audio real generado el 2026-08-14).
+5. ~~Activar los workflows 02–04~~ — **los cuatro están activos y comprobados**.
+
+### Lo único que bloquea de verdad, y por qué solo lo puedes hacer tú
+
+6. **DESPLEGAR EN EASYPANEL.** Es el bloqueo número uno. Todo lo arreglado esta tarde —que el
+   agente conteste, que reservar funcione, que no filtre su razonamiento, que escalar avise a
+   alguien, la agenda nueva— **está en `main` y NO está vivo**: producción sigue sirviendo el
+   código anterior. Comprobado, no supuesto: `npm run app -- version` dice
+   «producción: sin dato», que es la firma de la versión vieja de `/api/health`.
+
+   Cómo: abre **EasyPanel** → proyecto **`agen-prod`** → servicio de la **app web** (el que
+   corre `npm start`, no Evolution ni n8n) → botón **"Implementar"** (Deploy). Espera a que
+   termine y comprueba desde este repositorio:
+
+   ```bash
+   npm run app -- version
+   ```
+
+   Tiene que decir «Producción está al día con main». Si dice «sin dato», el despliegue no
+   terminó o no fue el servicio correcto.
+
+7. **Segundo proyecto de Supabase, o al menos un segundo negocio de pruebas.** Hoy hay **un
+   solo negocio** en la base (`Estética Bella Vida`) y es a la vez la demo, el sandbox y
+   producción: el mismo tenant que recibe WhatsApp de clientes reales. Por eso las pruebas que
+   escriben (`tests/e2e/admin/ciclo-servicio.spec.ts` y las que vengan) se saltan solas: sin
+   `E2E_SANDBOX_BUSINESS_NAME` no tocan nada, a propósito.
+
+   Lo mínimo que desbloquea la auditoría completa: crear un segundo negocio desde
+   `/plataforma/negocios` (por ejemplo "Sandbox de pruebas"), y declarar su nombre exacto en
+   `.env.test.local` y en los secrets del repositorio como `E2E_SANDBOX_BUSINESS_NAME`. Lo
+   ideal sigue siendo un segundo proyecto de Supabase, pero un segundo tenant ya separa los
+   datos de los clientes reales.
 
 ## Riesgos abiertos
 
-- **Las pruebas E2E locales no arrancan solas**: `auth.setup.ts` se queda esperando
-  `input[type="email"]` en `/login`. Pasa porque `.env.test.local` define un `E2E_BASE_URL` que
-  no es el servidor local. Ejecutar siempre
-  `CI=1 E2E_BASE_URL=http://localhost:3010 npm run test:e2e` — así corren y pasan las 261. En CI
-  no ocurre: allí el valor lo pone el workflow. Vale la pena arreglar el `.env.test.local` o
-  hacer que el valor del workflow sea el de por defecto.
+- ~~Las pruebas E2E locales no arrancan solas~~ — **resuelto**: `npm run app -- e2e [proyecto]`
+  pone `E2E_BASE_URL` por su cuenta y **no** pone `CI=1` (con `CI=1` Playwright levanta su
+  propio servidor y choca con el que ya está). Usa `localhost` y no `127.0.0.1` a propósito:
+  Next construye las redirecciones del middleware con `localhost`, así que entrando por la IP
+  un redirect cambiaba de origen, la cookie no viajaba y tres pruebas de control de acceso
+  fallaban por un bug que no existía.
 - `DIALOG360` sigue sin verificarse con un envío real (ver `CLAUDE.md` §6.1).
 - El token de `gh` de esta máquina (el de Git Credential Manager) tiene `gist`, `repo` y
   `workflow` pero **no `read:org`**, así que `gh pr view` / `gh pr checks` fallan por GraphQL.
@@ -234,14 +342,27 @@ Verificación local obligatoria antes de cualquier push (§9 de CLAUDE.md):
 npm run lint
 npm run typecheck
 npm run test:contrato
-CI=1 E2E_BASE_URL=http://localhost:3010 npm run test:e2e
+npm run app -- construir
+npm run app -- arrancar
+npm run app -- e2e
 ```
 
-Para seguir el CI después de un push (el ID sale del bloque automático de arriba):
+Para el ciclo de GitHub, sin escribir sintaxis que dispare diálogos:
 
 ```bash
-gh run view <ID_DEL_RUN> --repo ceuntabilo-a11y/AGEN
-gh run view <ID_DEL_RUN> --repo ceuntabilo-a11y/AGEN --log-failed
+npm run gh -- pr-crear-md          # cuerpo del PR en .pr/cuerpo.md
+npm run gh -- pr-checks <n>
+npm run gh -- pr-mergear <n>       # solo si TODOS los checks están verdes
+npm run gh -- log <idDelRun>       # pasos fallidos
+```
+
+Para mirar el agente de verdad (esto es lo que encontró todo lo de esta sesión):
+
+```bash
+npm run n8n -- probar <businessId> "<mensaje>" "<telefono>"   # mensaje real por la misma puerta
+npm run n8n -- dijo <idDeEjecucion>                            # qué contestó y qué hizo cada tool
+npm run n8n -- lento <idDelWorkflow>                           # dónde se van los segundos
+npm run db  -- buscar appointments id=<uuid>                   # comprobarlo en la base
 ```
 
 Si `npm ci` falla con `EPERM ... next-swc.win32-x64-msvc.node`, es el servidor local:

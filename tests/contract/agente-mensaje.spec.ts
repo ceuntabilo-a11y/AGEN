@@ -229,15 +229,15 @@ test.describe('A1/A2 — el pipeline no puede volver a tener dos versiones del m
   test('Registrar y Agrupar leen la identidad de Entrada, no la recalculan', () => {
     for (const nombre of ['Registrar', 'Agrupar']) {
       const cuerpo = cuerpoDe(nombre)
-      expect(cuerpo, `"${nombre}" debe usar $('Entrada').item.json.messageId`).toContain(
-        "messageId: $('Entrada').item.json.messageId",
+      expect(cuerpo, `"${nombre}" debe usar $('Entrada').first().json.messageId`).toContain(
+        "messageId: $('Entrada').first().json.messageId",
       )
       expect(cuerpo, `"${nombre}" no puede inventarse un id de respaldo propio`).not.toContain('Date.now()')
     }
   })
 
   test('el agente y la persistencia arman el mensaje con la MISMA expresión', () => {
-    const compartida = "String(($('Agrupar').item.json.message || $('Entrada').item.json.body.message) || '').slice(0, 2000)"
+    const compartida = "String(($('Agrupar').first().json.message || $('Entrada').first().json.body.message) || '').slice(0, 2000)"
     expect(String(nodo('Agente Agen').parameters.text)).toContain(compartida)
     expect(cuerpoDe('Persistir interacción')).toContain(`message: ${compartida}`)
   })
