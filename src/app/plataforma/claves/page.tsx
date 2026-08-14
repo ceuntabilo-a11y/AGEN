@@ -54,6 +54,7 @@ export default function PlatformKeysPage() {
       const datos = await respuesta.json()
       setSettings(datos.settings)
     } catch {
+      setExito('')
       setError('No se pudieron cargar las claves.')
     }
   }
@@ -62,18 +63,46 @@ export default function PlatformKeysPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setExito(''); setError(''); setGuardando(true)
-    const form = new FormData(event.currentTarget)
+    if (!settings) return
 
-    // Solo viaja lo que el administrador tocó. `null` = no cambiar; `''` = quitar.
+    // El elemento se captura ANTES de cualquier await. React anula `event.currentTarget` en
+    // cuanto el manejador cede el control, así que usarlo después del fetch lanzaba un
+    // TypeError que caía en el catch: la pantalla mostraba "No se pudo contactar al servidor"
+    // pegado al "Listo" del guardado que sí había funcionado.
+    const formulario = event.currentTarget
+    const form = new FormData(formulario)
+
+    setExito(''); setError(''); setGuardando(true)
+
+    /*
+     * Solo viaja lo que el administrador tocó de verdad.
+     *
+     * Antes, los tres campos de texto se mandaban SIEMPRE, así que cada guardado reescribía
+     * el endpoint, la URL de Evolution y el remitente de Resend —y borraba los que estuvieran
+     * en blanco— aunque solo se hubiera cambiado una credencial. De ahí el "3 guardada(s) y
+     * 1 quitada(s)" al tocar una sola clave: no era un conteo mal hecho, se estaban tocando
+     * filas ajenas.
+     */
     const cuerpo: Record<string, string | null> = {}
+
     for (const { clave } of SECRETOS) {
       const quitar = form.get(`${clave}__quitar`) === 'on'
       const escrito = String(form.get(clave) ?? '').trim()
-      cuerpo[clave] = quitar ? '' : escrito || null
+      if (quitar) cuerpo[clave] = ''
+      else if (escrito) cuerpo[clave] = escrito
+      // Vacío y sin marcar "quitar": no se envía. No se toca.
     }
+
     for (const { clave } of TEXTOS) {
-      cuerpo[clave] = String(form.get(clave) ?? '').trim()
+      const escrito = String(form.get(clave) ?? '').trim()
+      const actual = settings[clave] ?? ''
+      if (escrito !== actual) cuerpo[clave] = escrito
+    }
+
+    if (Object.keys(cuerpo).length === 0) {
+      setGuardando(false)
+      setError('No cambiaste nada. Escribe una clave nueva o marca "Quitar esta clave".')
+      return
     }
 
     try {
@@ -83,17 +112,24 @@ export default function PlatformKeysPage() {
         body: JSON.stringify(cuerpo),
       })
       const datos = await respuesta.json().catch(() => ({})) as { error?: string; guardadas?: string[]; quitadas?: string[] }
+
       if (!respuesta.ok) {
+        setExito('')
         setError(datos.error || 'No se pudo guardar.')
         return
       }
+
       const partes = []
       if (datos.guardadas?.length) partes.push(`${datos.guardadas.length} guardada(s)`)
       if (datos.quitadas?.length) partes.push(`${datos.quitadas.length} quitada(s)`)
+      setError('')
       setExito(`Listo: ${partes.join(' y ') || 'sin cambios'}.`)
+      formulario.reset()
       await cargar()
-      event.currentTarget.reset()
     } catch {
+      // Solo se llega acá si el fetch falló de verdad. El éxito se limpia para que nunca
+      // convivan los dos mensajes.
+      setExito('')
       setError('No se pudo contactar al servidor. Revisa la conexión e inténtalo de nuevo.')
     } finally {
       setGuardando(false)
