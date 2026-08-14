@@ -108,7 +108,11 @@ switch (orden) {
     if (nombre.startsWith('-')) { console.error('No se aceptan opciones.'); process.exit(2) }
     // Cambiar de rama con cambios sin guardar puede perderlos si git decide que puede
     // arrastrarlos: se exige el árbol limpio y se dice qué falta commitear.
-    const sucio = git(['status', '--porcelain'])
+    //
+    // Los archivos SIN seguimiento no cuentan: no pertenecen a ninguna rama, así que cambiar
+    // no puede perderlos, y si alguno estorbara git se negaría por su cuenta. Exigirlos limpios
+    // solo conseguía bloquear el trabajo por un par de archivos sueltos de siempre.
+    const sucio = git(['status', '--porcelain', '--untracked-files=no'])
     if (sucio) {
       console.error('El árbol tiene cambios sin commitear. Commitéalos antes de cambiar de rama:')
       console.error(sucio)
@@ -165,7 +169,15 @@ switch (orden) {
       process.exit(2)
     }
     if (!readFileSync(archivo, 'utf8').trim()) { console.error(`${archivo} está vacío.`); process.exit(2) }
-    if (!git(['diff', '--cached', '--name-only'])) {
+    /*
+     * Cerrar un merge es un commit aunque no haya nada "preparado".
+     *
+     * Si los conflictos se resolvieron quedándose con esta rama, el índice coincide con HEAD y
+     * `diff --cached` sale vacío — pero el merge sigue abierto y hay que cerrarlo. Sin esta
+     * excepción, la envoltura se negaba justo en el paso final y había que salir de ella.
+     */
+    const enMedioDeUnMerge = existsSync(path.join(RAIZ, '.git', 'MERGE_HEAD'))
+    if (!enMedioDeUnMerge && !git(['diff', '--cached', '--name-only'])) {
       console.error('No hay nada preparado. Usa antes: npm run git -- add <rutas>')
       process.exit(2)
     }
@@ -184,7 +196,7 @@ switch (orden) {
   case 'sincronizar': {
     const rama = ramaActual()
     git(['fetch', 'origin', '--prune'])
-    if (git(['status', '--porcelain'])) {
+    if (git(['status', '--porcelain', '--untracked-files=no'])) {
       console.error('El árbol tiene cambios sin commitear: commitéalos antes de sincronizar.')
       process.exit(2)
     }

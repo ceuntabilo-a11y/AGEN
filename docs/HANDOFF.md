@@ -270,9 +270,18 @@ actuales y **no se deben dar por buenos**:
   reintento y dependencia caída siguen cubiertos solo por pruebas de contrato.
 - **Pierna de reversión del ciclo autónomo.** Solo se dispara con `main` en rojo y la
   protección de rama impide provocarlo. Cubierta por pruebas de contrato, no por una ejecución.
-- **Latencia del modelo.** Medida (4,5–13,3 s por llamada, la mitad del tiempo de un turno)
-  pero no reducida. Lo que hay que atacar es el tamaño del contexto: ~9 000 caracteres de
-  prompt del sistema más el catálogo completo en cada turno.
+- **Latencia del modelo.** Medida y acotada por arriba, pero no reducida. Y ya se sabe por qué
+  no basta con recortar el prompt: `npm run n8n -- medir-prompt <idDeEjecucion>` dice que la
+  entrada completa de un turno son **≈3 750 tokens** (2 250 del prompt del sistema, 650 del
+  catálogo, 320 de las referencias temporales, el resto ficha y reservas). Con esa entrada,
+  13 s de respuesta no se explican por el tamaño: **es la API de OpenAI**, no algo que se
+  reestructure desde el repositorio. Lo que sí baja el total es reducir el número de llamadas
+  al modelo por conversación, que es exactamente lo que hacen las reglas de turnos (P3).
+  Un turno de reserva son hoy 2 llamadas al modelo, que ya es el mínimo.
+
+  Lo que queda por probar si se quiere bajar más: `Cargar memoria` (1,6 s) y `Cargar catálogo`
+  (0,9 s) corren en secuencia y son independientes; unirlos en una sola llamada a la app
+  ahorraría cerca de un segundo por turno.
 
 ## Pendiente del dueño (nadie más puede hacerlo)
 
