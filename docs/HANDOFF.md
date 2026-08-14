@@ -20,18 +20,17 @@ Cómo mantenerlo:
 
 | Dato | Valor |
 |---|---|
-| Rama | `fix/agente-sin-respuesta` |
-| HEAD local | `2b85d82` — fix: workflow 04 looked dead for hours, and a new service could not be created |
-| HEAD remoto | `2b85d82` (sincronizado) |
-| Commits por delante de `main` | 9 |
-| Árbol de trabajo | **sucio** — 3 archivo(s) |
-| PR abierto | [#9](https://github.com/ceuntabilo-a11y/AGEN/pull/9) — fix: el agente no le contestaba a nadie, y nada acotaba cuánto podía tardar (listo) |
-| Último CI | in_progress / **en curso** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31841230903 |
+| Rama | `docs/cierre-20260814` |
+| HEAD local | `729fb0c` — chore: ramificar desde origin/main y no dejarte tirado en un main viejo (#11) |
+| HEAD remoto | la rama no está en origin |
+| Commits por delante de `main` | 0 |
+| Árbol de trabajo | **sucio** — 2 archivo(s) |
+| PR abierto | ninguno |
+| Último CI | ninguna ejecución |
 
 Archivos sin commitear:
 
 ```
-M CLAUDE.md
 ?? .claude/skills/playwright-cli/
 ?? public/brand/synetia-logo.png
 ```
@@ -39,12 +38,12 @@ M CLAUDE.md
 Últimos commits:
 
 ```
-2b85d82 fix: workflow 04 looked dead for hours, and a new service could not be created
-c0c2056 fix: the platform monitor blocked on n8n before answering anything
-d873dc9 Merge origin/main into fix/agente-sin-respuesta
-3ceeede chore: the git wrapper can now bring main into a branch
-bace75d fix: the agent could not book, and leaked its own reasoning to the client
-8c8bb36 feat: "Mi agenda" is a real calendar now, not a list of the next seven days
+729fb0c chore: ramificar desde origin/main y no dejarte tirado en un main viejo (#11)
+4213e4d chore: medir lo que recibe el modelo, y dejar de bloquear por archivos sin seguimiento (#10)
+f33f9cb fix: el agente no le contestaba a nadie, y nada acotaba cuánto podía tardar (#9)
+c560651 feat: /api/health dice qué commit está vivo (#8)
+dbb72ab fix: an expired hold no longer turns a free slot into a technical error (#7)
+eacf163 docs: what is verified against real production, and what is not (#6)
 ```
 
 <!-- AUTO:FIN -->
@@ -54,6 +53,12 @@ bace75d fix: the agent could not book, and leaked its own reasoning to the clien
 ## Sesión del 2026-08-14 (tarde): el agente no le contestaba a nadie
 
 Lo más importante de esta sesión, y lo que cambia el veredicto de venta.
+
+**Estado al cerrar:** todo mergeado en `main` (PR #8 a #11, los cuatro con CI verde). En local,
+396 pruebas de contrato y 558 E2E en verde. Los cuatro workflows de n8n activos y comprobados
+funcionando. **Producción sigue con el código anterior**: falta el clic de "Implementar" en
+EasyPanel, que es el único bloqueo que queda y solo lo puedes dar tú (punto 6 de "Pendiente
+del dueño").
 
 ### Lo que estaba roto y ahora está arreglado
 
