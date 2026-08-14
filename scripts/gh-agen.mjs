@@ -10,7 +10,9 @@
  *
  * Acá todas las operaciones pasan por una sola envoltura con argumentos simples:
  *
- *   npm run gh -- pr-crear "<título>" "<cuerpo>"    abre un PR de la rama actual contra main
+ *   npm run gh -- pr-crear "<título>"              abre un PR (cuerpo corto, de una sola línea)
+ *   npm run gh -- pr-crear-md [ruta]               abre un PR con el cuerpo en un archivo
+ *                                                  (por defecto .pr/cuerpo.md; 1ª línea = título)
  *   npm run gh -- pr-ver <n>                        estado del PR
  *   npm run gh -- pr-checks <n>                     checks del PR
  *   npm run gh -- pr-mergear <n>                    mergea SOLO si todos los checks están verdes
@@ -29,6 +31,8 @@
  * se imprime.
  */
 import { execFileSync } from 'node:child_process'
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -79,6 +83,27 @@ function gh(args, { silencioso = false } = {}) {
 const espera = (ms) => new Promise((listo) => setTimeout(listo, ms))
 const ramaActual = () => git('rev-parse', '--abbrev-ref', 'HEAD') ?? 'main'
 
+/**
+ * Crea el PR de la rama actual contra main.
+ *
+ * El cuerpo se pasa a `gh` por un archivo temporal (`--body-file`) y no como argumento: un
+ * markdown largo como argumento de proceso choca con el límite de línea de comando de Windows
+ * y, sobre todo, obliga a escribirlo dentro del comando, que es la forma que dispara el
+ * diálogo de aprobación. El temporal se borra siempre, incluso si `gh` falla.
+ */
+function crearPr(titulo, cuerpo) {
+  const rama = ramaActual()
+  if (rama === 'main') { console.error('No se abre un PR desde main.'); process.exit(2) }
+  const temporal = path.join(tmpdir(), `agen-pr-${process.pid}.md`)
+  writeFileSync(temporal, cuerpo ?? '', 'utf8')
+  try {
+    console.log(gh(['pr', 'create', '--repo', REPO, '--base', 'main', '--head', rama,
+      '--title', titulo, '--body-file', temporal]))
+  } finally {
+    try { unlinkSync(temporal) } catch {}
+  }
+}
+
 /** Checks de un commit, ya normalizados. */
 function checksDe(sha) {
   const crudo = gh(['api', `repos/${REPO}/commits/${sha}/check-runs`, '--jq',
@@ -119,9 +144,41 @@ switch (orden) {
   case 'pr-crear': {
     const [titulo, cuerpo] = resto
     if (!titulo) { console.error('Falta el título del PR.'); process.exit(2) }
-    const rama = ramaActual()
-    if (rama === 'main') { console.error('No se abre un PR desde main.'); process.exit(2) }
-    console.log(gh(['pr', 'create', '--repo', REPO, '--base', 'main', '--head', rama, '--title', titulo, '--body', cuerpo ?? '']))
+    if ((cuerpo ?? '').includes('\n')) {
+      // Un cuerpo multilínea escrito dentro del comando es exactamente la forma que el
+      // analizador de seguridad no puede analizar: comillas que abarcan saltos de línea,
+      // acentos y markdown. Se rechaza acá para que no haya dos caminos, uno bueno y otro que
+      // vuelve a abrir el diálogo.
+      console.error('El cuerpo multilínea no va en el comando. Escríbelo en un archivo y usa:')
+      console.error('  npm run gh -- pr-crear-md [ruta]   (por defecto .pr/cuerpo.md)')
+      process.exit(2)
+    }
+    crearPr(titulo, cuerpo ?? '')
+    break
+  }
+
+  case 'pr-crear-md': {
+    /*
+     * PR con cuerpo largo, sin texto multilínea en el comando.
+     *
+     * El archivo lleva el título en la primera línea y el cuerpo en el resto. Así el comando
+     * visible es siempre `npm run gh -- pr-crear-md`, que no tiene nada que analizar, y el
+     * markdown —con saltos de línea, acentos, comillas y listas— viaja por disco.
+     *
+     * `.pr/` está ignorado por git: son borradores de trabajo, no parte del repositorio.
+     */
+    const ruta = path.resolve(RAIZ, resto[0] || '.pr/cuerpo.md')
+    if (!existsSync(ruta)) {
+      console.error(`No existe ${ruta}.`)
+      console.error('Escribe ahí el PR: primera línea = título, el resto = cuerpo.')
+      process.exit(2)
+    }
+    const contenido = readFileSync(ruta, 'utf8').replace(/^﻿/, '')
+    const salto = contenido.indexOf('\n')
+    const titulo = (salto === -1 ? contenido : contenido.slice(0, salto)).trim()
+    const cuerpo = salto === -1 ? '' : contenido.slice(salto + 1).trim()
+    if (!titulo) { console.error(`${ruta} está vacío: falta el título en la primera línea.`); process.exit(2) }
+    crearPr(titulo, cuerpo)
     break
   }
 
@@ -208,7 +265,7 @@ switch (orden) {
   }
 
   default:
-    console.log('Órdenes: pr-crear · pr-ver · pr-checks · pr-mergear · ci-esperar · run-esperar · runs · lanzar · log')
+    console.log('Órdenes: pr-crear · pr-crear-md · pr-ver · pr-checks · pr-mergear · ci-esperar · run-esperar · runs · lanzar · log')
     console.log('Ejemplo: npm run gh -- pr-checks 4')
     process.exitCode = orden ? 2 : 0
 }
