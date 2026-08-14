@@ -1,0 +1,82 @@
+name: Autonomía
+
+# Ciclo autónomo: detección → actuación → validación → recuperación → alerta.
+#
+# Corre en GitHub Actions, así que NO depende de que ninguna máquina concreta esté encendida:
+# producción deja de depender de que alguien esté mirando la pantalla o pulsando un botón.
+#
+# Lo único que puede hacer por su cuenta es abrir un PR de reversión al último commit verde
+# cuando `main` se pone en rojo, y abrir/cerrar la incidencia de alerta. Nunca mergea, nunca
+# reescribe historia, nunca despliega y nunca toca producción: la reversión se propone.
+#
+# Antes de proponerla la valida — revierte en local y corre lint, typecheck y el contrato del
+# agente— y solo abre el PR si pasa. Si la reversión tampoco pasa, avisa de que revertir no
+# arregla el problema en vez de proponer algo que no funciona.
+
+on:
+  schedule:
+    # Cada 15 minutos. GitHub no garantiza el minuto exacto en horas de mucha carga.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      simular:
+        description: 'Solo detectar y decidir, sin escribir nada'
+        type: boolean
+        default: true
+
+concurrency:
+  group: autonomia
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  ciclo:
+    name: Detectar, actuar y validar
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      AGEN_APP_URL: ${{ secrets.AGEN_APP_URL }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      # Historia completa: hace falta para encontrar el último commit verde y para revertir.
+      - name: Descargar el repositorio
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Preparar Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Fijar npm 10.9.8
+        run: npm install -g npm@10.9.8
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # En el disparo manual se puede pedir simulación; el ciclo programado siempre actúa.
+      - name: Ciclo autónomo
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.simular }}" = "true" ]; then
+            node scripts/autonomia.mjs
+          else
+            node scripts/autonomia.mjs --aplicar
+          fi
+
+      - name: Guardar la evidencia
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: autonomia-${{ github.run_id }}
+          path: monitor-salud.json
+          retention-days: 14
+          if-no-files-found: ignore

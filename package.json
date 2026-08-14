@@ -5,10 +5,20 @@
   "packageManager": "npm@10.9.8",
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "next build",
+    "dev:restart": "node scripts/dev-restart.mjs",
+    "dev:estado": "node scripts/dev-restart.mjs --estado",
+    "dev:detener": "node scripts/dev-restart.mjs --detener",
+    "build": "node ./node_modules/next/dist/bin/next build",
     "start": "next start -p 3010 -H 0.0.0.0",
     "lint": "eslint . --ext .js,.mjs,.ts,.tsx --max-warnings=0",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:contrato": "node ./node_modules/@playwright/test/cli.js test --project=contrato",
+    "test:e2e": "node ./node_modules/@playwright/test/cli.js test",
+    "handoff": "node scripts/handoff.mjs",
+    "rollback": "node scripts/rollback.mjs",
+    "gateway": "node scripts/gateway.mjs",
+    "watchdog": "node scripts/watchdog.mjs",
+    "autonomia": "node scripts/autonomia.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

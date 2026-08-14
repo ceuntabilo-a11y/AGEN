@@ -1,6 +1,20 @@
 import { test, expect } from '@playwright/test'
 import { ROLE_PAGES, irA, watchErrors } from '../../support/pages'
 
+/**
+ * Fechas calculadas, nunca escritas a mano: una fecha fija caduca sola y el día que pasa
+ * deja de haber horas (el portal solo ofrece futuro), así que el test empieza a fallar por
+ * el calendario y no por la app.
+ * Se toman con 2 días de margen para que el cambio de día en la zona del negocio no importe.
+ */
+const proximoDiaDeSemana = (diaISO: number) => {
+  const dia = new Date()
+  dia.setUTCHours(12, 0, 0, 0)
+  dia.setUTCDate(dia.getUTCDate() + 2)
+  while (((dia.getUTCDay() + 6) % 7) + 1 !== diaISO) dia.setUTCDate(dia.getUTCDate() + 1)
+  return dia.toISOString().slice(0, 10)
+}
+
 test.describe('Cliente', () => {
   for (const { path, heading } of ROLE_PAGES.client) {
     test(`carga ${path} sin errores`, async ({ page }) => {
@@ -32,7 +46,7 @@ test.describe('Cliente', () => {
     await page.getByRole('button', { name: /Camila Rojas|Valentina Soto/ }).first().click()
 
     // Lunes: el negocio abre de 09:00 a 19:00 (settings.business_hours day 1).
-    await page.locator('input[type="date"]').fill('2026-08-10')
+    await page.locator('input[type="date"]').fill(proximoDiaDeSemana(1))
     await page.getByRole('button', { name: 'Ver horas' }).click()
 
     const horas = page.getByRole('button', { name: /^\d{1,2}:\d{2}$/ })
@@ -59,8 +73,8 @@ test.describe('Cliente', () => {
 
     test('domingo: avisa que el negocio no atiende', async ({ page }) => {
       await elegirServicioYProfesional(page)
-      // 2026-08-09 es domingo y el negocio cierra (settings.business_hours day 7 enabled=false).
-      await page.locator('input[type="date"]').fill('2026-08-09')
+      // Domingo: el negocio cierra (settings.business_hours day 7 enabled=false).
+      await page.locator('input[type="date"]').fill(proximoDiaDeSemana(7))
       await page.getByRole('button', { name: 'Ver horas' }).click()
       await expect(paso3(page).getByText(/el negocio no atiende/i)).toBeVisible()
     })

@@ -4,6 +4,14 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { isRealClientPhone, normalizePhone } from '@/lib/phone'
 import { rejectTeamActor } from '@/lib/agent-actor'
 import { formatInZone, formatTimeInZone } from '@/lib/timezone'
+import {
+  confirmClientAppointment,
+  findClientAppointment,
+  listClientAppointments,
+  releaseClientAppointment,
+  requiereIdDeReserva,
+  type ReservaDelCliente,
+} from '@/lib/agent-appointments'
 
 /**
  * Herramienta del agente para las reservas del propio cliente que escribe.
@@ -14,6 +22,9 @@ import { formatInZone, formatTimeInZone } from '@/lib/timezone'
  *   de espera de ese servicio. Después el agente le ofrece horarios nuevos.
  *
  * Nunca actúa sobre reservas de otro cliente: siempre filtra por el teléfono que escribe.
+ * Y nunca sobre "la más próxima": `confirm` y `release` exigen `appointmentId`, porque son
+ * herramientas con reintento y un reintento que resolviera la reserva por proximidad podría
+ * cancelar una hora distinta de la que el cliente pidió liberar.
  */
 
 type Body = {
@@ -23,8 +34,6 @@ type Body = {
   appointmentId?: string
   reason?: string
 }
-
-const SELECT = 'id,status,service_period,client_confirmed_at,professional:professionals(display_name),service:services(name)'
 
 function rangeStart(period: unknown) {
   return String(period ?? '').replace(/[[\]()"]/g, '').split(',')[0]
@@ -37,6 +46,9 @@ export async function POST(request: Request) {
   const action = body.action ?? 'list'
   if (!body.businessId || !isRealClientPhone(phone)) return NextResponse.json({ error: 'Negocio o teléfono inválido' }, { status: 400 })
   if (!['list', 'confirm', 'release'].includes(action)) return NextResponse.json({ error: 'Acción inválida' }, { status: 400 })
+  if (requiereIdDeReserva(action) && !body.appointmentId) {
+    return NextResponse.json({ error: 'Falta appointmentId: primero usa mis_reservas y actúa sobre esa reserva' }, { status: 400 })
+  }
 
   const db = createAdminClient()
   if (action !== 'list' && await rejectTeamActor(db, body.businessId, phone)) {
@@ -49,15 +61,7 @@ export async function POST(request: Request) {
   const { data: client } = await db.from('clients').select('id,full_name').eq('business_id', body.businessId).eq('phone', phone).maybeSingle()
   if (!client) return NextResponse.json({ appointments: [], error: 'Ese teléfono no tiene reservas registradas' }, { status: 404 })
 
-  const { data: upcoming, error } = await db.from('appointments')
-    .select(SELECT)
-    .eq('business_id', body.businessId).eq('client_id', client.id)
-    .in('status', ['PENDING', 'CONFIRMED'])
-    .overlaps('service_period', `[${new Date().toISOString()},${new Date(Date.now() + 90 * 86400000).toISOString()})`)
-    .order('service_period').limit(5)
-  if (error) return NextResponse.json({ error: 'No se pudieron leer las reservas' }, { status: 500 })
-
-  const list = (upcoming ?? []).map((item: any) => ({
+  const describir = (item: ReservaDelCliente) => ({
     appointmentId: item.id,
     status: item.status,
     confirmedByClient: Boolean(item.client_confirmed_at),
@@ -66,26 +70,46 @@ export async function POST(request: Request) {
     time: formatTimeInZone(rangeStart(item.service_period), business.timezone),
     serviceName: item.service?.name ?? null,
     professionalName: item.professional?.display_name ?? null,
-  }))
+  })
 
-  if (action === 'list') return NextResponse.json({ appointments: list })
-  if (!list.length) return NextResponse.json({ error: 'No tienes reservas próximas' }, { status: 404 })
+  if (action === 'list') {
+    const { data, error } = await listClientAppointments(db, { businessId: body.businessId, clientId: client.id })
+    if (error) return NextResponse.json({ error: 'No se pudieron leer las reservas' }, { status: 500 })
+    return NextResponse.json({ appointments: ((data ?? []) as unknown as ReservaDelCliente[]).map(describir) })
+  }
 
-  const target = body.appointmentId ? list.find((item) => item.appointmentId === body.appointmentId) : list[0]
-  if (!target) return NextResponse.json({ error: 'Esa reserva no es tuya o ya no está vigente' }, { status: 404 })
+  const { reserva, error: lookupError } = await findClientAppointment(db, {
+    businessId: body.businessId,
+    clientId: client.id,
+    appointmentId: body.appointmentId!,
+  })
+  if (lookupError) return NextResponse.json({ error: 'No se pudieron leer las reservas' }, { status: 500 })
+  if (!reserva) return NextResponse.json({ error: 'Esa reserva no es tuya o no existe' }, { status: 404 })
 
   if (action === 'confirm') {
-    const { error: confirmError } = await db.rpc('confirm_appointment_by_client', { p_appointment_id: target.appointmentId })
-    if (confirmError) return NextResponse.json({ error: 'No se pudo confirmar la reserva' }, { status: 409 })
-    return NextResponse.json({ confirmed: true, appointment: { ...target, status: 'CONFIRMED', confirmedByClient: true } })
+    const resultado = await confirmClientAppointment(db, reserva)
+    if (!resultado.ok) {
+      return resultado.motivo === 'no_vigente'
+        ? NextResponse.json({ error: 'Esa reserva ya no se puede confirmar' }, { status: 409 })
+        : NextResponse.json({ error: 'No se pudo confirmar la reserva' }, { status: 409 })
+    }
+    return NextResponse.json({
+      confirmed: true,
+      alreadyDone: resultado.yaEstaba,
+      appointment: { ...describir(reserva), status: 'CONFIRMED', confirmedByClient: true },
+    })
   }
 
   const reason = body.reason?.trim().slice(0, 300) || 'El cliente avisó que no podía asistir'
-  const { error: cancelError } = await db.rpc('cancel_safe_appointment', {
-    p_appointment_id: target.appointmentId,
-    p_reason: reason,
-    p_actor: 'Tú lo pediste por WhatsApp',
+  const resultado = await releaseClientAppointment(db, reserva, reason)
+  if (!resultado.ok) {
+    return resultado.motivo === 'no_vigente'
+      ? NextResponse.json({ error: 'Esa reserva ya no se puede liberar' }, { status: 409 })
+      : NextResponse.json({ error: 'No se pudo liberar la reserva' }, { status: 409 })
+  }
+  return NextResponse.json({
+    released: true,
+    alreadyDone: resultado.yaEstaba,
+    appointment: { ...describir(reserva), status: 'CANCELLED' },
   })
-  if (cancelError) return NextResponse.json({ error: 'No se pudo liberar la reserva' }, { status: 409 })
-  return NextResponse.json({ released: true, appointment: { ...target, status: 'CANCELLED' } })
 }

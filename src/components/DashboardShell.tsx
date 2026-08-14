@@ -142,13 +142,18 @@ export function DashboardShell({ children, role = 'admin' }: { children: React.R
       <div className="border-t border-white/10 px-3 pt-3 text-xs leading-5 text-white/45">La sesión se protege automáticamente cuando el equipo queda sin uso.</div>
     </aside>
     <div className="lg:pl-64">
-      <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-black/5 bg-white/80 px-5 pl-16 backdrop-blur lg:px-8">
-        <div>
-          <p className="text-sm text-[#736f83]">{role === 'admin' ? 'Panel administrador' : role === 'professional' ? 'Panel profesional' : role === 'platform' ? 'Panel de plataforma' : 'Mi cuenta'}</p>
+      <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-2 border-b border-black/5 bg-white/80 px-5 pl-16 backdrop-blur lg:px-8">
+        <div className="min-w-0">
+          <p className="truncate text-sm text-[#736f83]">{role === 'admin' ? 'Panel administrador' : role === 'professional' ? 'Panel profesional' : role === 'platform' ? 'Panel de plataforma' : 'Mi cuenta'}</p>
           {today && <p className="hidden text-xs capitalize text-[#9a96a5] sm:block">{today}</p>}
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right"><p className="text-sm font-bold">{session?.name ?? (role === 'client' ? 'Cliente' : role === 'professional' ? 'Profesional' : 'Administrador')}</p><p className="text-xs text-[#736f83]">{session?.businessName ?? 'Agen'}</p></div>
+        <div className="flex min-w-0 items-center gap-3">
+          {/*
+            En móvil solo quedan la campana y el avatar: el nombre puede ser un correo largo y,
+            sin esto, empujaba la cabecera 41 px fuera de la pantalla. El nombre y el correo
+            siguen a un toque de distancia, dentro del menú de usuario.
+          */}
+          <div className="hidden min-w-0 text-right sm:block"><p className="truncate text-sm font-bold">{session?.name ?? (role === 'client' ? 'Cliente' : role === 'professional' ? 'Profesional' : 'Administrador')}</p><p className="truncate text-xs text-[#736f83]">{session?.businessName ?? 'Agen'}</p></div>
           {role!=='client'&&role!=='platform'&&<NotificationBell/>}
           <AccountMenu name={session?.name??'Usuario'} email={session?.email} role={role} initials={initials} onLogout={logout}/>
         </div>

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { isAuthorizedAgent } from '@/lib/agent-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import {rejectTeamActor} from '@/lib/agent-actor'
+import { liberarHoldsPrevios } from '@/lib/agent-holds'
 
 export async function POST(request: Request) {
   if (!isAuthorizedAgent(request)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -15,8 +16,9 @@ export async function POST(request: Request) {
   const {data:business}=await db.from('businesses').select('settings').eq('id',body.businessId).eq('active',true).maybeSingle()
   if(!business)return NextResponse.json({error:'Negocio inexistente o inactivo'},{status:404})
   const interval=Math.min(120,Math.max(5,Number(business.settings?.booking_interval_minutes??15)))
-  if (body.clientId) await db.from('appointment_holds').delete().eq('business_id',body.businessId).eq('client_id',body.clientId)
-  else if (body.contactKey?.trim()) await db.from('appointment_holds').delete().eq('business_id',body.businessId).eq('contact_key',body.contactKey.trim())
+  // Antes de apartar de nuevo se sueltan los apartados previos de ESTE contacto, por sus dos
+  // claves: si solo se mirara una, una búsqueda repetida iría acumulando cupos bloqueados.
+  await liberarHoldsPrevios(db, { businessId: body.businessId, clientId: body.clientId, contactKey: body.contactKey })
   const { data, error } = await db.rpc('find_service_slots', { p_business_id: body.businessId, p_service_id: body.serviceId, p_from: from.toISOString(), p_until: until.toISOString(), p_interval_minutes: interval, p_limit: 8 })
   if (error) return NextResponse.json({ error: 'No se pudo buscar disponibilidad' }, { status: 500 })
   const held=[]

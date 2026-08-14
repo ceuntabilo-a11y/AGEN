@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { normalizePhone } from '@/lib/phone'
 import {dateKeyInZone,formatInZone,formatTimeInZone,zonedDayRange} from '@/lib/timezone'
 import {findAgentTeamActor,rejectTeamActor} from '@/lib/agent-actor'
+import { saveAgentMemory } from '@/lib/client-memory'
 
 export async function POST(request: Request) {
   if (!isAuthorizedAgent(request)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -64,8 +65,14 @@ export async function PUT(request: Request) {
   if(await rejectTeamActor(db,body.businessId,body.actorPhone))return NextResponse.json({error:'El equipo solo puede consultar desde el agente'},{status:403})
   const { data: client } = await db.from('clients').select('id').eq('id',body.clientId).eq('business_id',body.businessId).maybeSingle()
   if (!client) return NextResponse.json({ error: 'Cliente inexistente' }, { status: 404 })
-  const { data: existing } = await db.from('client_memory').select('conversation_summary,last_intent,known_facts,preferences').eq('client_id',body.clientId).maybeSingle()
-  const { error } = await db.from('client_memory').upsert({ client_id: body.clientId, conversation_summary: body.summary?.slice(0, 4000) ?? existing?.conversation_summary ?? null, last_intent: body.lastIntent?.slice(0, 100) ?? existing?.last_intent ?? null, known_facts: { ...(existing?.known_facts ?? {}), ...(body.knownFacts ?? {}) }, preferences: { ...(existing?.preferences ?? {}), ...(body.preferences ?? {}) }, last_interaction_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-  if (error) return NextResponse.json({ error: 'No se pudo actualizar la memoria' }, { status: 500 })
+  // Único escritor del contenido de la memoria (ver `@/lib/client-memory`).
+  const guardada = await saveAgentMemory(db, {
+    clientId: body.clientId,
+    summary: body.summary,
+    lastIntent: body.lastIntent,
+    knownFacts: body.knownFacts,
+    preferences: body.preferences,
+  })
+  if (!guardada) return NextResponse.json({ error: 'No se pudo actualizar la memoria' }, { status: 500 })
   return NextResponse.json({ updated: true })
 }

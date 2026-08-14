@@ -1,0 +1,16 @@
+{
+  "//": "Solo para Playwright: necesita baseUrl explícito para resolver el alias @/ cuando un test importa una ruta real de src/. La app sigue compilando con ../tsconfig.json.",
+  "compilerOptions": {
+    "baseUrl": "..",
+    "paths": { "@/*": ["src/*"] },
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "jsx": "preserve",
+    "noEmit": true
+  }
+}

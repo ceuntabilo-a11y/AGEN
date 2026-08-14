@@ -3,13 +3,26 @@ import { isAuthorizedAgent } from '@/lib/agent-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { resolveDashScopeKey } from '@/lib/openai'
 import { generateSpeech } from '@/lib/voice'
+import { registrarAviso, registrarError } from '@/lib/observabilidad'
+
+/**
+ * Motivos que NO son un fallo: el negocio configuró la voz así. Se distinguen para que en los
+ * logs se pueda buscar "la voz no salió porque algo se rompió" sin ahogarse en las veces que
+ * simplemente estaba apagada.
+ */
+const MOTIVOS_ESPERADOS = new Set(['voz_desactivada', 'solo_si_hablo_por_voz', 'modo_equipo_solo_texto', 'datos_incompletos'])
 
 export async function POST(request: Request) {
-  const textOnly = (reason: string) => NextResponse.json({ speak: false, sendText: true, reason })
+  let negocio: string | undefined
+  const textOnly = (reason: string) => {
+    if (!MOTIVOS_ESPERADOS.has(reason)) registrarAviso('agent_voz_sin_audio', { businessId: negocio, motivo: reason })
+    return NextResponse.json({ speak: false, sendText: true, reason })
+  }
   try {
     if (!isAuthorizedAgent(request)) return NextResponse.json({ speak: false, sendText: true, reason: 'no_autorizado' }, { status: 401 })
     const body = await request.json().catch(() => ({})) as { businessId?: string; text?: string; wasAudio?: boolean; actorType?: string }
     const text = String(body.text || '').trim()
+    negocio = body.businessId
     if (!body.businessId || !text) return textOnly('datos_incompletos')
     if (body.actorType === 'TEAM') return textOnly('modo_equipo_solo_texto')
 
@@ -31,5 +44,10 @@ export async function POST(request: Request) {
 
     const audio = await generateSpeech(text, voice, key, endpoint)
     return NextResponse.json({ speak: true, sendText: behavior.also_send_text !== false, audio: audio.audioBase64, mime: audio.mime, chars: audio.chars })
-  } catch { return textOnly('error_generando_voz') }
+  } catch (error) {
+    // Este es el que de verdad importa: DashScope caído, clave caducada o cuota agotada. El
+    // cliente sigue recibiendo texto, así que sin este registro nadie se enteraría nunca.
+    registrarError('agent_voz_excepcion', { businessId: negocio, error })
+    return textOnly('error_generando_voz')
+  }
 }

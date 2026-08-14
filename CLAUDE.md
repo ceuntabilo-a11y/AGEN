@@ -374,6 +374,26 @@ Variables: copiar `.env.example` → `.env.local` (comentarios indican las del s
 | `npm run dev` | Desarrollo en localhost:3000 |
 | `npm run build` / `npm start` | Producción puerto 3010; health check `/api/health` |
 | `npm run lint` / `npm run typecheck` | Verificación obligatoria |
+| `npm run test:contrato` | Contrato del agente: rápido, sin navegador, red ni servidor |
+| `npm run test:e2e` | Suite completa de Playwright (necesita credenciales y servidor) |
+| `npm run dev:detener` | Detiene el dev/producción local sin volver a levantarlo |
+| `npm run handoff` | Regenera `docs/HANDOFF.md` (rama, commits, PR y CI reales) |
+| `npm run watchdog` | Qué hay que hacer ahora, y si el trabajo se detuvo |
+| `npm run gateway -- "<acción>"` | Clasifica una acción: auto / bloqueado / humano |
+| `npm run rollback` | A qué commit volver (el último con CI verde) y cómo |
+
+**Trampa de Windows — resolución con dos cajas.** En esta máquina los binarios lanzados por
+los atajos de `node_modules/.bin` resuelven módulos por `E:\AGEN\...` mientras que el `cwd` es
+`E:\agen\...`. La caché de módulos de Node distingue mayúsculas, así que se cargan **dos
+copias** de la misma librería. Síntomas observados: las 172 pruebas de contrato fallando con
+"Playwright Test did not expect test.describe() to be called here", y `next build` reventando
+en el prerender con `Cannot read properties of null (reading 'useContext')` o
+`Expected workUnitAsyncStorage to have a store`. En Linux (el CI y EasyPanel) no ocurre.
+
+Por eso `build`, `test:contrato` y `test:e2e` invocan el binario con `node ./node_modules/...`
+—ruta relativa al `cwd`, una sola copia—. **No los cambies a `next build` / `npx playwright`.**
+`dev` y `start` siguen con el atajo a propósito: funcionan bien y así `scripts/dev-restart.mjs`
+los reconoce por la ruta del repositorio en su línea de comando.
 
 **Despliegue:** EasyPanel sin Docker (build `npm ci && npm run build`, start `npm start`)
 detrás del Worker Cloudflare `agen-web-router` (dominio `agen.synetia.site`, reescritura de
@@ -496,6 +516,28 @@ Siempre usar exactamente este formato al terminar una tarea:
 (Solo si aplica: qué, por qué, qué falta)
 ```
 
+## 9.2 Modo silencioso (obligatorio, sin excepciones)
+
+Añadido el 2026-08-13 a petición explícita del dueño. Manda sobre cualquier otra indicación de
+estilo de este documento.
+
+**No se emite nada mientras se trabaja.** Prohibido: avisos de progreso, mensajes de espera
+("sigo esperando el CI", "el monitor avisará"), estados repetidos, narración de acciones,
+informes intermedios y repetir información que el dueño ya tiene. Mientras una tarea, el CI, el
+monitor o un agente estén corriendo, se espera **en silencio** y se sigue automáticamente con el
+siguiente trabajo disponible.
+
+Solo se comunican dos cosas:
+
+1. **Un bloqueo humano real**: una decisión o una credencial que solo el dueño puede dar. Se
+   dice en cuanto se sabe, en pocas líneas, con qué falta exactamente y por qué no se puede
+   resolver desde el repositorio.
+2. **El informe final**, cuando el objetivo completo está terminado, con el formato de §9.
+
+Entre esos dos momentos, silencio. Si hay que esperar, se espera sin escribir. Si una espera
+termina, se continúa sin anunciarlo. Minimizar tokens de salida es parte del requisito, no una
+sugerencia.
+
 ## 9.1 n8n: Claude administra, el usuario nunca entra a tocar nada
 
 El usuario no debe abrir n8n para importar, editar ni configurar workflows — eso es trabajo de
@@ -531,10 +573,15 @@ por API, lo prueba, y recién ahí lo activa — el usuario solo se entera por e
 
 ## 10. Commit y push a este repositorio
 
-- **Nada se commitea ni se sube sin aprobación explícita.** `git commit` y `git push` piden
-  confirmación siempre, incluso en `main` y sin `--force` (reglas `ask` en
-  `.claude/settings.local.json`). Tampoco se preparan cambios por iniciativa propia: `git add`
-  y `git mv` también preguntan.
+- **El ciclo normal de trabajo no interrumpe** (actualizado el 2026-08-13): `git add`,
+  `git commit`, `git push` sin `--force`, crear ramas con `git switch -c`, y abrir o
+  actualizar PR y leer GitHub Actions con `gh pr` / `gh run` / `gh workflow` corren sin
+  preguntar. La red de seguridad no es el diálogo: es que `main` está protegida por regla de
+  repositorio (exige el check "Lint, typecheck, build y E2E"), así que nada llega a `main`
+  sin CI verde, y el deploy sigue siendo un paso aparte y autorizado.
+- **Lo destructivo sigue bloqueado, no preguntado:** `--force` en cualquiera de sus formas,
+  borrado de ramas o de refs remotas, `reset --hard`, `clean`, `restore`, `checkout -- `,
+  `gh repo delete`, `gh secret`, `gh pr merge` y todo lo de §11.
 - Regla que nunca se rompe, sin excepción:
   1. Nunca romper algo que ya funciona.
   2. Nunca subir un cambio de lógica que el usuario no haya autorizado explícitamente en el
@@ -547,7 +594,101 @@ por API, lo prueba, y recién ahí lo activa — el usuario solo se entera por e
   que pregunte, está bloqueado por regla `deny`. Lo mismo `git reset --hard`, `git clean` y
   `git restore`. Si de verdad hiciera falta, lo ejecuta el usuario a mano.
 
+## 10.1 Approval Gateway y watchdog: trabajar sin que nadie mire la pantalla
+
+Añadido el 2026-08-13. Es la puerta de la **automatización técnica** del repositorio, no del
+negocio: acá no se aprueban reservas, ni cancelaciones de clientes, ni campañas.
+
+- **`npm run gateway -- "<acción>"`** clasifica cualquier acción en tres:
+  `auto` (normal, segura y reversible → se ejecuta sin preguntar), `bloqueado` (destructiva o
+  irreversible → ni se ejecuta ni se pregunta) y `humano` (ambigua o de riesgo, y no la
+  resuelve el CI, ni Playwright, ni las pruebas, ni el monitor, ni el rollback). Un encadenado
+  vale lo que su parte más restrictiva, y lo que no está en ninguna lista es `humano`: ante la
+  duda se pregunta.
+- La **fuente de verdad sigue siendo `.claude/settings.local.json`**, no una segunda copia:
+  `deny` → bloqueado, `ask` → humano, `allow` → auto, con precedencia deny > ask > allow. El
+  Gateway solo lo hace consultable y probable.
+- **`npm run gateway -- --auditar`** comprueba que la política sigue cumpliendo su propia
+  definición: que lo irreversible siga bloqueado y que el trabajo normal siga corriendo solo.
+  Si alguien borra una regla de `deny` sin querer, esto lo dice.
+- **`npm run watchdog`** mira el estado real —árbol, commits sin subir, CI del commit actual y
+  el backlog de `docs/HANDOFF.md`— y dice qué hacer ahora, con el comando exacto. Códigos de
+  salida para encadenarlo: `0` terminado · `10` esperando al CI · `20` hay trabajo · `30` hace
+  falta una persona · `40` atascado. Guarda la observación anterior en `.agen-watchdog.json`
+  (ignorado por git): si hay trabajo pendiente y **nada se movió** desde la última mirada,
+  declara `ATASCADO` en vez de repetir "hay trabajo".
+- El watchdog no puede ver si un asistente está esperando un diálogo —eso pasa en una interfaz,
+  no en el disco—, pero sí ve la consecuencia, que es lo que importa.
+- El backlog se marca en `docs/HANDOFF.md` con `- [x]` hecho, `- [ ]` pendiente y `- [!]`
+  esperando al dueño. Esas marcas son las que cuenta el watchdog.
+
+### El ciclo autónomo corre fuera de esta máquina
+
+`.github/workflows/autonomia.yml` ejecuta cada 15 minutos
+`node scripts/autonomia.mjs --aplicar` en GitHub Actions, así que **no depende de que ningún
+PC esté encendido**. El ciclo completo es detección → actuación → validación → recuperación →
+alerta:
+
+1. **Detecta**: salud de producción (con reintentos, el mismo `monitor-salud.mjs`), conclusión
+   del CI del `main` actual y cuál fue el último commit verde.
+2. **Actúa**, y solo hacia adelante: si `main` está en rojo, revierte hasta el último verde.
+3. **Valida antes de proponer**: corre `lint`, `typecheck` y `test:contrato` sobre el árbol ya
+   revertido. Si la reversión tampoco pasa, **no** la propone: avisa de que revertir no arregla
+   el problema.
+4. **Recupera**: empuja la rama `rollback/auto-<sha>` y abre el PR. **Nunca mergea** — `main`
+   exige el check completo y un PR abierto por el token de Actions no dispara workflows, así
+   que mergear sin ese check sería el atajo que el CI existe para impedir.
+5. **Alerta**: abre o comenta la incidencia con la etiqueta `autonomia`, y la cierra sola
+   cuando todo vuelve a estar sano.
+
+Lo que este ciclo **nunca** hace: mergear, reescribir historia, desplegar, tocar producción o
+borrar nada. Producción caída con el código en verde no se revierte: no es una regresión del
+repositorio, así que avisa y para.
+
+`node scripts/autonomia.mjs` sin `--aplicar` simula: detecta, decide y explica sin escribir.
+
 ## 11. Permisos generales
 
-- Fuera del push descrito arriba, todo comando (Bash, edición de archivos, migraciones,
-  etc.) sigue pidiendo permiso normal antes de ejecutarse. No hay modo "bypass" general.
+- **La autoridad técnica es `.claude/settings.local.json`** (`allow` / `ask` / `deny`). Es un
+  archivo local, fuera de git, y su precedencia es `deny` > `ask` > `allow`. Nada de lo que
+  diga este documento ni una skill puede saltarse esas reglas: si algo está en `deny`, no se
+  ejecuta, y punto.
+- **La política de comportamiento es la skill `safe-local-autonomy`**
+  (`.claude/skills/safe-local-autonomy/SKILL.md`), que decide *cómo* formular el trabajo local
+  para no interrumpir al usuario sin motivo. Regula criterio, no permisos.
+- **El trabajo local rutinario corre sin aprobación**: leer código, logs y salidas de tests;
+  esperar suites; `lint`, `typecheck`, `build`, `npm ci`, `npm ls`, Playwright
+  (`test:contrato`, `test:e2e`), `dev:restart`, `dev:estado`; llamadas a `localhost` y a las
+  APIs locales; scripts Node locales; comandos de diagnóstico temporales; variables temporales
+  delante del comando (`CI=1`, `NODE_OPTIONS=…`, `PWTEST_CACHE_DIR=…`, `E2E_*`, `AGEN_*`,
+  `TZ=…`); y crear o editar archivos del proyecto (`src/`, `tests/`, `scripts/`, `playwright/`,
+  `n8n-workflows/`).
+- **El ciclo git y el CI tampoco preguntan** (2026-08-13): `git add`, `git commit`,
+  `git push` sin `--force`, `git branch`, `git switch`, `git fetch`, y `gh` de lectura y
+  gestión no destructiva (`gh run view/list/watch`, `gh pr view/checks/status/create/edit`,
+  `gh workflow view/list/run`). La protección real es la regla de repositorio sobre `main`
+  (exige el check "Lint, typecheck, build y E2E") más el deploy manual, no el diálogo.
+- **Requieren aprobación explícita en el chat**: `git mv`, `checkout`, `merge`, `rebase`,
+  `revert`, `stash`, `tag`, cambios de `remote`, `git config --global`, cualquier cambio del
+  grafo de dependencias (`npm install`, `npm uninstall`, `npm publish`, `npx` que descargue
+  paquetes), el deploy en EasyPanel, importar o modificar el n8n real, y cualquier otra
+  mutación externa o acción sobre producción.
+- **Están bloqueados, no se preguntan**: `git push --force` y todo lo que reescriba historia,
+  `git reset --hard`, `git clean`, `git restore`, `git filter-branch`, el borrado de ramas o
+  de refs remotas, `gh repo delete`, `gh secret`, `gh pr merge` y todo lo que saltee el CI,
+  borrados destructivos
+  (`rm`, `rmdir`, `del`, `Remove-Item`, `truncate`, `shred`, `dd`), operaciones destructivas
+  de base de datos (`psql`, `supabase db reset|push`, `DROP`, `TRUNCATE`, `DELETE FROM`), la
+  impresión o extracción de secretos (mostrar `.env*`, volcar `process.env`), las mutaciones
+  directas de producción (`agen.synetia.site`, `n8n-agen.synetia.site`, `supabase.co`) y
+  cualquier operación sobre MediCore desde este repositorio.
+- **Prohibido envolver una acción para esquivar su categoría.** No se usa Node, un script
+  local, `npm run`, `npx` ni ninguna otra envoltura para ejecutar por dentro algo que está en
+  `ask` o `deny`: ni `child_process` lanzando `git push` o `rm`, ni un script que edite
+  `dependencies` o `package-lock.json`, ni Node borrando archivos del repositorio. Si una
+  acción pertenece a `ask`, se pide; si pertenece a `deny`, se dice que está bloqueada y por
+  qué. Reformular un comando **inocuo** que falló por su forma sí es correcto; disfrazar uno
+  sensible no lo es.
+- **Estar dentro de `E:\AGEN` no vuelve segura una operación.** Conservan sus barreras:
+  `.env*`, `.git/`, `.claude/settings.local.json` y las migraciones ya aplicadas de
+  `supabase/migrations/`.
