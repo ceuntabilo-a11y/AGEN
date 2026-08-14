@@ -169,7 +169,15 @@ switch (orden) {
       process.exit(2)
     }
     if (!readFileSync(archivo, 'utf8').trim()) { console.error(`${archivo} está vacío.`); process.exit(2) }
-    if (!git(['diff', '--cached', '--name-only'])) {
+    /*
+     * Cerrar un merge es un commit aunque no haya nada "preparado".
+     *
+     * Si los conflictos se resolvieron quedándose con esta rama, el índice coincide con HEAD y
+     * `diff --cached` sale vacío — pero el merge sigue abierto y hay que cerrarlo. Sin esta
+     * excepción, la envoltura se negaba justo en el paso final y había que salir de ella.
+     */
+    const enMedioDeUnMerge = existsSync(path.join(RAIZ, '.git', 'MERGE_HEAD'))
+    if (!enMedioDeUnMerge && !git(['diff', '--cached', '--name-only'])) {
       console.error('No hay nada preparado. Usa antes: npm run git -- add <rutas>')
       process.exit(2)
     }
