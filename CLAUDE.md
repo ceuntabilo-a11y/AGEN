@@ -383,6 +383,9 @@ Variables: copiar `.env.example` → `.env.local` (comentarios indican las del s
 | `npm run rollback` | A qué commit volver (el último con CI verde) y cómo |
 | `npm run gh -- <orden>` | Operaciones de GitHub sin sintaxis de shell (PR, CI, merge con checks verdes) |
 | `npm run app -- <orden>` | Ciclo local del servicio sin sintaxis de shell (ver abajo) |
+| `npm run git -- <orden>` | Ciclo git rutinario, con lista blanca (ver abajo) |
+| `npm run n8n -- <orden>` | Administrar el n8n real por API y ver la latencia por nodo |
+| `npm run db -- <orden>` | Consultas de SOLO LECTURA a la base (solo emite GET) |
 
 **`npm run app` — levantar y comprobar la app sin disparar diálogos.** Escrito a mano, ese
 ciclo era `npm start … &` + `sleep` + `curl` en bucle, y el analizador de seguridad no puede
@@ -399,6 +402,31 @@ convertirlos en una mutación de producción.
 **`npm run app -- version`** contesta la pregunta que antes no se podía contestar: si el commit
 de `main` es el que está vivo en producción, o si falta el clic de despliegue. Lo hace con el
 campo `commit` de `/api/health` (ver `src/lib/version.ts`).
+
+**Cuerpos largos por archivo, nunca dentro del comando.** Un mensaje de commit o un cuerpo de
+PR de varias líneas escrito entre comillas en la shell es la forma que el analizador no puede
+analizar. Por eso `npm run gh -- pr-crear-md [ruta]` y `npm run git -- commit [archivo]` leen
+el texto de un archivo (`.pr/`, ignorado por git). `pr-crear` con un cuerpo multilínea falla a
+propósito, para que no queden dos caminos.
+
+**`npm run git -- <orden>`** — `estado` · `rama` · `crear-rama` · `cambiar` · `traer` · `log` ·
+`diff` · `staged` · `add` · `add-todo` · `commit` · `subir` · `sincronizar` ·
+`probar-integracion` · `integrar-main` · `quedarme-con-lo-mio`. **No existe** orden para
+`reset`, `clean`, `restore`, `stash`, `rebase`, borrar ramas ni `push --force`: lo que puede
+perder trabajo no está, y por eso no hace falta preguntarlo. `cambiar` exige el árbol limpio;
+`sincronizar` es `--ff-only`; `integrar-main` es un merge normal que se detiene si hay
+conflictos.
+
+**`npm run n8n -- <orden>`** — `lista` · `ver` · `exportar` · `subir` · `activar` ·
+`desactivar` · `ejecuciones` · `ejecucion` (**desglose de latencia por nodo**) · `lento` ·
+`dijo` (qué contestó el agente y qué respondió cada herramienta) · `herramientas` (sincroniza
+el preámbulo común desde `n8n-workflows/preambulo-herramientas.js`) · `probar` (mete un mensaje
+de cliente por la misma puerta que Evolution) · `probar-programado` (acelera un disparador
+horario para comprobarlo sin esperar, y lo restaura). Sin órdenes de borrado.
+
+**`npm run db -- <orden>`** — `tablas` · `ver` · `buscar` · `columnas` · `contar` · `negocios`.
+Emite **solo GET**: el método está fijado en el código, no en un argumento. Enmascara cualquier
+valor que parezca credencial antes de imprimir.
 
 **Trampa de Windows — resolución con dos cajas.** En esta máquina los binarios lanzados por
 los atajos de `node_modules/.bin` resuelven módulos por `E:\AGEN\...` mientras que el `cwd` es
