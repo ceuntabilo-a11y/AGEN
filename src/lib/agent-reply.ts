@@ -23,6 +23,7 @@ const LARGO_MINIMO = 2
 export type MotivoRevision =
   | 'id_interno' | 'markdown_tecnico'
   | 'vacia' | 'datos_crudos' | 'error_tecnico' | 'interno_del_sistema'
+  | 'razonamiento_del_modelo' | 'idioma_incorrecto'
   | 'reserva_sin_evidencia' | 'cancelacion_sin_evidencia' | 'confirmacion_sin_evidencia'
 
 export type EvidenciaDelTurno = { reservo: boolean; cancelo: boolean; confirmo: boolean }
@@ -51,6 +52,51 @@ const SENALES_INTERNAS = [
   /\/api\/(agent|admin|automation|platform)\//i,
   /\b(supabase|postgrest|service[_ ]role|n8n|webhook|evolution api|openai)\b/i,
 ]
+
+/**
+ * El modelo pensando en voz alta.
+ *
+ * Pasó de verdad: ante un "Ok" suelto, el agente le mandó al cliente su propio razonamiento
+ * —en inglés, citando sus reglas y sus herramientas por nombre— en vez de una respuesta.
+ * El prompt lo prohíbe, pero el prompt no lo garantiza; esta capa sí, porque corre en la app.
+ *
+ * Los nombres de las herramientas van aparte de `SENALES_INTERNAS` porque son inofensivos
+ * como palabras y demoledores como filtración: si aparece "buscar_horarios" en un mensaje de
+ * WhatsApp, no es una respuesta, es el andamio.
+ */
+const NOMBRES_DE_HERRAMIENTAS = /\b(buscar_horarios|crear_reserva|registrar_cliente|guardar_memoria|mis_reservas|confirmar_reserva|liberar_reserva|avisar_al_equipo)\b/i
+
+const SENALES_DE_RAZONAMIENTO = [
+  NOMBRES_DE_HERRAMIENTAS,
+  /\b(we|i)\s+(must|should|need to|have to|can|cannot|will|are|were)\b/i,
+  /\b(the user|the assistant|the platform|the system prompt|per rule|rule \d+|tool call|function call)\b/i,
+  /\b(let'?s|okay,? so|first,? we|next,? we|clarify:)/i,
+  /\bregla\s*\d+\b/i,
+  /\bREGLA DE SALIDA\b/,
+  // Las etiquetas del contexto que se le inyecta: si salen, salió el andamio entero.
+  /(^|\n)\s*(MENSAJE|NEGOCIO|ACTOR|FICHA|CLIENTE|SERVICIOS|RESERVAS|TIEMPO|ZONA|EQUIPO|AGENDA_HOY):/,
+]
+
+/** Palabras funcionales: sirven para saber en qué idioma está escrito, no de qué habla. */
+const PALABRAS_ES = /\b(que|de|la|el|los|las|para|con|una|uno|tu|te|es|está|hora|día|puedo|quieres|gracias|hola)\b/gi
+const PALABRAS_EN = /\b(the|and|we|should|must|would|because|there|about|which|user|assistant|response|however|need)\b/gi
+
+/**
+ * Texto escrito en inglés donde solo puede haber español.
+ *
+ * Conservador a propósito: hace falta que el inglés domine con claridad. Una respuesta normal
+ * puede llevar una palabra suelta en inglés (un nombre de servicio, "spa", "look") y eso no
+ * puede bloquear un mensaje legítimo.
+ */
+export function pareceOtroIdioma(texto: string): boolean {
+  const es = (texto.match(PALABRAS_ES) ?? []).length
+  const en = (texto.match(PALABRAS_EN) ?? []).length
+  return en >= 4 && en > es * 2
+}
+
+export function pareceRazonamiento(texto: string): boolean {
+  return SENALES_DE_RAZONAMIENTO.some((patron) => patron.test(texto))
+}
 
 /** Frases que dan una acción por hecha. Se evalúan por oración, no sobre el texto entero. */
 const AFIRMA_RESERVA = [
@@ -130,6 +176,8 @@ export function revisarRespuesta(original: string, evidencia: EvidenciaDelTurno)
   if (SENALES_CRUDAS.some((patron) => patron.test(texto))) graves.push('datos_crudos')
   if (SENALES_DE_ERROR.some((patron) => patron.test(texto))) graves.push('error_tecnico')
   if (SENALES_INTERNAS.some((patron) => patron.test(texto))) graves.push('interno_del_sistema')
+  if (pareceRazonamiento(texto)) graves.push('razonamiento_del_modelo')
+  if (pareceOtroIdioma(texto)) graves.push('idioma_incorrecto')
 
   const afirmaciones = detectarAfirmaciones(texto)
   if (afirmaciones.reservo && !evidencia.reservo) graves.push('reserva_sin_evidencia')

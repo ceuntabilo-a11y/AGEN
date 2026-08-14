@@ -1,5 +1,11 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { test, expect } from '@playwright/test'
 import { cargarWorkflow, nodo } from '../support/n8n'
+
+/** La única copia del preámbulo, la misma que inyecta `npm run n8n -- herramientas`. */
+const preambulo = () =>
+  readFileSync(path.resolve(__dirname, '..', '..', 'n8n-workflows', 'preambulo-herramientas.js'), 'utf8').trimEnd()
 
 /**
  * Dos fallos que dejaban al cliente sin respuesta, encontrados midiendo ejecuciones reales del
@@ -90,6 +96,84 @@ test.describe('Toda llamada de red tiene techo de tiempo', () => {
     for (const n of herramientas) {
       const codigo = String((n.parameters as { jsCode: string }).jsCode)
       expect(codigo, `la herramienta "${n.name}" no acota su petición`).toContain('timeout:')
+    }
+  })
+})
+
+test.describe('Una herramienta llamada sin argumentos no puede reventar', () => {
+  /*
+   * Ocurrió en una reserva real (ejecución 7110): el modelo llamó `crear_reserva` sin
+   * argumentos, n8n no definió `query`, y la primera línea de la herramienta hacía
+   * `(query || {})` en la rama falsa de un `typeof`. `typeof` no lanza, pero eso sí: el nodo
+   * murió con «query is not defined» y el cliente recibió "hubo un error técnico y no pude
+   * completar la reserva". El horario estaba libre.
+   */
+  const herramientas = workflow.nodes.filter((n) => n.type === '@n8n/n8n-nodes-langchain.toolCode')
+
+  test('ninguna evalúa `query` sin comprobar antes que existe', () => {
+    for (const n of herramientas) {
+      const codigo = String((n.parameters as { jsCode: string }).jsCode)
+      expect(codigo, `"${n.name}" sigue con la forma que revienta`).not.toContain("(query || {})")
+      expect(codigo, `"${n.name}" tiene que protegerse de que \`query\` no exista`).toContain("typeof query === 'undefined'")
+    }
+  })
+
+  /** Ejecuta el preámbulo real de la herramienta con el entorno que le da n8n. */
+  function argumentosLeidos(codigo: string, entorno: { query?: unknown; item?: unknown }) {
+    const preludio = codigo.split('const res = await')[0]
+    const contexto = () => ({ first: () => ({ json: { body: { businessId: 'b', phone: '569111' } } }) })
+    // `query` y `$json` se declaran solo si n8n los declararía: ese es justo el caso a probar.
+    const declaraciones = [
+      entorno.query === undefined ? '' : 'const query = ENTORNO.query;',
+      entorno.item === undefined ? '' : 'const $json = ENTORNO.item;',
+    ].join('\n')
+    const evaluar = new Function('$', '$env', 'ENTORNO', `${declaraciones}\n${preludio}\nreturn q`)
+    return evaluar(contexto, { AGEN_APP_URL: 'http://x', AGEN_WEBHOOK_SECRET: 's' }, entorno)
+  }
+
+  test('el código de cada herramienta se ejecuta con `query` sin definir', () => {
+    for (const n of herramientas) {
+      const q = argumentosLeidos(String((n.parameters as { jsCode: string }).jsCode), {})
+      expect(typeof q, `"${n.name}" no sobrevive a una llamada sin argumentos`).toBe('object')
+    }
+  })
+
+  test('acepta las DOS formas en que n8n entrega los argumentos', () => {
+    /*
+     * Las dos formas, vistas en la misma ejecución real (7112):
+     *   buscar_horarios → item {"input": "{…}"}     → n8n define `query`
+     *   crear_reserva   → item {"clientId": …, …}   → n8n NO define `query`
+     * Leer solo la primera mandaba el cuerpo vacío: la app respondía 400 y el cliente recibía
+     * "hubo un problema técnico" con el horario libre y el apartado ya hecho.
+     */
+    for (const n of herramientas) {
+      const codigo = String((n.parameters as { jsCode: string }).jsCode)
+
+      const porQuery = argumentosLeidos(codigo, { query: '{"holdId":"h-1"}' })
+      expect(porQuery.holdId, `"${n.name}" no lee el argumento único`).toBe('h-1')
+
+      const porItem = argumentosLeidos(codigo, { item: { holdId: 'h-2', clientId: 'c-1' } })
+      expect(porItem.holdId, `"${n.name}" no lee los argumentos con nombre`).toBe('h-2')
+      expect(porItem.clientId).toBe('c-1')
+
+      const porItemConInput = argumentosLeidos(codigo, { item: { input: '{"holdId":"h-3"}' } })
+      expect(porItemConInput.holdId, `"${n.name}" no lee el item con \`input\``).toBe('h-3')
+
+      // Cuarta forma, vista en la ejecución 7121: el modelo devuelve un lote de llamadas.
+      const porLote = argumentosLeidos(codigo, {
+        item: { tool_uses: [{ recipient_name: 'functions.buscar_horarios', parameters: { input: '{"holdId":"h-4"}' } }] },
+      })
+      expect(porLote.holdId, `"${n.name}" no desenvuelve \`tool_uses\``).toBe('h-4')
+    }
+  })
+
+  test('el preámbulo de las ocho herramientas sale de un solo archivo', () => {
+    // Cada una de las tres veces que esto falló hubo que copiar el arreglo ocho veces a mano
+    // en un JSON de 40 000 caracteres. Así es como se cuelan los arreglos a medias.
+    const texto = preambulo()
+    for (const n of herramientas) {
+      const codigo = String((n.parameters as { jsCode: string }).jsCode)
+      expect(codigo.startsWith(texto), `"${n.name}" tiene su propia copia del preámbulo`).toBe(true)
     }
   })
 })

@@ -201,6 +201,25 @@ switch (orden) {
     break
   }
 
+  case 'dijo': {
+    const { spawnSync } = await import('node:child_process')
+    const resultado = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'n8n-ver-ejecucion.mjs'), ...resto], {
+      cwd: RAIZ, stdio: 'inherit',
+    })
+    process.exitCode = resultado.status ?? 1
+    break
+  }
+
+  case 'herramientas': {
+    // Delegado a su propio script para poder importarlo desde las pruebas sin ejecutar nada.
+    const { spawnSync } = await import('node:child_process')
+    const resultado = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'n8n-herramientas.mjs'), ...resto], {
+      cwd: RAIZ, stdio: 'inherit',
+    })
+    process.exitCode = resultado.status ?? 1
+    break
+  }
+
   case 'probar': {
     /*
      * Un mensaje de cliente de verdad, de punta a punta, y su desglose de latencia.
@@ -279,7 +298,7 @@ switch (orden) {
   }
 
   default:
-    console.log('Órdenes: lista · ver · exportar · subir · activar · desactivar · ejecuciones · ejecucion · lento · probar')
+    console.log('Órdenes: lista · ver · exportar · subir · activar · desactivar · ejecuciones · ejecucion · lento · herramientas · probar')
     console.log('Ejemplo: npm run n8n -- lento <idDelWorkflow01> 3')
     process.exitCode = orden ? 2 : 0
 }

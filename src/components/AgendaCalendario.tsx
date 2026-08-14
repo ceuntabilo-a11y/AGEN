@@ -223,7 +223,9 @@ export function AgendaCalendario({
                   // solo para la hora. Meter tres líneas donde caben dos las corta a la mitad.
                   const minutos = tramo.hasta - tramo.desde
                   const cabeNombre = minutos >= 25
-                  const cabeServicio = minutos >= 45
+                  // 45 minutos parecían suficientes para la tercera línea y no lo son: en vista
+                  // Semana esa caja mide ~39 px y el servicio quedaba cortado por la mitad.
+                  const cabeServicio = minutos >= 60
                   return (
                     <button
                       key={cita.id}
