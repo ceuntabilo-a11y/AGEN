@@ -38,7 +38,7 @@ const workflow = cargarWorkflow()
 
 /** Nodos que se ejecutan DESPUÉS del `Esperar`, donde el emparejado de items ya no vale. */
 const TRAS_LA_ESPERA = [
-  'Agrupar', 'Cargar memoria', 'Cargar catálogo', 'Agente Agen',
+  'Agrupar', 'Cargar contexto', 'Agente Agen',
   'Memoria reciente', 'Enviar a WhatsApp', 'Persistir interacción', 'Responder',
 ]
 
@@ -95,6 +95,25 @@ test.describe('Toda llamada de red tiene techo de tiempo', () => {
   test('el modelo también tiene techo', () => {
     const opciones = (nodo('Modelo').parameters as { options?: { timeout?: number } }).options ?? {}
     expect(opciones.timeout).toBeTruthy()
+  })
+
+  test('el contexto del turno se pide en UNA llamada, no en dos', () => {
+    // Eran dos peticiones a la app en secuencia (memoria y catálogo) sin que ninguna dependiera
+    // de la otra: 1,5–2,5 s de cada turno regalados. Si vuelven a aparecer, esto lo dice.
+    const nombres = workflow.nodes.map((n) => n.name)
+    expect(nombres).toContain('Cargar contexto')
+    expect(nombres).not.toContain('Cargar memoria')
+    expect(nombres).not.toContain('Cargar catálogo')
+    expect(String((nodo('Cargar contexto').parameters as { url: string }).url)).toContain('/api/agent/context')
+  })
+
+  test('la espera de agrupación no puede volver a crecer', () => {
+    // Está para juntar los mensajes que alguien manda seguidos, y eso se cumple con segundo y
+    // medio. Cada décima de más es coste fijo en TODAS las conversaciones, incluidas las de un
+    // solo mensaje, que son casi todas.
+    const espera = nodo('Esperar').parameters as { amount: number; unit: string }
+    expect(espera.unit).toBe('seconds')
+    expect(espera.amount).toBeLessThanOrEqual(1.5)
   })
 
   test('las herramientas del agente acotan su llamada a la app', () => {

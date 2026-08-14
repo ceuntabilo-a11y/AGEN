@@ -36,7 +36,10 @@ test.describe('La huella identifica una versión sin necesitar git', () => {
   test('el mismo código da la misma huella desde el disco y desde git', () => {
     // Se compara contra HEAD, no contra el árbol de trabajo, para que el test no dependa de
     // tener cambios sin commitear. Si los hay, se salta con un motivo claro.
-    const sucio = execFileSync('git', ['status', '--porcelain', '--untracked-files=no', '--', ...RUTAS_DE_LA_HUELLA], {
+    // Los archivos SIN seguimiento cuentan aquí, al revés que en el resto del repositorio: un
+    // archivo nuevo en `src` está en el disco y no en HEAD, así que la huella tiene que
+    // diferir — y la prueba fallaría por eso y no por un fallo del cálculo.
+    const sucio = execFileSync('git', ['status', '--porcelain', '--untracked-files=all', '--', ...RUTAS_DE_LA_HUELLA], {
       cwd: RAIZ, encoding: 'utf8',
     }).trim()
     test.skip(Boolean(sucio), `hay cambios sin commitear en ${RUTAS_DE_LA_HUELLA.join(', ')}`)

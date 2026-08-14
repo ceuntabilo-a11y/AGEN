@@ -136,6 +136,39 @@ switch (orden) {
       id = igual.id
     }
 
+    /*
+     * Un workflow no puede llamar a una ruta que todavía no está desplegada.
+     *
+     * El despliegue de la app es un clic manual en EasyPanel y el workflow se sube por API:
+     * nada impide subir primero el workflow y dejar al agente llamando a un 404, que en
+     * producción significa clientes sin respuesta. Así que antes de subir se comprueba que
+     * las rutas nuevas que el JSON menciona existen de verdad ahí fuera.
+     *
+     * La sonda es un GET a una ruta que solo exporta POST: 405 = existe, 404 = no existe. No
+     * manda datos ni credenciales.
+     */
+    const RUTAS_NUEVAS = ['/api/agent/context', '/api/agent/escalate']
+    const texto = JSON.stringify(local)
+    const mencionadas = RUTAS_NUEVAS.filter((ruta) => texto.includes(ruta))
+    for (const ruta of mencionadas) {
+      let estado = 0
+      try {
+        const sonda = await fetch(`https://agen.synetia.site${ruta}`, { method: 'GET', signal: AbortSignal.timeout(10000) })
+        estado = sonda.status
+      } catch { estado = 0 }
+      if (estado === 404) {
+        console.error(`El workflow llama a ${ruta}, que NO existe en producción (HTTP 404).`)
+        console.error('Subirlo ahora dejaría al agente llamando a una ruta inexistente.')
+        console.error('Despliega primero la app en EasyPanel y vuelve a intentarlo.')
+        process.exit(1)
+      }
+      if (estado === 0) {
+        console.error(`No pude comprobar si ${ruta} existe en producción. No se sube a ciegas.`)
+        process.exit(1)
+      }
+      console.log(`comprobado: ${ruta} existe en producción (HTTP ${estado})`)
+    }
+
     // La API solo acepta estos campos en PUT; mandar `active`, `id` o `tags` da 400.
     const cuerpo = {
       name: local.name,

@@ -386,6 +386,7 @@ switch (orden) {
      * cabeceras ni credenciales: la respuesta llega antes de que la ruta haga nada.
      */
     const SONDAS = [
+      { ruta: '/api/agent/context', desde: 'contexto en una sola llamada (latencia)' },
       { ruta: '/api/agent/escalate', desde: 'escalación humana real (bace75d)' },
       { ruta: '/api/agent/media', desde: 'multimedia del agente (ya existía)' },
       { ruta: '/api/agent/voice/reply', desde: 'voz del agente (ya existía)' },
