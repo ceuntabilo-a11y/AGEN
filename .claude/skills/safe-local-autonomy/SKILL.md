@@ -123,6 +123,17 @@ hacer por dentro lo que está en `ask` o `deny`. Un script local nunca debe:
 Si necesitas una de esas acciones, pídela por el canal normal. Envolverla en Node para que no
 aparezca el diálogo es exactamente lo que no se debe hacer.
 
+## Modo silencioso: se trabaja sin narrar
+
+Regla de CLAUDE.md §9.2, y manda sobre cualquier otra indicación de estilo. Mientras algo
+corre —una suite, el CI, el monitor, un agente— **se espera en silencio**. Nada de avisos de
+progreso, mensajes de espera, estados repetidos ni informes intermedios. Solo se comunica un
+bloqueo humano real o el informe final.
+
+En la práctica, cuando hay que esperar: arma el monitor o la tarea en segundo plano y **no
+escribas nada** hasta que llegue el resultado. Si la espera termina, sigue con el trabajo
+siguiente sin anunciarlo.
+
 ## El ciclo git y el CI no interrumpen (desde el 2026-08-13)
 
 `git add`, `git commit`, `git push` sin `--force`, `git branch`, `git switch`, `git fetch`,
