@@ -21,37 +21,29 @@ Cómo mantenerlo:
 | Dato | Valor |
 |---|---|
 | Rama | `cierre/agente-idempotencia-ci` |
-| HEAD local | `361b0e0` — docs: close the backlog and point every session at the watchdog |
-| HEAD remoto | `361b0e0` (sincronizado) |
-| Commits por delante de `main` | 23 |
-| Árbol de trabajo | **sucio** — 10 archivo(s) |
+| HEAD local | `9080c08` — docs: silent mode in the local autonomy policy too |
+| HEAD remoto | `9ff8055` (**difiere del local**) |
+| Commits por delante de `main` | 25 |
+| Árbol de trabajo | **sucio** — 2 archivo(s) |
 | PR abierto | [#1](https://github.com/ceuntabilo-a11y/AGEN/pull/1) — Cierre/agente idempotencia ci (listo) |
-| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31754700222 |
+| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31756496872 |
 
 Archivos sin commitear:
 
 ```
-M CLAUDE.md
- M docs/HANDOFF.md
- M package.json
 ?? .claude/skills/playwright-cli/
-?? .github/workflows/autonomia.yml
 ?? public/brand/synetia-logo.png
-?? scripts/autonomia-logica.d.mts
-?? scripts/autonomia-logica.mjs
-?? scripts/autonomia.mjs
-?? tests/contract/autonomia.spec.ts
 ```
 
 Últimos commits:
 
 ```
+9080c08 docs: silent mode in the local autonomy policy too
+9ff8055 feat: an autonomous cycle that runs without anyone's computer on
 361b0e0 docs: close the backlog and point every session at the watchdog
 0ff0890 fix: the policy audit cannot run where the policy does not exist
 ea5b0e4 feat: an approval gateway for the technical automation, plus a watchdog
 13cc34a docs: record where each backlog item really stands
-7c7e3bf feat: know which commit to roll back to, without guessing at 3am
-e3d4493 feat: watch latency, and stop the monitor from failing when everything is fine
 ```
 
 <!-- AUTO:FIN -->
