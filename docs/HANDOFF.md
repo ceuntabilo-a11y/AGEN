@@ -20,18 +20,17 @@ Cómo mantenerlo:
 
 | Dato | Valor |
 |---|---|
-| Rama | `docs/cierre-produccion` |
-| HEAD local | `f6bd748` — fix: keep the good half when the model tacks its reasoning onto the answer (#20) |
-| HEAD remoto | la rama no está en origin |
-| Commits por delante de `main` | 0 |
-| Árbol de trabajo | **sucio** — 3 archivo(s) |
-| PR abierto | ninguno |
+| Rama | `docs/cierre-avisos` |
+| HEAD local | `66a8a9a` — docs: refrescar el estado de retoma después de los dos merges |
+| HEAD remoto | `66a8a9a` (sincronizado) |
+| Commits por delante de `main` | 4 |
+| Árbol de trabajo | **sucio** — 2 archivo(s) |
+| PR abierto | [#24](https://github.com/ceuntabilo-a11y/AGEN/pull/24) — Refresca el bloque automático de `docs/HANDOFF.md` (`npm run handoff`) con la rama, el HEAD, el (listo) |
 | Último CI | ninguna ejecución |
 
 Archivos sin commitear:
 
 ```
-M docs/HANDOFF.md
 ?? .claude/skills/playwright-cli/
 ?? public/brand/synetia-logo.png
 ```
@@ -39,12 +38,12 @@ M docs/HANDOFF.md
 Últimos commits:
 
 ```
+66a8a9a docs: refrescar el estado de retoma después de los dos merges
+2f0ec57 chore: poner main al día también es trabajo rutinario
+7ce56c9 fix: el cliente contestó "No" y el agente preguntó a qué se refería
+393c59f docs: the second deploy, verified against production step by step
 f6bd748 fix: keep the good half when the model tacks its reasoning onto the answer (#20)
 18288df docs: the third finding, and what still needs a deploy (#19)
-acb9251 fix: bloquear el texto del modelo no es deshacer lo que ya pasó (#18)
-848f86d docs: final state — 435 contract and 609 E2E green, one deploy left (#17)
-3d6cccf test: bloquear un horario desde la agenda, verlo y deshacerlo (#16)
-8ae3340 test: auditoría de equipo, campañas, seguimiento y finanzas + duplicados + estado real (#15)
 ```
 
 <!-- AUTO:FIN -->
