@@ -20,18 +20,17 @@ Cómo mantenerlo:
 
 | Dato | Valor |
 |---|---|
-| Rama | `fix/version-sin-git` |
-| HEAD local | `e56f55d` — test: prove that a duplicated webhook answers once, not twice |
-| HEAD remoto | `e56f55d` (sincronizado) |
-| Commits por delante de `main` | 5 |
-| Árbol de trabajo | **sucio** — 3 archivo(s) |
+| Rama | `docs/cierre-final` |
+| HEAD local | `3d6cccf` — test: bloquear un horario desde la agenda, verlo y deshacerlo (#16) |
+| HEAD remoto | la rama no está en origin |
+| Commits por delante de `main` | 0 |
+| Árbol de trabajo | **sucio** — 2 archivo(s) |
 | PR abierto | ninguno |
-| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31852817027 |
+| Último CI | ninguna ejecución |
 
 Archivos sin commitear:
 
 ```
-M docs/HANDOFF.md
 ?? .claude/skills/playwright-cli/
 ?? public/brand/synetia-logo.png
 ```
@@ -39,12 +38,12 @@ M docs/HANDOFF.md
 Últimos commits:
 
 ```
-e56f55d test: prove that a duplicated webhook answers once, not twice
-81b2317 test: the write cycle of team, campaigns, follow-ups and finance
-e781049 fix: the agent was telling clients the wrong day and the wrong hour
-bd63895 perf: the agent asks the app for its context once, not twice
-4170e01 fix: identify the deployed version when the build has no git
+3d6cccf test: bloquear un horario desde la agenda, verlo y deshacerlo (#16)
+8ae3340 test: auditoría de equipo, campañas, seguimiento y finanzas + duplicados + estado real (#15)
+7cb5568 fix: el agente le decía al cliente el día y la hora equivocados (#14)
+08a1cfe fix: saber qué versión está desplegada cuando el build no tiene git (#13)
 8b79959 docs: close out the session — what is green, what is live, and what is not (#12)
+729fb0c chore: ramificar desde origin/main y no dejarte tirado en un main viejo (#11)
 ```
 
 <!-- AUTO:FIN -->
@@ -55,9 +54,11 @@ bd63895 perf: the agent asks the app for its context once, not twice
 
 Lo más importante de esta sesión, y lo que cambia el veredicto de venta.
 
-**Estado al cerrar (actualizado tras el despliegue):** todo mergeado en `main` (PR #8 a #14,
-todos con CI verde). En local, 434 pruebas de contrato y 606 E2E en verde. Los cuatro workflows
-de n8n activos y comprobados funcionando.
+**Estado al cerrar (actualizado tras el despliegue):** todo mergeado en `main` (PR #8 a #16,
+todos con CI verde). En local, **435 pruebas de contrato y 609 E2E en verde**, con `lint`,
+`typecheck` y build limpios. Los cuatro workflows de n8n activos y comprobados funcionando.
+Último humo contra producción: el agente contesta ("El Tratamiento Antiedad dura 75 minutos y
+cuesta $32.000") y la respuesta se entrega por WhatsApp.
 
 **El despliegue ya se hizo** y `/api/agent/escalate` responde en producción, así que los
 arreglos del agente están vivos. Lo comprobado después de desplegar está en la sección
