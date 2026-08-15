@@ -20,17 +20,18 @@ Cómo mantenerlo:
 
 | Dato | Valor |
 |---|---|
-| Rama | `docs/cierre-final` |
-| HEAD local | `3d6cccf` — test: bloquear un horario desde la agenda, verlo y deshacerlo (#16) |
+| Rama | `docs/ultimo-hallazgo` |
+| HEAD local | `acb9251` — fix: bloquear el texto del modelo no es deshacer lo que ya pasó (#18) |
 | HEAD remoto | la rama no está en origin |
 | Commits por delante de `main` | 0 |
-| Árbol de trabajo | **sucio** — 2 archivo(s) |
+| Árbol de trabajo | **sucio** — 3 archivo(s) |
 | PR abierto | ninguno |
 | Último CI | ninguna ejecución |
 
 Archivos sin commitear:
 
 ```
+M docs/HANDOFF.md
 ?? .claude/skills/playwright-cli/
 ?? public/brand/synetia-logo.png
 ```
@@ -38,12 +39,12 @@ Archivos sin commitear:
 Últimos commits:
 
 ```
+acb9251 fix: bloquear el texto del modelo no es deshacer lo que ya pasó (#18)
+848f86d docs: final state — 435 contract and 609 E2E green, one deploy left (#17)
 3d6cccf test: bloquear un horario desde la agenda, verlo y deshacerlo (#16)
 8ae3340 test: auditoría de equipo, campañas, seguimiento y finanzas + duplicados + estado real (#15)
 7cb5568 fix: el agente le decía al cliente el día y la hora equivocados (#14)
 08a1cfe fix: saber qué versión está desplegada cuando el build no tiene git (#13)
-8b79959 docs: close out the session — what is green, what is live, and what is not (#12)
-729fb0c chore: ramificar desde origin/main y no dejarte tirado en un main viejo (#11)
 ```
 
 <!-- AUTO:FIN -->
@@ -125,9 +126,24 @@ estado comprobado en la base después de cada paso:
 | Día y hora de los horarios | "Lunes, 17 de agosto — 09:45", correcto tras el arreglo (antes decía "martes 17 a las 13:00") |
 | `/api/health` | 230 ms en caliente; 2,5 s en frío, de los cuales 1,3 s son DNS |
 
-**Dos fallos encontrados así, que ninguna prueba anterior habría visto**: el agente daba el día
-y la hora equivocados (convertía UTC a mano), y pedía disponibilidad con horas sin zona. Los dos
-arreglados en la app y en la herramienta de n8n; la parte de la herramienta ya está viva.
+**Tres fallos encontrados así, que ninguna prueba anterior habría visto:**
+
+1. El agente daba el **día y la hora equivocados** (convertía UTC a mano): decía "el martes 17 a
+   las 13:00" cuando el 17 era lunes y eran las 09:00. Arreglado en la app y en la herramienta
+   de n8n; la parte de la herramienta **ya está viva** y comprobada.
+2. Pedía disponibilidad con **horas sin zona**, así que buscaba en la franja equivocada y
+   contestaba "no hay horas en la tarde" cuando sí las había. Arreglado (`instanteDelNegocio`),
+   pendiente de despliegue.
+3. **Bloquear el texto no es deshacer la acción.** En una cancelación real, la hora se canceló
+   en la base pero el texto del modelo salió con su razonamiento dentro; la revisión lo bloqueó
+   —bien— y le dijo al cliente "no pude completar eso" —mal—. Ahora el respaldo dice la verdad
+   según lo que la base respalde. Pendiente de despliegue.
+
+**Nota de calidad, no bloqueo:** en unos quince turnos de prueba, el modelo produjo una vez un
+texto con su razonamiento dentro. La guarda hizo su trabajo (el cliente recibió un mensaje
+seguro y la acción se había ejecutado bien), así que no hay ni confirmación falsa ni acción
+equivocada — pero conviene vigilar la frecuencia con `npm run n8n -- dijo <id>`, que muestra los
+motivos de la revisión.
 
 ### Latencia del agente, medida por nodo (no estimada)
 
@@ -353,7 +369,9 @@ actuales y **no se deben dar por buenos**:
      2,5 s de cada turno;
    - las horas sin zona leídas en la del negocio (`instanteDelNegocio`), que evita que el
      agente busque en la franja equivocada;
-   - los horarios que la app devuelve ya formateados en la zona del negocio.
+   - los horarios que la app devuelve ya formateados en la zona del negocio;
+   - el respaldo veraz: si la revisión bloquea el texto del modelo pero la acción **sí** se
+     hizo, el cliente oye lo que de verdad pasó en vez de "no pude completar eso".
 
    Cómo: **EasyPanel** → proyecto **`agen-prod`** → servicio de la **app web** (el que corre
    `npm start`, no Evolution ni n8n) → botón **"Implementar"**. Después, desde el repositorio:
