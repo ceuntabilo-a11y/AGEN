@@ -5,6 +5,7 @@ import { buildNotification } from '@/lib/notification-templates'
 import { sendWhatsApp } from '@/lib/whatsapp'
 import { sendMarketingEmail } from '@/lib/resend'
 import { claimNotifications, contarAvisosAmbiguos, descartarAviso, marcarAvisoEnviado, reintentarAviso, type AvisoReclamado } from '@/lib/notification-dispatch'
+import { registrarAvisoSaliente } from '@/lib/outbound-context'
 
 /**
  * Envía de verdad los avisos pendientes de la cola.
@@ -36,6 +37,35 @@ function textToHtml(text: string) {
     .replace(/_([^_\n]+)_/g, '<em>$1</em>')
     .replace(/\n/g, '<br/>')
   return `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.6;color:#1c1b22;max-width:520px">${escaped}</div>`
+}
+
+/** Avisos que dejan de tener sentido una vez que la hora de la que hablan ya pasó. */
+const RECORDATORIOS = ['CONFIRM_REQUEST', 'DAY_OF_REMINDER', 'REMINDER_24H', 'REMINDER_2H']
+
+/**
+ * Tipo con el que se guarda el aviso para el agente.
+ *
+ * `CHANGED` cubre cuatro cosas que piden respuestas opuestas: una cancelación (un "sí" quiere
+ * decir «búscame otro horario»), un cambio de hora o de profesional (un "sí" confirma la hora
+ * nueva) y un cambio de duración. Guardarlas con el mismo nombre obligaría al agente a
+ * adivinar, que es justo el fallo que esto viene a cerrar.
+ */
+function tipoDeAviso(eventType: string, payload: Record<string, unknown>) {
+  if (eventType !== 'CHANGED') return eventType
+  const kind = typeof payload.kind === 'string' ? payload.kind : 'RESCHEDULE'
+  return `CHANGED_${kind}`
+}
+
+/** Por qué se le escribió, en las mismas palabras que vio el cliente. */
+function resumirAviso(eventType: string, payload: Record<string, unknown>) {
+  const partes: string[] = []
+  const kind = typeof payload.kind === 'string' ? payload.kind : null
+  if (eventType === 'CHANGED' && kind) {
+    partes.push({ CANCEL: 'cancelación', RESCHEDULE: 'cambio de hora', MOVE: 'cambio de hora o profesional', RESIZE: 'cambio de duración' }[kind] ?? kind)
+  }
+  if (typeof payload.reason === 'string' && payload.reason.trim()) partes.push(`motivo: ${payload.reason.trim()}`)
+  if (typeof payload.actor === 'string' && payload.actor.trim()) partes.push(`lo hizo: ${payload.actor.trim()}`)
+  return partes.length ? partes.join(' · ').slice(0, 400) : null
 }
 
 export async function POST(request: Request) {
@@ -120,6 +150,22 @@ export async function POST(request: Request) {
     if (result.success) {
       sent += 1
       await marcarAvisoEnviado(db, row.id)
+      // El aviso llegó: queda registrado qué se preguntó, sobre qué y hasta cuándo, para que
+      // el agente pueda leer el "sí" o el "no" que venga después. Nunca bloquea el envío.
+      await registrarAvisoSaliente(db, {
+        businessId: row.business_id,
+        clientId: row.client_id,
+        channel: row.channel === 'EMAIL' ? 'EMAIL' : 'WHATSAPP',
+        // `CHANGED` a secas no dice nada: cancelar, mover y alargar piden respuestas distintas.
+        kind: tipoDeAviso(row.event_type, row.payload ?? {}),
+        espera: message.espera,
+        appointmentId: row.appointment_id,
+        summary: resumirAviso(row.event_type, row.payload ?? {}),
+        payload: row.payload ?? {},
+        // Un recordatorio no sobrevive a la hora de la que habla: pasada la cita, un "sí"
+        // suelto ya no es una confirmación de asistencia.
+        noMasAllaDe: RECORDATORIOS.includes(row.event_type) ? (end ?? start) : null,
+      })
     } else {
       failed += 1
       await reintentarAviso(db, row as unknown as AvisoReclamado, result.error ?? 'error_desconocido')

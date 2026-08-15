@@ -462,7 +462,24 @@ switch (orden) {
     break
   }
 
-  case 'e2e': {
+  case 'e2e':
+  case 'e2e-prod': {
+    /*
+     * `e2e-prod` corre la misma suite contra la aplicación DESPLEGADA.
+     *
+     * Existe porque hasta ahora todo se comprobaba contra un build local (con la base de
+     * producción detrás), y eso deja sin verificar justo lo que usa un cliente: el servidor
+     * real, detrás del Worker de Cloudflare, con su propio build y sus propias variables.
+     *
+     * Es seguro por construcción, no por cuidado: `exigirSandbox` (tests/support/sandbox.ts)
+     * exige destino LOCAL para cualquier prueba que escriba, así que contra producción todas
+     * ellas se saltan solas con un motivo claro. Lo que queda es lectura: que las páginas
+     * carguen, que los límites de acceso por rol se cumplan y que nada se desborde en móvil.
+     *
+     * El destino no se pasa por argumento: es la misma constante que el resto de órdenes de
+     * producción de esta envoltura.
+     */
+    const contraProduccion = orden === 'e2e-prod'
     // Primer argumento: el project. El resto se pasa tal cual a Playwright (`--grep`, un
     // fichero suelto…), para no tener que salir de la envoltura para filtrar una prueba.
     const [proyecto, ...extras] = resto
@@ -491,14 +508,22 @@ switch (orden) {
        * cookie de sesión no viajaba y acababa en `/login`. Tres pruebas de control de acceso
        * fallaban por eso y el bug no existía: era el destino de la suite.
        */
-      env: { ...process.env, E2E_BASE_URL: process.env.E2E_BASE_URL || `http://localhost:${PUERTO_POR_DEFECTO}` },
+      env: {
+        ...process.env,
+        // Contra producción manda la constante, no lo que haya en el entorno: si se pudiera
+        // pasar por fuera, `e2e-prod` dejaría de significar lo que dice.
+        E2E_BASE_URL: contraProduccion
+          ? PRODUCCION
+          : process.env.E2E_BASE_URL || `http://localhost:${PUERTO_POR_DEFECTO}`,
+      },
     })
+    if (contraProduccion) console.log(`(suite contra ${PRODUCCION}; las pruebas que escriben se saltan solas)`)
     await new Promise((listo) => hijo.on('exit', (codigo) => { process.exitCode = codigo ?? 1; listo() }))
     break
   }
 
   default:
-    console.log('Órdenes: estado · construir · arrancar · detener · reiniciar · salud · esperar · medir · limpiar-temporales · verificar-version · prod · version · e2e')
+    console.log('Órdenes: estado · construir · arrancar · detener · reiniciar · salud · esperar · medir · limpiar-temporales · verificar-version · prod · prod-sondeo · prod-perfil · version · e2e · e2e-prod')
     console.log('Ejemplo: npm run app -- arrancar   y luego   npm run app -- medir /api/health 30')
     process.exitCode = orden ? 2 : 0
 }

@@ -5,6 +5,8 @@ import { resolveCampaignAudience } from '@/lib/campaign-audience'
 import { sendWhatsApp } from '@/lib/whatsapp'
 import { sendMarketingEmail, resendConfigured } from '@/lib/resend'
 import { claimCampaignForSending, destinatariosYaEnviados, markCampaignSent, restoreCampaignStatus, type MotivoNoEnviable } from '@/lib/campaigns'
+import { createAdminClient } from '@/lib/supabase-admin'
+import { ESPERA_DE_CAMPANA, registrarAvisoSaliente } from '@/lib/outbound-context'
 
 const MOTIVOS: Record<MotivoNoEnviable, string> = {
   inexistente: 'La campaña no existe',
@@ -44,6 +46,18 @@ export async function POST(request: Request) {
       return respuesta
     }
 
+    /**
+     * Una campaña también es un mensaje que el negocio manda solo, y la gente le contesta.
+     * Se registra con service_role a propósito: el agente lee esa tabla para interpretar
+     * respuestas, así que nadie que no sea el sistema debería poder escribir en ella.
+     */
+    const sistema = createAdminClient()
+    const registrarEnvio = (clientId: string, channel: 'WHATSAPP' | 'EMAIL') => registrarAvisoSaliente(sistema, {
+      businessId, clientId, channel, kind: 'CAMPAIGN', campaignId,
+      espera: ESPERA_DE_CAMPANA,
+      summary: `campaña "${campaign.name}"`,
+    })
+
     try {
       if (campaign.channel === 'WHATSAPP') {
         const { data: business } = await db.from('businesses').select('whatsapp_provider,whatsapp_instance,whatsapp_phone_id,whatsapp_token,whatsapp_360_api_key').eq('id', businessId).single()
@@ -56,6 +70,7 @@ export async function POST(request: Request) {
           for (const client of pendientes) {
             const result = await sendWhatsApp({ id: businessId, whatsapp_provider: business.whatsapp_provider, whatsapp_instance: business.whatsapp_instance, whatsapp_phone_id: business.whatsapp_phone_id, whatsapp_token: business.whatsapp_token, whatsapp_360_api_key: business.whatsapp_360_api_key }, { phone: client.phone!, text: campaign.content, imageUrl: campaign.image_url })
             await db.from('campaign_recipients').update({ status: result.success ? 'SENT' : 'FAILED', reason: result.error ?? null, sent_at: result.success ? new Date().toISOString() : null }).eq('campaign_id', campaignId).eq('client_id', client.id)
+            if (result.success) await registrarEnvio(client.id, 'WHATSAPP')
           }
           await markCampaignSent(db, campaignId)
           return NextResponse.json({ sent: true, recipients: pendientes.length, skipped: eligible.length - pendientes.length })
@@ -75,6 +90,7 @@ export async function POST(request: Request) {
           const unsubscribeUrl = `${process.env.NEXT_PUBLIC_APP_URL}/unsubscribe?token=${client.marketing_unsubscribe_token ?? ''}`
           const result = await sendMarketingEmail({ to: client.email!, subject: (campaign.subject?.trim() || campaign.name), html: campaign.email_html ? campaign.email_html.replace(/{{unsubscribeUrl}}/g, unsubscribeUrl) : emailHtml(businessName, campaign.content, unsubscribeUrl), businessName, replyTo: business?.email })
           await db.from('campaign_recipients').update({ status: result.success ? 'SENT' : 'FAILED', reason: result.error ?? null, sent_at: result.success ? new Date().toISOString() : null }).eq('campaign_id', campaignId).eq('client_id', client.id)
+          if (result.success) await registrarEnvio(client.id, 'EMAIL')
         }
         await markCampaignSent(db, campaignId)
         return NextResponse.json({ sent: true, recipients: pendientes.length, skipped: eligible.length - pendientes.length })

@@ -42,9 +42,61 @@ export type NotificationContext = {
   payload?: Record<string, unknown>
 }
 
-export type BuiltNotification = { text: string; subject: string }
+/**
+ * Qué respuesta espera el mensaje. Es lo que le permite al agente leer un «sí», un «no» o un
+ * «después» sueltos: sin esto, la respuesta llega sin la pregunta.
+ */
+export type EsperaDeRespuesta = 'YES_NO' | 'CHOICE' | 'RATING' | 'FREE' | 'NONE'
+
+export type EsperaDelAviso = {
+  expects: EsperaDeRespuesta
+  /** La pregunta en una línea, tal como la entendería una persona. */
+  question: string
+  /** Cuántas horas tiene sentido leer una respuesta como respuesta a ESTE mensaje. */
+  ttlHours: number
+  /**
+   * Qué hacer si el cliente dice que sí, y qué si dice que no.
+   *
+   * Vive acá, junto al texto que se le mandó, y no en el prompt del agente. Dos razones: el
+   * prompt se paga entero en cada turno de cada conversación, y una regla escrita en código se
+   * puede probar. Además queda guardado con el aviso, así que si mañana cambia una plantilla,
+   * el aviso ya enviado sigue significando lo que significaba cuando salió.
+   */
+  ifYes?: string
+  ifNo?: string
+}
+
+export type BuiltNotification = { text: string; subject: string; espera: EsperaDelAviso }
 
 const SEPARATOR = '━━━━━━━━━━━━━━━'
+
+/**
+ * Qué significa un «sí» y qué un «no» para cada tipo de aviso.
+ *
+ * Están agrupados porque varios avisos hacen la misma pregunta con otras palabras, y separados
+ * donde de verdad se diferencian: un «sí» a una cancelación pide horarios nuevos, mientras que
+ * un «sí» a un cambio de hora confirma la hora nueva. Tratarlos igual era exactamente el error.
+ */
+const CONFIRMAR_O_LIBERAR = {
+  ifYes: 'Va a venir: llama confirmar_reserva con el appointmentId de este aviso.',
+  ifNo: 'No puede venir: llama liberar_reserva con el appointmentId de este aviso y reason en sus palabras, y enseguida ofrécele horarios nuevos con buscar_horarios.',
+}
+const LE_ACOMODA_O_NO = {
+  ifYes: 'Le acomoda como quedó: llama confirmar_reserva con el appointmentId de este aviso.',
+  ifNo: 'No le acomoda: no confirmes nada, busca horarios con buscar_horarios y ofrécele alternativas.',
+}
+const YA_ESTA_CANCELADA = {
+  ifYes: 'Quiere otro horario: ofrécele horarios con buscar_horarios. Esa hora ya está cancelada, así que no llames liberar_reserva ni confirmar_reserva.',
+  ifNo: 'Por ahora no quiere otro horario: contesta una línea amable y no insistas.',
+}
+const OFRECER_HORARIOS = {
+  ifYes: 'Quiere volver: ofrécele horarios con buscar_horarios.',
+  ifNo: 'Ahora no: una línea amable, deja la puerta abierta y no insistas.',
+}
+const CUPO_LIBERADO = {
+  ifYes: 'Quiere el cupo: búscalo con buscar_horarios ese día y resérvalo con crear_reserva; nunca digas que quedó tomado sin booked=true.',
+  ifNo: 'No lo quiere: una línea amable y todo sigue como estaba.',
+}
 
 function firstName(value?: string | null) {
   const name = (value ?? '').trim()
@@ -123,6 +175,12 @@ function changedMessage(context: NotificationContext): BuiltNotification | null 
 
   if (kind === 'CANCEL') {
     return {
+      espera: {
+        expects: 'YES_NO',
+        question: 'Le avisamos que le cancelamos la hora y le ofrecimos buscarle un horario nuevo.',
+        ttlHours: 72,
+        ...YA_ESTA_CANCELADA,
+      },
       subject: `Tu hora en ${business.name} fue cancelada`,
       text: compose([
         header('❌', 'Tu hora fue cancelada', business.name),
@@ -142,6 +200,12 @@ function changedMessage(context: NotificationContext): BuiltNotification | null 
       ? `⏱️ *Duración:* ${oldMinutes} min → *${newMinutes} min*`
       : null
     return {
+      espera: {
+        expects: 'YES_NO',
+        question: 'Le avisamos que cambiamos cuánto dura su hora y le preguntamos si le acomoda así.',
+        ttlHours: 72,
+        ...LE_ACOMODA_O_NO,
+      },
       subject: `Cambio en tu hora en ${business.name}`,
       text: compose([
         header('🔄', 'Cambiamos la duración de tu hora', business.name),
@@ -162,6 +226,12 @@ function changedMessage(context: NotificationContext): BuiltNotification | null 
       ? `🔁 *Profesional:* ${oldProfessional} → *${newProfessional}*`
       : null
     return {
+      espera: {
+        expects: 'YES_NO',
+        question: 'Le avisamos que le cambiamos la hora (o el profesional) y le pedimos que responda SÍ si le acomoda o NO para buscarle otro horario.',
+        ttlHours: 72,
+        ...LE_ACOMODA_O_NO,
+      },
       subject: `Cambio en tu hora en ${business.name}`,
       text: compose([
         header('🔄', 'Cambiamos tu hora', business.name),
@@ -177,6 +247,12 @@ function changedMessage(context: NotificationContext): BuiltNotification | null 
   }
 
   return {
+    espera: {
+      expects: 'YES_NO',
+      question: 'Le avisamos que le cambiamos la hora y le pedimos que responda SÍ si le acomoda o NO para buscarle otro horario.',
+      ttlHours: 72,
+      ...LE_ACOMODA_O_NO,
+    },
     subject: `Cambio en tu hora en ${business.name}`,
     text: compose([
       header('🔄', 'Cambiamos tu hora', business.name),
@@ -198,6 +274,12 @@ export function buildNotification(eventType: string, context: NotificationContex
     case 'BOOKED':
       if (!appointment) return null
       return {
+        espera: {
+          expects: 'FREE',
+          question: 'Le confirmamos que su hora quedó agendada y le dijimos que nos escriba si necesita cambiarla o cancelarla.',
+          ttlHours: 48,
+          ...CONFIRMAR_O_LIBERAR,
+        },
         subject: `Tu hora en ${business.name} quedó agendada`,
         text: compose([
           header('✅', 'Tu hora quedó agendada', business.name),
@@ -220,6 +302,12 @@ export function buildNotification(eventType: string, context: NotificationContex
     case 'CONFIRM_REQUEST':
       if (!appointment) return null
       return {
+        espera: {
+          expects: 'YES_NO',
+          question: 'Le pedimos que responda SÍ para dejar confirmada su hora, o NO si no puede venir y así liberamos el cupo.',
+          ttlHours: 24,
+          ...CONFIRMAR_O_LIBERAR,
+        },
         subject: `¿Confirmas tu hora en ${business.name}?`,
         text: compose([
           header('📋', '¿Confirmamos tu hora?', business.name),
@@ -233,6 +321,12 @@ export function buildNotification(eventType: string, context: NotificationContex
     case 'DAY_OF_REMINDER':
       if (!appointment) return null
       return {
+        espera: {
+          expects: 'YES_NO',
+          question: 'Le recordamos que hoy tiene hora y le pedimos que responda SÍ para confirmar que viene, o NO para liberar el cupo.',
+          ttlHours: 12,
+          ...CONFIRMAR_O_LIBERAR,
+        },
         subject: `Hoy tienes hora en ${business.name}`,
         text: compose([
           header('☀️', 'Hoy tienes tu hora', business.name),
@@ -247,6 +341,12 @@ export function buildNotification(eventType: string, context: NotificationContex
     case 'REMINDER_2H':
       if (!appointment) return null
       return {
+        espera: {
+          expects: 'FREE',
+          question: 'Le recordamos su hora y le dijimos que nos escriba si no puede venir, para reagendarla.',
+          ttlHours: 24,
+          ...CONFIRMAR_O_LIBERAR,
+        },
         subject: `Recordatorio de tu hora en ${business.name}`,
         text: compose([
           header('⏰', 'Recordatorio de tu hora', business.name),
@@ -263,6 +363,12 @@ export function buildNotification(eventType: string, context: NotificationContex
       const serviceName = typeof payload.serviceName === 'string' ? payload.serviceName : null
       const professionalName = typeof payload.professionalName === 'string' ? payload.professionalName : null
       return {
+        espera: {
+          expects: 'YES_NO',
+          question: 'Estaba en la lista de espera: le ofrecimos un cupo que se liberó y le pedimos que responda SÍ si lo quiere.',
+          ttlHours: 6,
+          ...CUPO_LIBERADO,
+        },
         subject: `Se liberó un cupo en ${business.name}`,
         text: compose([
           header('🔔', '¡Se liberó un cupo!', business.name),
@@ -277,6 +383,12 @@ export function buildNotification(eventType: string, context: NotificationContex
 
     case 'FOLLOW_UP':
       return {
+        espera: {
+          expects: 'YES_NO',
+          question: 'Le escribimos porque hace tiempo que no viene (o no pudo asistir) y le ofrecimos buscarle un nuevo horario.',
+          ttlHours: 72,
+          ...OFRECER_HORARIOS,
+        },
         subject: `Te echamos de menos en ${business.name}`,
         text: compose([
           header('💬', '¿Todo bien?', business.name),
@@ -291,6 +403,13 @@ export function buildNotification(eventType: string, context: NotificationContex
 
     case 'REVIEW_REQUEST':
       return {
+        espera: {
+          expects: 'RATING',
+          question: 'Le pedimos que califique su visita del 1 al 5 y, si quiere, que cuente por qué.',
+          ttlHours: 72,
+          ifYes: 'Agradécele en una línea y guarda lo que dijo con guardar_memoria. No ofrezcas nada más salvo que él lo pida.',
+          ifNo: 'No quiere responder: agradécele igual en una línea y no insistas.',
+        },
         subject: `¿Cómo te fue en ${business.name}?`,
         text: compose([
           header('⭐', '¿Cómo te fue?', business.name),

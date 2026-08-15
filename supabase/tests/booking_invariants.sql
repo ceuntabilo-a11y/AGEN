@@ -72,6 +72,8 @@ declare
   v_avisos_cancelacion integer;
   v_contactados_antes integer;
   v_contactados_despues integer;
+  v_aviso_pendiente uuid;
+  v_aviso_resuelto text;
 begin
   -- 1. Disponibilidad: las dos peluqueras, y solo ellas.
   select count(*) into v_hair_count
@@ -200,6 +202,25 @@ begin
   if v_contactados_despues <> v_contactados_antes then
     raise exception 'La segunda cancelación contactó a % personas más de la lista de espera',
       v_contactados_despues - v_contactados_antes;
+  end if;
+
+  -- 9. Un aviso automático deja de esperar respuesta en cuanto la respuesta se materializa.
+  --    Si no se cerrara, un "sí" de mañana volvería a leerse contra la pregunta de ayer.
+  --    Se comprueba con el disparador, no con la aplicación, porque la misma cita se confirma
+  --    desde el agente, desde el panel y desde el portal del cliente.
+  insert into public.outbound_prompts (
+    business_id, client_id, channel, kind, appointment_id, expects, question, expires_at
+  ) values (
+    'f1000000-0000-0000-0000-000000000001', 'f6000000-0000-0000-0000-000000000001',
+    'WHATSAPP', 'CONFIRM_REQUEST', v_first.id, 'YES_NO',
+    'Le pedimos que confirme su hora.', now() + interval '24 hours'
+  ) returning id into v_aviso_pendiente;
+
+  perform public.confirm_appointment_by_client(v_first.id);
+
+  select resolution into v_aviso_resuelto from public.outbound_prompts where id = v_aviso_pendiente and answered_at is not null;
+  if v_aviso_resuelto is distinct from 'CONFIRMED' then
+    raise exception 'Confirmar la cita dejó el aviso pendiente (resolución %)', coalesce(v_aviso_resuelto, 'sin cerrar');
   end if;
 
   raise notice 'Invariantes de reservas: todas las comprobaciones pasaron.';

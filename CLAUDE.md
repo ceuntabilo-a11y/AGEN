@@ -359,6 +359,46 @@ alguien atendía el domingo la agenda ofrecía el domingo aunque el negocio estu
   construida con `Date.UTC`, así que al oeste de Greenwich toda la grilla se corría una columna
   y el día de hoy caía bajo la letra equivocada. Va con `.getUTCDay()`.
 
+## 6.7 Cuando AGEN escribe primero: la respuesta tiene que encontrar su pregunta
+
+Añadido el 2026-08-15 (`20260815000001_outbound_context.sql`). Fallo real en producción: un
+recordatorio automático decía «Responde Sí para confirmar que vienes. Si no puedes, responde
+NO…», el cliente escribió «No» y el agente contestó «¿A qué te refieres con "no"?».
+
+- **La causa no era el recordatorio.** La cola (`notification_outbox`) se procesa y se olvida,
+  así que cuando llegaba la respuesta no quedaba rastro de la pregunta. Le pasaba a **todo**
+  mensaje saliente que pueda recibir respuesta: recordatorios, peticiones de confirmación,
+  avisos de cambio, cancelaciones, cupos de lista de espera, seguimientos, encuestas y
+  campañas de marketing.
+- **`outbound_prompts` es la memoria de lo que el negocio manda solo.** Una fila por mensaje
+  entregado, con qué se envió, por qué, sobre qué cita o campaña, qué respuesta se espera
+  (`expects`), qué significa un sí y qué un no (`if_yes`/`if_no`) y hasta cuándo es relevante
+  (`expires_at`). Se escribe **solo tras una entrega exitosa** —lo que no llegó no se puede
+  contestar— y nunca puede tumbar un envío: si la tabla no existe todavía o la escritura falla,
+  el mensaje sale igual y el agente sigue como antes.
+- **Los puntos de registro son dos**, porque son los dos únicos sitios desde los que AGEN le
+  escribe a un cliente por su cuenta: `POST /api/automation/notifications/dispatch` (toda la
+  cola de avisos) y el envío de campañas (`/api/admin/campaigns/send` y el camino histórico por
+  n8n, `/api/automation/campaign/result`).
+- **El significado vive con el mensaje, no en el prompt.** `buildNotification` devuelve además
+  `espera: {expects, question, ttlHours, ifYes, ifNo}`. Así el prompt del agente no crece con
+  cada tipo de aviso (se paga entero en cada turno), la regla se puede probar, y un aviso ya
+  enviado sigue significando lo que significaba aunque mañana cambie la plantilla. Un «sí» a
+  una cancelación pide horarios nuevos; un «sí» a un cambio de hora confirma la hora nueva:
+  son opuestos, y por eso `CHANGED` se guarda como `CHANGED_CANCEL`, `CHANGED_MOVE`,
+  `CHANGED_RESCHEDULE` o `CHANGED_RESIZE`, nunca a secas.
+- **El agente lo recibe en el mismo contexto del turno** (`cargarContexto` →
+  `pendingNotice`, inyectado en el prompt como `AVISO_PENDIENTE`), sin una llamada extra.
+  Incluye `repliesSince`: cuántos mensajes escribió el cliente desde que salió el aviso. Con 1
+  está contestando eso ahora mismo; con más, la conversación ya siguió y el aviso es
+  antecedente. Reglas 20–24 del prompt: prohibido preguntar «¿a qué te refieres?» ante un sí o
+  un no cuando hay aviso pendiente, hay que seguir `ifYes`/`ifNo` al pie de la letra con el
+  `appointmentId` del aviso, y **las respuestas mixtas se atienden enteras** («No, mejor
+  cámbiamela para mañana» = liberar la hora **y** ofrecer las de mañana, en un solo mensaje).
+- **El aviso se cierra solo cuando la respuesta se materializa**, con un disparador sobre
+  `appointments` y no desde la aplicación: la misma cita se confirma, se mueve o se cancela
+  desde el agente, desde el panel y desde el portal del cliente, y las tres tienen que cerrarlo.
+
 ## 7. Entorno y despliegue
 
 Variables nuevas: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` (Evolution API compartida por la
