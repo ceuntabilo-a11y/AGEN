@@ -211,3 +211,39 @@ export function validTimeZone(value: unknown): value is string {
     return false
   }
 }
+
+/**
+ * Un instante mandado por el agente, interpretado en la zona del NEGOCIO cuando no trae zona.
+ *
+ * El fallo que cierra, visto en producción: el modelo pidió horarios con
+ * `from: "2026-08-18T13:00:00"` —sin zona— para buscar "el martes en la tarde". `new Date()`
+ * interpreta eso en la zona del proceso (UTC en el contenedor), así que la búsqueda se hizo
+ * entre las 09:00 y las 15:00 hora de Santiago y el agente le contestó al cliente "no hay
+ * horas en la tarde del martes" cuando sí las había. Un fallo silencioso y con una respuesta
+ * perfectamente plausible: el peor tipo.
+ *
+ * La regla es la del sentido común de quien escribe: si la cadena trae zona (`Z` o `±HH:MM`)
+ * es un instante y no admite interpretación, se respeta tal cual. Si no la trae, es hora local
+ * del negocio.
+ */
+export function instanteDelNegocio(valor: unknown, timeZone: string): Date | null {
+  if (typeof valor !== 'string' || !valor.trim()) return null
+  const texto = valor.trim()
+
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(texto)) {
+    const conZona = new Date(texto)
+    return Number.isNaN(conZona.getTime()) ? null : conZona
+  }
+
+  const partes = texto.match(/^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2})?))?$/)
+  if (!partes) {
+    // Formato que no reconocemos: se deja como estaba antes en vez de inventar una lectura.
+    const suelto = new Date(texto)
+    return Number.isNaN(suelto.getTime()) ? null : suelto
+  }
+
+  const [, dateKey, hora] = partes
+  const zona = validTimeZone(timeZone) ? timeZone : DEFAULT_TIME_ZONE
+  const fecha = zonedDateTimeToUtc(dateKey, `${hora ?? '00:00'}:00`.slice(0, 8), zona)
+  return Number.isNaN(fecha.getTime()) ? null : fecha
+}
