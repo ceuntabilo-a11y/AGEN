@@ -64,13 +64,44 @@ const nextConfig = {
     AGEN_HUELLA: HUELLA,
   },
   async headers() {
+    /*
+     * Cloudflare Web Analytics, y solo eso.
+     *
+     * Cloudflare inyecta su baliza (`static.cloudflareinsights.com/beacon.min.js`) en todas las
+     * páginas del dominio, y la CSP la bloqueaba: **cada carga de página** dejaba un error de
+     * CSP en la consola del cliente y la analítica del dueño no recogía absolutamente nada.
+     * Comprobado contra producción, no supuesto: es lo que hizo fallar las 17 pruebas de rol al
+     * ejecutarlas contra la aplicación desplegada.
+     *
+     * Dos cosas importaban a la vez: que la analítica funcione, y que un error en la consola
+     * vuelva a significar algo. Con ruido en todas las páginas, ninguna prueba de "sin errores
+     * de consola" puede pasar contra producción, y eso es justo lo que esconde los fallos de
+     * verdad.
+     *
+     * Se añade **un host concreto** —el de la propia CDN del dominio— a `script-src` y
+     * `connect-src`, no un comodín. No se toca nada más de la política.
+     */
+    const CLOUDFLARE_ANALYTICS = 'https://static.cloudflareinsights.com'
+    const csp = [
+      "default-src 'self'",
+      `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${CLOUDFLARE_ANALYTICS}`,
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "media-src 'self' data: blob:",
+      `connect-src 'self' https://*.supabase.co wss://*.supabase.co ${CLOUDFLARE_ANALYTICS}`,
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; ')
+
     return [{source:'/:path*',headers:[
       {key:'X-Content-Type-Options',value:'nosniff'},
       {key:'X-Frame-Options',value:'DENY'},
       {key:'Referrer-Policy',value:'strict-origin-when-cross-origin'},
       {key:'Permissions-Policy',value:'camera=(), microphone=(), geolocation=()'},
       {key:'Strict-Transport-Security',value:'max-age=31536000; includeSubDomains'},
-      {key:'Content-Security-Policy',value:"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"},
+      {key:'Content-Security-Policy',value:csp},
     ]}]
   },
 }

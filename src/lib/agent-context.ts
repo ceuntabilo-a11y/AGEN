@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { findAgentTeamActor } from '@/lib/agent-actor'
+import { cargarAvisoPendiente } from '@/lib/outbound-context'
 import { dateKeyInZone, formatInZone, formatTimeInZone, referenciasTemporales, zonedDayRange } from '@/lib/timezone'
 
 /**
@@ -141,16 +142,24 @@ export async function cargarContexto(
     }
   }
 
-  // Segunda oleada, y solo si hace falta: las reservas cuelgan del id del cliente.
+  // Segunda oleada, y solo si hace falta: las dos cosas cuelgan del id del cliente, pero no
+  // dependen entre sí, así que van juntas.
   let appointments: Array<Record<string, unknown>> = []
+  let pendingNotice = null
   if (cliente.data) {
-    const { data: vigentes } = await db.from('appointments')
-      .select('id,status,service_period,client_confirmed_at,professional:professionals(display_name),service:services(name)')
-      .eq('business_id', datos.businessId).eq('client_id', cliente.data.id)
-      .in('status', ['PENDING', 'CONFIRMED'])
-      .overlaps('service_period', `[${new Date().toISOString()},${new Date(Date.now() + 90 * 86400000).toISOString()})`)
-      .order('service_period').limit(5)
-    appointments = formatearReservas(vigentes ?? [], timezone)
+    const [vigentes, aviso] = await Promise.all([
+      db.from('appointments')
+        .select('id,status,service_period,client_confirmed_at,professional:professionals(display_name),service:services(name)')
+        .eq('business_id', datos.businessId).eq('client_id', cliente.data.id)
+        .in('status', ['PENDING', 'CONFIRMED'])
+        .overlaps('service_period', `[${new Date().toISOString()},${new Date(Date.now() + 90 * 86400000).toISOString()})`)
+        .order('service_period').limit(5),
+      // Lo último que el negocio le mandó por su cuenta y sigue esperando respuesta. Sin esto,
+      // un "No" llega sin la pregunta y el agente contesta "¿a qué te refieres con no?".
+      cargarAvisoPendiente(db, { businessId: datos.businessId, clientId: cliente.data.id, phone: datos.phone, timezone }),
+    ])
+    appointments = formatearReservas(vigentes.data ?? [], timezone)
+    pendingNotice = aviso
   }
 
   return {
@@ -159,6 +168,7 @@ export async function cargarContexto(
     actorType: 'CLIENT',
     client: cliente.data,
     appointments,
+    pendingNotice,
     timezone,
   }
 }
