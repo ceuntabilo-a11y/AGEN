@@ -20,18 +20,17 @@ Cómo mantenerlo:
 
 | Dato | Valor |
 |---|---|
-| Rama | `docs/cierre-produccion` |
-| HEAD local | `f6bd748` — fix: keep the good half when the model tacks its reasoning onto the answer (#20) |
-| HEAD remoto | la rama no está en origin |
-| Commits por delante de `main` | 0 |
-| Árbol de trabajo | **sucio** — 3 archivo(s) |
+| Rama | `chore/actualizar-main-y-cierre` |
+| HEAD local | `2f0ec57` — chore: poner main al día también es trabajo rutinario |
+| HEAD remoto | `2f0ec57` (sincronizado) |
+| Commits por delante de `main` | 3 |
+| Árbol de trabajo | **sucio** — 2 archivo(s) |
 | PR abierto | ninguno |
-| Último CI | ninguna ejecución |
+| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31899090387 |
 
 Archivos sin commitear:
 
 ```
-M docs/HANDOFF.md
 ?? .claude/skills/playwright-cli/
 ?? public/brand/synetia-logo.png
 ```
@@ -39,12 +38,12 @@ M docs/HANDOFF.md
 Últimos commits:
 
 ```
+2f0ec57 chore: poner main al día también es trabajo rutinario
+7ce56c9 fix: el cliente contestó "No" y el agente preguntó a qué se refería
+393c59f docs: the second deploy, verified against production step by step
 f6bd748 fix: keep the good half when the model tacks its reasoning onto the answer (#20)
 18288df docs: the third finding, and what still needs a deploy (#19)
 acb9251 fix: bloquear el texto del modelo no es deshacer lo que ya pasó (#18)
-848f86d docs: final state — 435 contract and 609 E2E green, one deploy left (#17)
-3d6cccf test: bloquear un horario desde la agenda, verlo y deshacerlo (#16)
-8ae3340 test: auditoría de equipo, campañas, seguimiento y finanzas + duplicados + estado real (#15)
 ```
 
 <!-- AUTO:FIN -->
