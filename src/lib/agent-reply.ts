@@ -39,7 +39,7 @@ const LARGO_MINIMO = 2
 export type MotivoRevision =
   | 'id_interno' | 'markdown_tecnico'
   | 'vacia' | 'datos_crudos' | 'error_tecnico' | 'interno_del_sistema'
-  | 'razonamiento_del_modelo' | 'idioma_incorrecto'
+  | 'razonamiento_del_modelo' | 'idioma_incorrecto' | 'razonamiento_recortado'
   | 'reserva_sin_evidencia' | 'cancelacion_sin_evidencia' | 'confirmacion_sin_evidencia'
 
 export type EvidenciaDelTurno = {
@@ -123,6 +123,57 @@ export function pareceRazonamiento(texto: string): boolean {
   return SENALES_DE_RAZONAMIENTO.some((patron) => patron.test(texto))
 }
 
+/**
+ * La parte limpia de una respuesta que se le fue de las manos al final.
+ *
+ * Observado dos veces en producción, las dos tras cancelar: el modelo escribe la respuesta
+ * correcta y **luego** añade su deliberación. Por ejemplo:
+ *
+ *   "He cancelado tu Diseño de Cejas del lunes 17 a las 09:30. ¿Quieres otro horario?
+ *    Como assistant, we must respond in Spanish, one emoji max… "
+ *
+ * Bloquear todo era seguro pero tiraba una respuesta perfectamente buena y la sustituía por un
+ * respaldo genérico. Como el andamio siempre va DESPUÉS, se puede cortar por la primera
+ * oración contaminada y quedarse con lo de antes.
+ *
+ * Solo recorta: nunca añade ni reescribe. Y quien lo llame tiene que volver a revisar el trozo
+ * que queda, porque recortar no lo vuelve válido por sí solo.
+ */
+export function recortarEnRazonamiento(texto: string): string | null {
+  /*
+   * Corte por oración propio, y no el de `oraciones()`.
+   *
+   * En el caso real el andamio empezaba **pegado** al signo de cierre, sin espacio:
+   * «…para ese servicio?Como assistant, we must…». Un corte que exija espacio deja todo en una
+   * sola oración y no recorta nada. Acá basta con que después del punto o del cierre venga un
+   * espacio o una mayúscula.
+   */
+  const partes = texto
+    .split(/(?<=[.!?])(?=\s|[A-ZÁÉÍÓÚÑ¿¡])|\n+/)
+    .map((parte) => parte.trim())
+    .filter(Boolean)
+  const limpias: string[] = []
+  for (const parte of partes) {
+    if (pareceRazonamiento(parte) || pareceOtroIdioma(parte)) break
+    limpias.push(parte)
+  }
+  if (!limpias.length || limpias.length === partes.length) return null
+
+  const cabeza = limpias.join(' ').trim()
+  if (cabeza.length < 20) return null
+
+  /*
+   * El trozo que queda tiene que parecer una frase de verdad, no el principio del andamio.
+   *
+   * Sin esto, un volcado que empieza «Hay varios pasos here. Clarify: We must…» dejaba pasar
+   * «Hay varios pasos here.», que no es una respuesta: es basura corta que además no dice nada.
+   * Una frase escrita para un cliente lleva varias palabras funcionales en español; un retazo
+   * de deliberación, no.
+   */
+  const palabrasEspanolas = (cabeza.match(PALABRAS_ES) ?? []).length
+  return palabrasEspanolas >= 3 ? cabeza : null
+}
+
 /** Frases que dan una acción por hecha. Se evalúan por oración, no sobre el texto entero. */
 const AFIRMA_RESERVA = [
   /\bqued(ó|o|aste|é|as)\s+(agendad|reservad)/i,
@@ -193,8 +244,8 @@ export function sanitizarRespuesta(texto: string): { texto: string; motivos: Mot
  * Decide qué se envía. Devuelve el texto listo para WhatsApp: el del modelo si pasa la
  * revisión, o la respuesta de respaldo si no. Nunca devuelve algo vacío.
  */
-export function revisarRespuesta(original: string, evidencia: EvidenciaDelTurno): RevisionRespuesta {
-  const { texto, motivos } = sanitizarRespuesta(original)
+/** Los motivos graves de un texto ya limpio. Vacío = se puede enviar tal cual. */
+function motivosGraves(texto: string, evidencia: EvidenciaDelTurno): MotivoRevision[] {
   const graves: MotivoRevision[] = []
 
   if (texto.length < LARGO_MINIMO) graves.push('vacia')
@@ -208,6 +259,28 @@ export function revisarRespuesta(original: string, evidencia: EvidenciaDelTurno)
   if (afirmaciones.reservo && !evidencia.reservo) graves.push('reserva_sin_evidencia')
   if (afirmaciones.cancelo && !evidencia.cancelo) graves.push('cancelacion_sin_evidencia')
   if (afirmaciones.confirmo && !evidencia.confirmo) graves.push('confirmacion_sin_evidencia')
+  return graves
+}
+
+export function revisarRespuesta(original: string, evidencia: EvidenciaDelTurno): RevisionRespuesta {
+  const { texto, motivos } = sanitizarRespuesta(original)
+  const graves = motivosGraves(texto, evidencia)
+
+  /*
+   * Antes de tirar la respuesta entera: quedarse con la parte buena.
+   *
+   * Visto dos veces en producción, las dos tras cancelar: el modelo escribe la contestación
+   * correcta y **luego** añade su deliberación. Bloquear todo era seguro pero cambiaba una
+   * respuesta perfectamente buena por un respaldo genérico. Como el andamio siempre va después,
+   * se corta por ahí y se vuelve a revisar el trozo que queda — recortar no lo vuelve válido
+   * por sí solo, así que pasa los mismos controles que cualquier otro texto.
+   */
+  if (graves.length && graves.every((motivo) => motivo === 'razonamiento_del_modelo' || motivo === 'idioma_incorrecto')) {
+    const cabeza = recortarEnRazonamiento(texto)
+    if (cabeza && motivosGraves(cabeza, evidencia).length === 0) {
+      return { texto: cabeza, bloqueada: false, motivos: [...motivos, 'razonamiento_recortado'] }
+    }
+  }
 
   if (graves.length) {
     /*
