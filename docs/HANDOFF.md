@@ -20,13 +20,13 @@ Cómo mantenerlo:
 
 | Dato | Valor |
 |---|---|
-| Rama | `chore/actualizar-main-y-cierre` |
-| HEAD local | `2f0ec57` — chore: poner main al día también es trabajo rutinario |
-| HEAD remoto | `2f0ec57` (sincronizado) |
-| Commits por delante de `main` | 3 |
+| Rama | `docs/cierre-avisos` |
+| HEAD local | `66a8a9a` — docs: refrescar el estado de retoma después de los dos merges |
+| HEAD remoto | `66a8a9a` (sincronizado) |
+| Commits por delante de `main` | 4 |
 | Árbol de trabajo | **sucio** — 2 archivo(s) |
-| PR abierto | ninguno |
-| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31899090387 |
+| PR abierto | [#24](https://github.com/ceuntabilo-a11y/AGEN/pull/24) — Refresca el bloque automático de `docs/HANDOFF.md` (`npm run handoff`) con la rama, el HEAD, el (listo) |
+| Último CI | ninguna ejecución |
 
 Archivos sin commitear:
 
@@ -38,12 +38,12 @@ Archivos sin commitear:
 Últimos commits:
 
 ```
+66a8a9a docs: refrescar el estado de retoma después de los dos merges
 2f0ec57 chore: poner main al día también es trabajo rutinario
 7ce56c9 fix: el cliente contestó "No" y el agente preguntó a qué se refería
 393c59f docs: the second deploy, verified against production step by step
 f6bd748 fix: keep the good half when the model tacks its reasoning onto the answer (#20)
 18288df docs: the third finding, and what still needs a deploy (#19)
-acb9251 fix: bloquear el texto del modelo no es deshacer lo que ya pasó (#18)
 ```
 
 <!-- AUTO:FIN -->
