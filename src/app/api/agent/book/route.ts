@@ -3,6 +3,7 @@ import { isAuthorizedAgent } from '@/lib/agent-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import {rejectTeamActor} from '@/lib/agent-actor'
 import { registrarAviso } from '@/lib/observabilidad'
+import { instanteDelNegocio } from '@/lib/timezone'
 
 type BookingRequest = {
   businessId?: string
@@ -24,12 +25,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Faltan datos obligatorios de la reserva' }, { status: 400 })
   }
 
-  const desiredStart = new Date(body.desiredStart)
-  if (Number.isNaN(desiredStart.getTime()) || desiredStart.getTime() <= Date.now()) {
+  const supabase = createAdminClient()
+
+  /*
+   * La hora se lee en la zona del NEGOCIO cuando el modelo no manda zona.
+   *
+   * Normalmente el modelo devuelve el `service_start` que le dio `buscar_horarios`, que ya
+   * viene con zona; pero cuando la construye él, una hora sin zona se interpretaba en la del
+   * proceso (UTC) y la reserva caía cuatro horas corrida. Misma guarda que en `/api/agent/slots`.
+   */
+  const { data: negocio } = await supabase.from('businesses').select('timezone').eq('id', body.businessId).maybeSingle()
+  const desiredStart = instanteDelNegocio(body.desiredStart, negocio?.timezone ?? 'America/Santiago')
+  if (!desiredStart || desiredStart.getTime() <= Date.now()) {
     return NextResponse.json({ error: 'desiredStart debe ser una fecha ISO futura válida' }, { status: 400 })
   }
 
-  const supabase = createAdminClient()
   if(await rejectTeamActor(supabase,body.businessId,body.actorPhone))return NextResponse.json({error:'El equipo solo puede consultar; usa el panel para gestionar reservas'},{status:403})
   const branchId=!body.branchId||body.branchId==='null'?null:body.branchId
   let holdId=body.holdId

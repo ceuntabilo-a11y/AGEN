@@ -234,6 +234,24 @@ switch (orden) {
     break
   }
 
+  case 'herramienta': {
+    const { spawnSync } = await import('node:child_process')
+    const resultado = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'n8n-subir-herramienta.mjs'), ...resto], {
+      cwd: RAIZ, stdio: 'inherit',
+    })
+    process.exitCode = resultado.status ?? 1
+    break
+  }
+
+  case 'prompt': {
+    const { spawnSync } = await import('node:child_process')
+    const resultado = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'n8n-subir-prompt.mjs'), ...resto], {
+      cwd: RAIZ, stdio: 'inherit',
+    })
+    process.exitCode = resultado.status ?? 1
+    break
+  }
+
   case 'medir-prompt': {
     const { spawnSync } = await import('node:child_process')
     const resultado = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'n8n-medir-prompt.mjs'), ...resto], {

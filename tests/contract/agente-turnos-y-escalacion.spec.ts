@@ -41,6 +41,30 @@ test.describe('P3 — una reserva sencilla se cierra en pocos turnos', () => {
   test('el objetivo de tres intercambios está escrito, no implícito', () => {
     expect(prompt).toContain('tres intercambios')
   })
+
+  test('un día de la semana a secas no se pregunta: se resuelve', () => {
+    /*
+     * Observado en producción: a "quiero hora para Corte y Peinado el martes en la tarde" el
+     * agente contestó "¿te refieres al martes 18 de agosto por la tarde?" en vez de ofrecer
+     * horarios. Un turno entero gastado en confirmar algo que el contexto ya resuelve:
+     * `TIEMPO.proximos.martes` es siempre futuro y no admite dos lecturas.
+     */
+    expect(prompt).toContain('TIEMPO.proximos')
+    expect(prompt).toContain('NO es ambiguo')
+    expect(prompt).toContain('ofrece directamente los horarios')
+  })
+
+  test('"en la mañana" y "en la tarde" se filtran, no se preguntan', () => {
+    expect(prompt).toContain('filtra por el campo franja')
+    expect(prompt).toContain('no estreches la búsqueda ni preguntes a qué hora')
+  })
+
+  test('el modelo no convierte horas: copia las que le da la herramienta', () => {
+    // Se le prohibió explícitamente después de verlo fallar en producción: con horarios de las
+    // 09:00 locales dijo "el martes 17 a las 13:00", y el 17 era lunes.
+    expect(prompt).toContain('no conviertas horas por tu cuenta')
+    expect(prompt).toContain('dia, hora y franja YA resueltos')
+  })
 })
 
 test.describe('P4 — avisar al equipo tiene que ocurrir de verdad', () => {
