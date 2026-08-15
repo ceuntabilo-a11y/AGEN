@@ -306,9 +306,18 @@ switch (orden) {
      * ejecución de este webhook — un dato que la API le devuelve a quien ya administra la
      * instancia. Nunca se imprime, ni se escribe en disco, ni se pasa por la línea de comandos.
      */
-    const [businessId, mensaje, telefono] = resto
+    const sueltos = resto.filter((valor) => !valor.startsWith('--'))
+    const [businessId, mensaje, telefono] = sueltos
+    /*
+     * `--id <valor>` fija el identificador del mensaje, que normalmente es único por prueba.
+     *
+     * Sirve para lo único que no se puede provocar de otra forma: **el mismo evento entregado
+     * dos veces**, que es lo que hace Evolution cuando un reintento se cruza con la respuesta.
+     * Mandarlo dos veces con el mismo id tiene que producir UNA sola contestación.
+     */
+    const idFijado = resto.includes('--id') ? resto[resto.indexOf('--id') + 1] : null
     if (!businessId || !mensaje) {
-      console.error('Uso: npm run n8n -- probar <businessId> "<mensaje>" [telefono]')
+      console.error('Uso: npm run n8n -- probar <businessId> "<mensaje>" [telefono] [--id <messageId>]')
       process.exit(2)
     }
 
@@ -339,7 +348,7 @@ switch (orden) {
       phone: telefono || '+56900000001',
       message: mensaje,
       sender: 'Prueba de latencia',
-      messageId: `prueba-${Date.now()}`,
+      messageId: idFijado || `prueba-${Date.now()}`,
       instance: 'Agen',
     }
     const arranque = Date.now()
