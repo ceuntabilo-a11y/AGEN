@@ -20,17 +20,18 @@ Cómo mantenerlo:
 
 | Dato | Valor |
 |---|---|
-| Rama | `docs/cierre-20260814` |
-| HEAD local | `729fb0c` — chore: ramificar desde origin/main y no dejarte tirado en un main viejo (#11) |
-| HEAD remoto | la rama no está en origin |
-| Commits por delante de `main` | 0 |
-| Árbol de trabajo | **sucio** — 2 archivo(s) |
+| Rama | `fix/version-sin-git` |
+| HEAD local | `e56f55d` — test: prove that a duplicated webhook answers once, not twice |
+| HEAD remoto | `e56f55d` (sincronizado) |
+| Commits por delante de `main` | 5 |
+| Árbol de trabajo | **sucio** — 3 archivo(s) |
 | PR abierto | ninguno |
-| Último CI | ninguna ejecución |
+| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31852817027 |
 
 Archivos sin commitear:
 
 ```
+M docs/HANDOFF.md
 ?? .claude/skills/playwright-cli/
 ?? public/brand/synetia-logo.png
 ```
@@ -38,12 +39,12 @@ Archivos sin commitear:
 Últimos commits:
 
 ```
-729fb0c chore: ramificar desde origin/main y no dejarte tirado en un main viejo (#11)
-4213e4d chore: medir lo que recibe el modelo, y dejar de bloquear por archivos sin seguimiento (#10)
-f33f9cb fix: el agente no le contestaba a nadie, y nada acotaba cuánto podía tardar (#9)
-c560651 feat: /api/health dice qué commit está vivo (#8)
-dbb72ab fix: an expired hold no longer turns a free slot into a technical error (#7)
-eacf163 docs: what is verified against real production, and what is not (#6)
+e56f55d test: prove that a duplicated webhook answers once, not twice
+81b2317 test: the write cycle of team, campaigns, follow-ups and finance
+e781049 fix: the agent was telling clients the wrong day and the wrong hour
+bd63895 perf: the agent asks the app for its context once, not twice
+4170e01 fix: identify the deployed version when the build has no git
+8b79959 docs: close out the session — what is green, what is live, and what is not (#12)
 ```
 
 <!-- AUTO:FIN -->
@@ -54,11 +55,21 @@ eacf163 docs: what is verified against real production, and what is not (#6)
 
 Lo más importante de esta sesión, y lo que cambia el veredicto de venta.
 
-**Estado al cerrar:** todo mergeado en `main` (PR #8 a #11, los cuatro con CI verde). En local,
-396 pruebas de contrato y 558 E2E en verde. Los cuatro workflows de n8n activos y comprobados
-funcionando. **Producción sigue con el código anterior**: falta el clic de "Implementar" en
-EasyPanel, que es el único bloqueo que queda y solo lo puedes dar tú (punto 6 de "Pendiente
-del dueño").
+**Estado al cerrar (actualizado tras el despliegue):** todo mergeado en `main` (PR #8 a #14,
+todos con CI verde). En local, 434 pruebas de contrato y 606 E2E en verde. Los cuatro workflows
+de n8n activos y comprobados funcionando.
+
+**El despliegue ya se hizo** y `/api/agent/escalate` responde en producción, así que los
+arreglos del agente están vivos. Lo comprobado después de desplegar está en la sección
+"Verificado contra producción" de más abajo.
+
+**Lo que quedó pendiente de un segundo despliegue** (todo está en `main`, nada de esto está
+vivo aún): el contexto del agente en una sola llamada, `/api/agent/context`, las horas sin zona
+leídas en la del negocio, y los horarios que la app devuelve ya formateados. `npm run n8n --
+subir` está **bloqueado a propósito** hasta que la ruta exista en producción, para no dejar al
+agente llamando a un 404. Los dos arreglos de conducta del agente (día y hora correctos, menos
+turnos) **sí están vivos**, subidos por `npm run n8n -- prompt` y `-- herramienta`, que no
+dependen del despliegue de la app.
 
 ### Lo que estaba roto y ahora está arreglado
 
@@ -99,6 +110,23 @@ estado comprobado en la base después de cada paso:
 | Confirmar | `CONFIRMED` + `client_confirmed_at` |
 | Liberar | `CANCELLED` y ofrece horarios nuevos |
 | Escalar sin endpoint desplegado | dice la verdad: "no pude avisar al equipo" |
+
+### Verificado contra producción DESPUÉS del despliegue
+
+| Qué | Resultado |
+|---|---|
+| Escalación real | `escalated:true`, `notified:1`; hilo en `HUMAN`, mensaje `SYSTEM` en el hilo y aviso en `team_notifications` con el nombre y el teléfono del cliente |
+| Escalación repetida | `alreadyDone:true`, **un solo aviso** en la base, y el agente dice "el equipo ya tiene tu solicitud" en vez de repetir |
+| Webhook duplicado | dos entregas del mismo `messageId` → **una sola respuesta**: la segunda ejecución sale sin contestar |
+| "Ok" sin contexto | pregunta una vez, en una línea |
+| "No sé" | decide él: propone el primer horario disponible, con día y hora correctos |
+| "Después" | una línea amable, deja la puerta abierta y no insiste |
+| Día y hora de los horarios | "Lunes, 17 de agosto — 09:45", correcto tras el arreglo (antes decía "martes 17 a las 13:00") |
+| `/api/health` | 230 ms en caliente; 2,5 s en frío, de los cuales 1,3 s son DNS |
+
+**Dos fallos encontrados así, que ninguna prueba anterior habría visto**: el agente daba el día
+y la hora equivocados (convertía UTC a mano), y pedía disponibilidad con horas sin zona. Los dos
+arreglados en la app y en la herramienta de n8n; la parte de la herramienta ya está viva.
 
 ### Latencia del agente, medida por nodo (no estimada)
 
@@ -258,12 +286,17 @@ app real, no contra localhost:
 Estos puntos siguen sin verificarse en su entorno real. No están cubiertos por las pruebas
 actuales y **no se deben dar por buenos**:
 
-- **Auditoría funcional completa por roles — hecha en parte.** Ya existe la primera prueba del
-  ciclo completo (`tests/e2e/admin/ciclo-servicio.spec.ts`: crear → verlo → recargar → editar →
-  persiste → eliminar), y encontró un fallo real de camino. **Falta el mismo ciclo** para
-  clientes, equipo, especialidades, campañas, seguimiento, finanzas y agenda desde el panel.
-  Ojo: esas pruebas ESCRIBEN, así que exigen `E2E_SANDBOX_BUSINESS_NAME` y hoy se saltan (ver
-  "Pendiente del dueño": hay un solo negocio y es el de producción).
+- ~~**Auditoría funcional completa por roles**~~ — **hecha**, con el ciclo completo
+  (abrir → escribir → guardar → recargar → verificar → deshacer) de todo lo que se toca a
+  diario: servicios, clientes, reservas desde el panel, reservas desde el portal del cliente,
+  equipo y especialidades, campañas, seguimiento y finanzas.
+  (`tests/e2e/admin/ciclo-*.spec.ts` y `tests/e2e/client/ciclo-reserva-portal.spec.ts`.)
+  Encontró tres fallos reales de camino: el modal de servicios sin estado de carga, la
+  redirección que cambiaba de host, y las pruebas de claves pisándose entre sí.
+  **Lo que queda fuera a propósito**, porque tendría efectos fuera del sistema: dar de alta un
+  profesional (manda una invitación por correo a una persona) y enviar una campaña.
+  Ojo: estas pruebas ESCRIBEN, así que exigen `E2E_SANDBOX_BUSINESS_NAME` y **se saltan solas**
+  sin él (ver "Pendiente del dueño": hay un solo negocio y es el de producción).
 - ~~**Voz real con DashScope**~~ — **hecha el 2026-08-14**: WAV real de 142 124 bytes,
   cabecera `RIFF`/`WAVE`, 4,7 s en frío y 2,9 s después. Texto vacío responde 400 en español.
 - ~~**n8n 01–04 funcionando**~~ — **comprobado el 2026-08-14**. 01 de punta a punta con
@@ -271,8 +304,10 @@ actuales y **no se deben dar por buenos**:
   se disparaba bien pero no registraba nada (`saveDataSuccessExecution: "none"`), corregido y
   verificado con `npm run n8n -- probar-programado` (ejecución 7159, correcta en 1,6 s).
 - ~~**WhatsApp de punta a punta**~~ — **hecho el 2026-08-14**, con entrega confirmada y estado
-  comprobado en la base tras cada paso. **Falta** la parte de robustez: mensaje duplicado,
-  reintento y dependencia caída siguen cubiertos solo por pruebas de contrato.
+  comprobado en la base tras cada paso. El **mensaje duplicado** también está comprobado contra
+  producción: dos entregas del mismo `messageId` (`npm run n8n -- probar … --id <id>`) producen
+  una sola respuesta. **Falta** provocar de verdad una dependencia caída, que no se puede hacer
+  sin tumbar algo real; sigue cubierto por contrato.
 - **Pierna de reversión del ciclo autónomo.** Solo se dispara con `main` en rojo y la
   protección de rama impide provocarlo. Cubierta por pruebas de contrato, no por una ejecución.
 - **Latencia del modelo.** Medida y acotada por arriba, pero no reducida. Y ya se sabe por qué
@@ -284,9 +319,16 @@ actuales y **no se deben dar por buenos**:
   al modelo por conversación, que es exactamente lo que hacen las reglas de turnos (P3).
   Un turno de reserva son hoy 2 llamadas al modelo, que ya es el mínimo.
 
-  Lo que queda por probar si se quiere bajar más: `Cargar memoria` (1,6 s) y `Cargar catálogo`
-  (0,9 s) corren en secuencia y son independientes; unirlos en una sola llamada a la app
-  ahorraría cerca de un segundo por turno.
+  **Ya hecho, esperando despliegue:** `Cargar memoria` (1,6 s) y `Cargar catálogo` (0,9 s)
+  corrían en secuencia siendo independientes. Ahora hay `/api/agent/context`, que los une en una
+  llamada y por dentro va en dos oleadas, y la espera de agrupación baja de 3 s a 1,5 s. Entre
+  las dos cosas se quitan de 3 a 4 segundos de cada turno — pero **no está vivo**: necesita el
+  despliegue (ver "Pendiente del dueño", punto 6).
+
+- **DIALOG360 — no es una dependencia activa.** El único negocio de la base usa `EVOLUTION`
+  (`whatsapp_provider`), así que 360dialog no está en el camino de producción de nadie. La
+  pantalla de Integraciones ya avisa de que no está verificado. No tiene sentido gastar en
+  probarlo hasta que un negocio lo elija.
 
 ## Pendiente del dueño (nadie más puede hacerlo)
 
@@ -299,22 +341,34 @@ actuales y **no se deben dar por buenos**:
 
 ### Lo único que bloquea de verdad, y por qué solo lo puedes hacer tú
 
-6. **DESPLEGAR EN EASYPANEL.** Es el bloqueo número uno. Todo lo arreglado esta tarde —que el
-   agente conteste, que reservar funcione, que no filtre su razonamiento, que escalar avise a
-   alguien, la agenda nueva— **está en `main` y NO está vivo**: producción sigue sirviendo el
-   código anterior. Comprobado, no supuesto: `npm run app -- version` dice
-   «producción: sin dato», que es la firma de la versión vieja de `/api/health`.
+6. ~~Desplegar en EasyPanel~~ — **hecho**: los arreglos del agente están vivos, comprobado con
+   `npm run app -- prod-sondeo` (`/api/agent/escalate` responde 405, es decir existe) y con la
+   escalación funcionando de verdad contra producción.
 
-   Cómo: abre **EasyPanel** → proyecto **`agen-prod`** → servicio de la **app web** (el que
-   corre `npm start`, no Evolution ni n8n) → botón **"Implementar"** (Deploy). Espera a que
-   termine y comprueba desde este repositorio:
+   **Hace falta UN despliegue más**, y es lo único que queda del lado de la aplicación. Está
+   todo en `main` y nada de esto está vivo todavía:
+
+   - el contexto del agente en una sola llamada (`/api/agent/context`), que quita entre 1,5 y
+     2,5 s de cada turno;
+   - las horas sin zona leídas en la del negocio (`instanteDelNegocio`), que evita que el
+     agente busque en la franja equivocada;
+   - los horarios que la app devuelve ya formateados en la zona del negocio.
+
+   Cómo: **EasyPanel** → proyecto **`agen-prod`** → servicio de la **app web** (el que corre
+   `npm start`, no Evolution ni n8n) → botón **"Implementar"**. Después, desde el repositorio:
 
    ```bash
-   npm run app -- version
+   npm run app -- version                              # tiene que decir "al día con main"
+   npm run n8n -- subir n8n-workflows/01-agen-agent.json
    ```
 
-   Tiene que decir «Producción está al día con main». Si dice «sin dato», el despliegue no
-   terminó o no fue el servicio correcto.
+   Ese `subir` está **bloqueado a propósito** mientras la ruta no exista en producción: subir
+   el workflow antes dejaría al agente llamando a un 404, que es un cliente sin respuesta. En
+   cuanto la ruta esté, deja de negarse.
+
+   Nota: en EasyPanel el contenedor de compilación no trae `.git`, así que `commit` sale
+   `desconocido` en `/api/health`. Por eso existe la **huella** — un hash del código
+   compilado— y `npm run app -- version` compara por ella cuando no hay commit.
 
 7. **Segundo proyecto de Supabase, o al menos un segundo negocio de pruebas.** Hoy hay **un
    solo negocio** en la base (`Estética Bella Vida`) y es a la vez la demo, el sandbox y
