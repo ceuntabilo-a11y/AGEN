@@ -270,6 +270,15 @@ switch (orden) {
     break
   }
 
+  case 'crudo': {
+    const { spawnSync } = await import('node:child_process')
+    const resultado = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'n8n-ver-crudo.mjs'), ...resto], {
+      cwd: RAIZ, stdio: 'inherit',
+    })
+    process.exitCode = resultado.status ?? 1
+    break
+  }
+
   case 'dijo': {
     const { spawnSync } = await import('node:child_process')
     const resultado = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'n8n-ver-ejecucion.mjs'), ...resto], {
