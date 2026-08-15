@@ -20,6 +20,7 @@
  *   npm run git -- commit [archivo.md]     commitea con el mensaje del archivo (.pr/commit.md)
  *   npm run git -- subir                   push de la rama actual a origin (nunca --force)
  *   npm run git -- sincronizar             traer + poner la rama actual al día con origin/main
+ *   npm run git -- actualizar-main         adelanta el `main` LOCAL a origin/main (desde donde estés)
  *
  * Qué NO puede hacer, por construcción: no hay orden para `reset`, `clean`, `restore`,
  * `checkout -- `, `stash`, `rebase`, `merge`, borrado de ramas ni `push --force`. No es que
@@ -228,6 +229,53 @@ switch (orden) {
     break
   }
 
+  case 'actualizar-main': {
+    /*
+     * Poner el `main` LOCAL al día con `origin/main`, desde donde estés.
+     *
+     * Existe porque faltaba justo el paso de después de mergear un PR: `main` local se queda
+     * atrás (los PR se mergean con squash en GitHub y aquí nadie actualiza esa rama), `cambiar
+     * main` se niega —con razón— por estar por detrás, y no había ninguna orden para
+     * adelantarlo. Sin esto había que salir de la envoltura, que es exactamente lo que estas
+     * envolturas existen para evitar.
+     *
+     * Cómo lo hace sin poder perder nada: si NO estás en main, mueve solo la referencia con
+     * `fetch origin main:main`, que git rechaza si no es un avance directo y que no toca el
+     * árbol de trabajo ni la rama en la que estás. Si estás en main, es un `merge --ff-only`.
+     * En ninguno de los dos casos se reescribe historia ni se descarta nada.
+     */
+    git(['fetch', 'origin', '--prune'])
+    const rama = ramaActual()
+
+    if (rama !== 'main') {
+      const salida = git(['fetch', 'origin', 'main:main'], { silencioso: true })
+      if (salida === null) {
+        const unicos = git(['rev-list', '--count', 'origin/main..main'], { silencioso: true }) ?? '?'
+        console.error(`El "main" local tiene ${unicos} commit(s) que origin/main no tiene, así que no se puede adelantar sin más.`)
+        console.error('Casi siempre es inofensivo: son commits de ramas que se mergearon con squash, y su contenido')
+        console.error('ya está en origin/main con otra historia. Nada se ha perdido.')
+        console.error('No hace falta arreglarlo para seguir trabajando: "crear-rama" siempre parte de origin/main.')
+        console.error('Alinear ese main local descarta esos commits, así que lo hace una persona a conciencia.')
+        process.exit(1)
+      }
+      console.log(`main local al día con origin/main (sigues en ${rama}).`)
+      console.log(git(['log', '--oneline', '-1', 'main']))
+      break
+    }
+
+    if (git(['status', '--porcelain', '--untracked-files=no'])) {
+      console.error('El árbol tiene cambios sin commitear: commitéalos antes de actualizar main.')
+      process.exit(2)
+    }
+    const salida = git(['merge', '--ff-only', 'origin/main'], { silencioso: true })
+    if (salida === null) {
+      console.error('main no se puede poner al día avanzando sin más. Lo resuelve una persona.')
+      process.exit(1)
+    }
+    console.log(salida || 'main ya estaba al día con origin/main.')
+    break
+  }
+
   case 'sincronizar': {
     const rama = ramaActual()
     git(['fetch', 'origin', '--prune'])
@@ -336,7 +384,7 @@ switch (orden) {
   }
 
   default:
-    console.log('Órdenes: estado · rama · crear-rama · cambiar · traer · log · diff · staged · add · add-todo · commit · subir · sincronizar · probar-integracion · integrar-main · quedarme-con-lo-mio')
+    console.log('Órdenes: estado · rama · crear-rama · cambiar · traer · log · diff · staged · add · add-todo · commit · subir · sincronizar · actualizar-main · probar-integracion · integrar-main · quedarme-con-lo-mio')
     console.log('Ejemplo: npm run git -- crear-rama fix/algo   y luego   npm run git -- add src/x.ts')
     process.exitCode = orden ? 2 : 0
 }

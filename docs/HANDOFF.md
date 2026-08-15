@@ -51,6 +51,43 @@ acb9251 fix: bloquear el texto del modelo no es deshacer lo que ya pasó (#18)
 
 ---
 
+## Sesión del 2026-08-15: la respuesta llegaba sin la pregunta
+
+**El fallo, tal como pasó.** Un recordatorio automático le escribió al cliente «Responde SÍ para
+confirmar que vienes. Si no puedes, responde NO y liberamos el cupo». Contestó **«No»** y el
+agente le preguntó **«¿A qué te refieres con "no"?»**.
+
+Está comprobado en la base, no deducido: el aviso salió hoy a las 12:00 UTC
+(`notification_outbox` 103, `DAY_OF_REMINDER`, `processed_at` puesto) para la cita
+`46b24435-620d-4ba5-824a-86a79b356f8a` del cliente Dorian Muñoz (`56941398290`), y esa cita
+**sigue en PENDING sin `client_confirmed_at`**: la respuesta del cliente nunca se entendió.
+
+**La causa no era ese recordatorio.** La cola de avisos se procesa y se olvida, así que cuando
+llegaba la respuesta no quedaba rastro de la pregunta. Le pasaba a todos los mensajes que AGEN
+manda solo: recordatorios, peticiones de confirmación, avisos de cambio, cancelaciones, cupos de
+lista de espera, seguimientos, encuestas y campañas.
+
+**La solución (PR #22, mergeado, CI verde).** `outbound_prompts` guarda cada mensaje **entregado**
+con qué se preguntó, por qué, sobre qué cita o campaña, qué respuesta se espera, **qué significa
+un sí y qué un no**, y hasta cuándo es relevante. El agente lo recibe en el mismo contexto del
+turno (`pendingNotice` → `AVISO_PENDIENTE`), sin llamadas extra. Detalles en `CLAUDE.md` §6.7.
+
+Lo que se comprobó: 25 pruebas de contrato nuevas, una invariante nueva en
+`booking_invariants.sql` (confirmar la cita cierra el aviso), y lint, typecheck, build,
+**471 de contrato** y **621 E2E** en verde. El workflow 01 ya está subido al n8n real y probado
+por la puerta de Evolution (el agente contestó el catálogo correctamente con `AVISO_PENDIENTE:
+null`, que es la conducta de hoy).
+
+**Lo que NO está verificado y por qué:** el ciclo completo «llega el aviso → el cliente dice No →
+el agente libera y ofrece horarios» necesita la migración aplicada y un despliegue. Ver
+"Pendiente del dueño", puntos 8 y 9. Hasta entonces la conducta es exactamente la de antes: sin
+la tabla, el registro se salta en silencio y el agente trabaja igual.
+
+**Envoltura nueva:** `npm run git -- actualizar-main`. Faltaba justo el paso de después de
+mergear un PR y era el único momento en que había que salir de las envolturas.
+
+---
+
 ## Sesión del 2026-08-14 (tarde): el agente no le contestaba a nadie
 
 Lo más importante de esta sesión, y lo que cambia el veredicto de venta.
@@ -420,7 +457,44 @@ actuales y **no se deben dar por buenos**:
    `desconocido` en `/api/health`. Por eso existe la **huella** — un hash del código
    compilado— y `npm run app -- version` compara por ella cuando no hay commit.
 
-7. **Segundo proyecto de Supabase, o al menos un segundo negocio de pruebas.** Hoy hay **un
+8. **Aplicar la migración del contexto de avisos** (`20260815000001_outbound_context.sql`).
+   Es aditiva, idempotente y **no toca ni borra ningún dato existente**: crea una tabla, sus
+   índices, su política de lectura y un disparador. Sin ella no se rompe nada — el agente sigue
+   funcionando como hoy — pero el arreglo del «No» no entra en vigor.
+
+   Paso a paso, como si nunca hubieras usado Supabase:
+   1. Abre `https://supabase.com/dashboard` y entra con tu cuenta.
+   2. En la lista de proyectos, haz clic en el proyecto de Agen (ref `vvrsfbaczafggqxttnlk`).
+   3. En el menú de la izquierda, haz clic en **SQL Editor** (el icono de una hoja con «SQL»).
+   4. Arriba a la derecha del editor, haz clic en **+ New query**.
+   5. Abre en el repositorio el archivo `supabase/migrations/20260815000001_outbound_context.sql`,
+      copia **todo** su contenido y pégalo en el editor.
+   6. Haz clic en **Run** (abajo a la derecha, o Ctrl+Enter).
+   7. Si funcionó, abajo aparece **Success. No rows returned**. No tiene que salir ningún error
+      en rojo.
+   8. Para comprobarlo: en el menú de la izquierda entra en **Table Editor** y busca la tabla
+      **`outbound_prompts`** en la lista. Tiene que aparecer, vacía.
+
+9. **Desplegar** en EasyPanel (servicio `web` del proyecto `agen-prod`, botón «Implementar»).
+   El orden correcto es **primero la migración (punto 8) y después el despliegue**. Comprobación
+   después, desde el repositorio:
+
+   ```bash
+   npm run app -- version    # tiene que decir "Producción está al día con main"
+   ```
+
+   El workflow de n8n **ya está subido y activo**, así que no hay nada más que hacer ahí.
+
+   **Cómo comprobar que el arreglo funciona de verdad** (con un aviso nuevo, no con el de hoy:
+   los avisos ya enviados antes de la migración no tienen contexto guardado):
+   1. En `/admin/agenda`, mueve o cambia una reserva tuya de prueba y escribe el motivo. Eso
+      encola un aviso.
+   2. En dos minutos el workflow 02 lo envía por WhatsApp.
+   3. Responde **«No, mejor cámbiamela para mañana»**.
+   4. Lo esperado: el agente libera esa hora y te ofrece horarios de mañana en un solo mensaje —
+      sin preguntarte a qué te refieres.
+
+10. **Segundo proyecto de Supabase, o al menos un segundo negocio de pruebas.** Hoy hay **un
    solo negocio** en la base (`Estética Bella Vida`) y es a la vez la demo, el sandbox y
    producción: el mismo tenant que recibe WhatsApp de clientes reales. Por eso las pruebas que
    escriben (`tests/e2e/admin/ciclo-servicio.spec.ts` y las que vengan) se saltan solas: sin

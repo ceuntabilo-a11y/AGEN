@@ -22,6 +22,7 @@ import { test, expect } from '@playwright/test'
 const RAIZ = path.resolve(__dirname, '..', '..')
 const GH = path.join(RAIZ, 'scripts', 'gh-agen.mjs')
 const APP = path.join(RAIZ, 'scripts', 'servicio.mjs')
+const GIT = path.join(RAIZ, 'scripts', 'git-agen.mjs')
 const fuente = (ruta: string) => readFileSync(ruta, 'utf8')
 
 /**
@@ -92,6 +93,40 @@ test.describe('npm run gh: no amplía lo que se puede hacer', () => {
     for (const destructiva of ['repo delete', 'pr close', 'run delete', 'secret', 'ruleset']) {
       expect(codigo).not.toContain(destructiva)
     }
+  })
+})
+
+test.describe('npm run git: el ciclo git rutinario, entero y sin poder perder trabajo', () => {
+  const codigo = codigoEjecutable(GIT)
+
+  test('cubre el ciclo completo, incluido poner main al día después de mergear', () => {
+    // Si falta un paso, se sale de la envoltura para ese paso — y ahí vuelve el diálogo.
+    // `actualizar-main` era justo el hueco: tras mergear un PR, `main` local queda por detrás,
+    // `cambiar main` se niega con razón y no había forma de adelantarlo desde acá.
+    const { salida } = correr(GIT, [])
+    for (const orden of ['estado', 'crear-rama', 'cambiar', 'traer', 'add', 'commit', 'subir', 'sincronizar', 'actualizar-main', 'integrar-main']) {
+      expect(salida, `falta la orden "${orden}"`).toContain(orden)
+    }
+  })
+
+  test('no existe ninguna orden que pueda perder trabajo', () => {
+    for (const destructiva of ['reset', 'clean', 'restore', 'stash', 'rebase', 'filter-branch', '--force', '--hard', '-D']) {
+      expect(codigo, `"${destructiva}" no puede estar en la envoltura`).not.toContain(destructiva)
+    }
+  })
+
+  test('adelantar main no reescribe nada: solo avanza si es un avance directo', () => {
+    // `fetch origin main:main` y `merge --ff-only` fallan en vez de descartar commits. Sin
+    // esto, "poner main al día" sería un `reset --hard` con otro nombre.
+    expect(codigo).toContain("'main:main'")
+    expect(codigo).toContain('--ff-only')
+  })
+
+  test('subir nunca empuja a main ni acepta refspecs', () => {
+    expect(codigo).toContain('No se empuja directamente a main')
+    const { codigo: salidaCodigo, salida } = correr(GIT, ['crear-rama', 'main'])
+    expect(salidaCodigo).toBe(2)
+    expect(salida).toContain('No se trabaja directamente sobre main')
   })
 })
 

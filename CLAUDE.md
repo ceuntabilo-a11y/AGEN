@@ -451,7 +451,10 @@ propósito, para que no queden dos caminos.
 
 **`npm run git -- <orden>`** — `estado` · `rama` · `crear-rama` · `cambiar` · `traer` · `log` ·
 `diff` · `staged` · `add` · `add-todo` · `commit` · `subir` · `sincronizar` ·
-`probar-integracion` · `integrar-main` · `quedarme-con-lo-mio`. **No existe** orden para
+`actualizar-main` · `probar-integracion` · `integrar-main` · `quedarme-con-lo-mio`.
+`actualizar-main` es el paso de después de mergear un PR: adelanta el `main` **local** a
+`origin/main` desde donde estés, moviendo solo la referencia (`fetch origin main:main`), así que
+no toca el árbol ni la rama actual y se niega si no es un avance directo. **No existe** orden para
 `reset`, `clean`, `restore`, `stash`, `rebase`, borrar ramas ni `push --force`: lo que puede
 perder trabajo no está, y por eso no hace falta preguntarlo. `cambiar` exige el árbol limpio;
 `sincronizar` es `--ff-only`; `integrar-main` es un merge normal que se detiene si hay
