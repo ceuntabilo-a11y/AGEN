@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { RESPUESTA_DE_RESPALDO, pareceOtroIdioma, pareceRazonamiento, revisarRespuesta } from '@/lib/agent-reply'
+import { RESPALDO_SEGUN_ACCION, RESPUESTA_DE_RESPALDO, pareceOtroIdioma, pareceRazonamiento, revisarRespuesta } from '@/lib/agent-reply'
 
 /**
  * El modelo pensando en voz alta delante del cliente.
@@ -70,6 +70,50 @@ test.describe('Responder en otro idioma se bloquea', () => {
     // El catálogo real tiene servicios con nombres en inglés: bloquear por eso sería peor.
     expect(pareceOtroIdioma('Tenemos Lifting de Pestañas a las 10:00, ¿te sirve?')).toBe(false)
     expect(pareceOtroIdioma('El look que quieres queda con el Corte y Peinado')).toBe(false)
+  })
+})
+
+test.describe('Bloquear el texto no es deshacer lo que ya pasó', () => {
+  /*
+   * Pasó en producción: el cliente pidió cancelar, la hora se canceló DE VERDAD en la base, y
+   * el texto del modelo salió con su razonamiento dentro. La revisión lo bloqueó —bien— y le
+   * mandó "no pude completar eso" —mal—: la hora estaba cancelada. Decirle que algo falló
+   * cuando sí ocurrió es tan dañino como lo contrario, y encima le hace insistir.
+   */
+  const bloqueable = 'We must respond in Spanish. The user said cancel, so we should call liberar_reserva.'
+
+  test('si la base dice que se canceló, el respaldo lo dice también', () => {
+    const revision = revisarRespuesta(bloqueable, { reservo: false, cancelo: true, confirmo: false, ultima: 'cancelo' })
+    expect(revision.bloqueada).toBe(true)
+    expect(revision.texto).toBe(RESPALDO_SEGUN_ACCION.cancelo)
+    expect(revision.texto).not.toBe(RESPUESTA_DE_RESPALDO)
+  })
+
+  test('lo mismo para una reserva y para una confirmación', () => {
+    expect(revisarRespuesta(bloqueable, { reservo: true, cancelo: false, confirmo: false, ultima: 'reservo' }).texto)
+      .toBe(RESPALDO_SEGUN_ACCION.reservo)
+    expect(revisarRespuesta(bloqueable, { reservo: false, cancelo: false, confirmo: true, ultima: 'confirmo' }).texto)
+      .toBe(RESPALDO_SEGUN_ACCION.confirmo)
+  })
+
+  test('si en el turno hubo dos acciones, manda la última', () => {
+    // Reservar y cancelar a los pocos minutos: el cliente tiene que oír lo último que pasó.
+    const revision = revisarRespuesta(bloqueable, { reservo: true, cancelo: true, confirmo: false, ultima: 'cancelo' })
+    expect(revision.texto).toBe(RESPALDO_SEGUN_ACCION.cancelo)
+  })
+
+  test('sin evidencia de nada sigue diciendo que no pudo', () => {
+    // Es lo honesto cuando de verdad no pasó nada: prometer lo contrario sería peor.
+    const revision = revisarRespuesta(bloqueable, sinEvidencia)
+    expect(revision.texto).toBe(RESPUESTA_DE_RESPALDO)
+  })
+
+  test('ningún respaldo inventa horas ni nombres', () => {
+    // El respaldo se manda sin haber leído el texto del modelo: no puede afirmar detalles.
+    for (const texto of Object.values(RESPALDO_SEGUN_ACCION)) {
+      expect(texto).not.toMatch(/\d{1,2}:\d{2}/)
+      expect(texto.length).toBeLessThan(120)
+    }
   })
 })
 

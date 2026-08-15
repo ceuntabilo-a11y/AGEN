@@ -18,7 +18,7 @@ import { nodo } from '../support/n8n'
  * (`@/lib/agent-reply`), no en el prompt, y el envío pasa por ahí obligatoriamente.
  */
 
-const SIN_EVIDENCIA = { reservo: false, cancelo: false, confirmo: false }
+const SIN_EVIDENCIA = { reservo: false, cancelo: false, confirmo: false, ultima: null }
 const CON_RESERVA = { reservo: true, cancelo: false, confirmo: false }
 
 test.describe('Nada de lo interno llega al cliente', () => {
@@ -156,7 +156,7 @@ test.describe('La evidencia sale de la base, no de lo que diga el modelo', () =>
 
   test('una reserva recién creada es evidencia de reserva', async () => {
     falso.tablas.appointments = [cita({ created_at: '2026-08-12T12:00:30.000Z' })]
-    expect(await reunirEvidencia(db, { businessId: NEGOCIO, clientId: CLIENTE, desde: DESDE })).toEqual({ reservo: true, cancelo: false, confirmo: false })
+    expect(await reunirEvidencia(db, { businessId: NEGOCIO, clientId: CLIENTE, desde: DESDE })).toEqual({ reservo: true, cancelo: false, confirmo: false, ultima: 'reservo' })
   })
 
   test('una cancelación reciente es evidencia de cancelación', async () => {
