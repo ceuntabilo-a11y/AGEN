@@ -16,6 +16,22 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export const RESPUESTA_DE_RESPALDO =
   'Disculpa, tuve un problema y no pude completar eso. ¿Quieres que lo intente de nuevo?'
 
+/**
+ * Respaldos para cuando el texto no sirve pero la acción SÍ se hizo.
+ *
+ * Pasó en producción: el cliente pidió cancelar, la hora se canceló de verdad en la base, y el
+ * texto del modelo salió con su propio razonamiento dentro. La revisión lo bloqueó —bien— y le
+ * mandó al cliente "no pude completar eso" —mal—: la hora estaba cancelada. Decirle que algo
+ * falló cuando sí ocurrió es tan dañino como lo contrario, y encima le hace insistir.
+ *
+ * Con la evidencia de la base ya se sabe qué pasó, así que el respaldo puede ser verdad.
+ */
+export const RESPALDO_SEGUN_ACCION: Record<'reservo' | 'confirmo' | 'cancelo', string> = {
+  reservo: 'Listo, tu hora quedó reservada. Si necesitas cambiarla, dime.',
+  confirmo: 'Listo, tu hora quedó confirmada. Te esperamos.',
+  cancelo: 'Listo, cancelé tu hora. ¿Quieres que te busque otro horario?',
+}
+
 /** Tope de un mensaje de WhatsApp del agente. Más largo que esto no es una respuesta, es un volcado. */
 const LARGO_MAXIMO = 1200
 const LARGO_MINIMO = 2
@@ -26,7 +42,16 @@ export type MotivoRevision =
   | 'razonamiento_del_modelo' | 'idioma_incorrecto'
   | 'reserva_sin_evidencia' | 'cancelacion_sin_evidencia' | 'confirmacion_sin_evidencia'
 
-export type EvidenciaDelTurno = { reservo: boolean; cancelo: boolean; confirmo: boolean }
+export type EvidenciaDelTurno = {
+  reservo: boolean
+  cancelo: boolean
+  confirmo: boolean
+  /**
+   * La última de las tres que ocurrió, por marca de tiempo. Sin esto no se puede elegir el
+   * respaldo correcto cuando en el mismo turno hubo más de una (reservar y luego cancelar).
+   */
+  ultima?: 'reservo' | 'confirmo' | 'cancelo' | null
+}
 export type RevisionRespuesta = { texto: string; bloqueada: boolean; motivos: MotivoRevision[] }
 
 const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi
@@ -184,7 +209,20 @@ export function revisarRespuesta(original: string, evidencia: EvidenciaDelTurno)
   if (afirmaciones.cancelo && !evidencia.cancelo) graves.push('cancelacion_sin_evidencia')
   if (afirmaciones.confirmo && !evidencia.confirmo) graves.push('confirmacion_sin_evidencia')
 
-  if (graves.length) return { texto: RESPUESTA_DE_RESPALDO, bloqueada: true, motivos: [...motivos, ...graves] }
+  if (graves.length) {
+    /*
+     * Bloquear el texto no es lo mismo que deshacer lo que ya pasó.
+     *
+     * Si la base dice que la hora se canceló, decirle al cliente "no pude completar eso" es
+     * mentira, y encima le hace insistir sobre algo que ya está hecho. Cuando hay evidencia,
+     * el respaldo dice la verdad; solo cuando no hay nada que respalde una acción se usa el
+     * "no pude".
+     */
+    const accion = evidencia.ultima
+      ?? (evidencia.cancelo ? 'cancelo' : evidencia.confirmo ? 'confirmo' : evidencia.reservo ? 'reservo' : null)
+    const respaldo = accion ? RESPALDO_SEGUN_ACCION[accion] : RESPUESTA_DE_RESPALDO
+    return { texto: respaldo, bloqueada: true, motivos: [...motivos, ...graves] }
+  }
   return { texto, bloqueada: false, motivos }
 }
 
@@ -196,7 +234,7 @@ export async function reunirEvidencia(
   db: SupabaseClient,
   datos: { businessId: string; clientId: string | null; desde: string },
 ): Promise<EvidenciaDelTurno> {
-  if (!datos.clientId) return { reservo: false, cancelo: false, confirmo: false }
+  if (!datos.clientId) return { reservo: false, cancelo: false, confirmo: false, ultima: null }
 
   const { data } = await db.from('appointments')
     .select('id,status,created_at,updated_at,client_confirmed_at')
@@ -206,9 +244,23 @@ export async function reunirEvidencia(
   const filas = (data ?? []) as Array<{ status: string; created_at: string; updated_at: string; client_confirmed_at: string | null }>
   const reciente = (momento: string | null | undefined) => Boolean(momento && String(momento) >= datos.desde)
 
-  return {
-    reservo: filas.some((fila) => reciente(fila.created_at) && fila.status !== 'CANCELLED'),
-    cancelo: filas.some((fila) => fila.status === 'CANCELLED' && reciente(fila.updated_at)),
-    confirmo: filas.some((fila) => reciente(fila.client_confirmed_at)),
+  const reservo = filas.some((fila) => reciente(fila.created_at) && fila.status !== 'CANCELLED')
+  const cancelo = filas.some((fila) => fila.status === 'CANCELLED' && reciente(fila.updated_at))
+  const confirmo = filas.some((fila) => reciente(fila.client_confirmed_at))
+
+  /*
+   * Cuál fue la ÚLTIMA, por marca de tiempo.
+   *
+   * En un mismo turno puede haber más de una —reservar y cancelar a los pocos minutos— y el
+   * respaldo tiene que hablar de la última, no de la primera que se encuentre.
+   */
+  const momentos: Array<['reservo' | 'confirmo' | 'cancelo', string]> = []
+  for (const fila of filas) {
+    if (reciente(fila.created_at) && fila.status !== 'CANCELLED') momentos.push(['reservo', fila.created_at])
+    if (fila.status === 'CANCELLED' && reciente(fila.updated_at)) momentos.push(['cancelo', fila.updated_at])
+    if (reciente(fila.client_confirmed_at)) momentos.push(['confirmo', String(fila.client_confirmed_at)])
   }
+  momentos.sort((a, b) => a[1].localeCompare(b[1]))
+
+  return { reservo, cancelo, confirmo, ultima: momentos.length ? momentos[momentos.length - 1][0] : null }
 }
