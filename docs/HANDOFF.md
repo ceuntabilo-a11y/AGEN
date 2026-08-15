@@ -20,8 +20,8 @@ Cómo mantenerlo:
 
 | Dato | Valor |
 |---|---|
-| Rama | `docs/ultimo-hallazgo` |
-| HEAD local | `acb9251` — fix: bloquear el texto del modelo no es deshacer lo que ya pasó (#18) |
+| Rama | `docs/cierre-produccion` |
+| HEAD local | `f6bd748` — fix: keep the good half when the model tacks its reasoning onto the answer (#20) |
 | HEAD remoto | la rama no está en origin |
 | Commits por delante de `main` | 0 |
 | Árbol de trabajo | **sucio** — 3 archivo(s) |
@@ -39,12 +39,12 @@ M docs/HANDOFF.md
 Últimos commits:
 
 ```
+f6bd748 fix: keep the good half when the model tacks its reasoning onto the answer (#20)
+18288df docs: the third finding, and what still needs a deploy (#19)
 acb9251 fix: bloquear el texto del modelo no es deshacer lo que ya pasó (#18)
 848f86d docs: final state — 435 contract and 609 E2E green, one deploy left (#17)
 3d6cccf test: bloquear un horario desde la agenda, verlo y deshacerlo (#16)
 8ae3340 test: auditoría de equipo, campañas, seguimiento y finanzas + duplicados + estado real (#15)
-7cb5568 fix: el agente le decía al cliente el día y la hora equivocados (#14)
-08a1cfe fix: saber qué versión está desplegada cuando el build no tiene git (#13)
 ```
 
 <!-- AUTO:FIN -->
@@ -55,23 +55,58 @@ acb9251 fix: bloquear el texto del modelo no es deshacer lo que ya pasó (#18)
 
 Lo más importante de esta sesión, y lo que cambia el veredicto de venta.
 
-**Estado al cerrar (actualizado tras el despliegue):** todo mergeado en `main` (PR #8 a #16,
-todos con CI verde). En local, **435 pruebas de contrato y 609 E2E en verde**, con `lint`,
-`typecheck` y build limpios. Los cuatro workflows de n8n activos y comprobados funcionando.
-Último humo contra producción: el agente contesta ("El Tratamiento Antiedad dura 75 minutos y
-cuesta $32.000") y la respuesta se entrega por WhatsApp.
+**Estado al cerrar:** todo mergeado en `main` (PR #8 a #20, todos con CI verde). En local,
+**446 pruebas de contrato y 621 E2E en verde**, con `lint`, `typecheck` y build limpios. Los
+cuatro workflows de n8n activos y comprobados ejecutándose.
 
-**El despliegue ya se hizo** y `/api/agent/escalate` responde en producción, así que los
-arreglos del agente están vivos. Lo comprobado después de desplegar está en la sección
-"Verificado contra producción" de más abajo.
+**Los dos despliegues están hechos y verificados contra producción**, no supuestos: la sección
+siguiente tiene la evidencia de cada paso, incluido un ciclo completo de reserva por WhatsApp
+con la base comprobada después de cada acción.
 
-**Lo que quedó pendiente de un segundo despliegue** (todo está en `main`, nada de esto está
-vivo aún): el contexto del agente en una sola llamada, `/api/agent/context`, las horas sin zona
-leídas en la del negocio, y los horarios que la app devuelve ya formateados. `npm run n8n --
-subir` está **bloqueado a propósito** hasta que la ruta exista en producción, para no dejar al
-agente llamando a un 404. Los dos arreglos de conducta del agente (día y hora correctos, menos
-turnos) **sí están vivos**, subidos por `npm run n8n -- prompt` y `-- herramienta`, que no
-dependen del despliegue de la app.
+## Segundo despliegue: hecho y verificado (2026-08-15)
+
+`npm run app -- version` compara por **huella** (el build de EasyPanel no trae `.git`):
+
+```
+huella viva:    7d60d7219a35656e
+huella de main: 7d60d7219a35656e
+Producción está al día con main.
+```
+
+Con la ruta ya viva, `npm run n8n -- subir n8n-workflows/01-agen-agent.json` dejó de negarse y
+subió el workflow (28 nodos, activo). Comprobado inmediatamente después, contra producción:
+
+| Qué | Cómo se comprobó | Resultado |
+|---|---|---|
+| `/api/agent/context` existe | `prod-sondeo` | HTTP 405 (existe), antes 404 |
+| Una sola llamada de contexto | desglose por nodo | `Cargar contexto` 1,6 s; ya no hay `Cargar memoria`/`Cargar catálogo`/`Unir contexto` |
+| Espera de agrupación | desglose por nodo | 1,5 s (antes 3 s) |
+| Horarios con día y hora correctos | `npm run n8n -- crudo <id> buscar_horarios dia` | `"lunes, 17 de agosto"`, `hora "09:00"`, `franja "mañana"`, `fecha "2026-08-17"` — resueltos por la app |
+| Turno simple de punta a punta | ejecución 7434 | 17,6 s y entregado (antes 21–30 s) |
+
+**Ciclo completo por WhatsApp, en producción, con la base comprobada en cada paso:**
+
+1. *"…para pasado mañana"* → **no hay horarios** (es domingo y el negocio cierra). Lo dice sin inventar.
+2. *"El lunes entonces"* → tres horarios reales, con día y hora correctos.
+3. *"09:30 con Isidora"* → `booked=true`, fila en `appointments`, `source=AI_AGENT`, `quoted_price` 12000.
+4. **Visible en la agenda del negocio**: `/api/admin/agenda` la devuelve con Isidora Castro, Diseño de Cejas con Henna, cliente Dorian Muñoz, 13:30–14:00 UTC.
+5. *"Si, confirmo esa hora"* → `CONFIRMED` + `client_confirmed_at`.
+6. *"cancélala"* → `CANCELLED`. El texto del modelo llevaba su razonamiento dentro, la revisión
+   lo bloqueó **y el respaldo dijo la verdad**: "Listo, cancelé tu hora. ¿Quieres que te busque
+   otro horario?". Es exactamente la conducta que se quería: nunca una confirmación falsa, y
+   nunca un "no pude" sobre algo que sí ocurrió.
+
+**Escalación**, conversación nueva: `escalated:true`, hilo en `HUMAN`, mensaje `SYSTEM`, un aviso
+en `team_notifications`. Al insistir, **no** se creó un segundo aviso (2 en total = uno por
+conversación) y el agente no repitió la frase.
+
+**Monitorización y ciclo autónomo**, lanzados a mano contra producción y en verde:
+Monitorización (run 31857911364) y Autonomía (run 31857964721).
+
+**Lo único que `main` tiene por delante de producción** es el PR #20 —quedarse con la mitad
+buena cuando el modelo pega su razonamiento al final—, que **mejora** una conducta que ya es
+correcta y segura: hoy esa respuesta se sustituye por un respaldo veraz, y con el próximo
+despliegue se enviará la parte limpia del propio modelo. No corre prisa.
 
 ### Lo que estaba roto y ahora está arreglado
 
@@ -362,28 +397,24 @@ actuales y **no se deben dar por buenos**:
    `npm run app -- prod-sondeo` (`/api/agent/escalate` responde 405, es decir existe) y con la
    escalación funcionando de verdad contra producción.
 
-   **Hace falta UN despliegue más**, y es lo único que queda del lado de la aplicación. Está
-   todo en `main` y nada de esto está vivo todavía:
+   **Segundo despliegue: hecho el 2026-08-15 y verificado.** `npm run app -- version` dio la
+   misma huella en producción y en `main`, y con la ruta ya viva
+   `npm run n8n -- subir n8n-workflows/01-agen-agent.json` dejó de negarse y subió el workflow.
+   Todo lo que esperaba ese despliegue está comprobado contra producción (ver la sección
+   "Segundo despliegue: hecho y verificado").
 
-   - el contexto del agente en una sola llamada (`/api/agent/context`), que quita entre 1,5 y
-     2,5 s de cada turno;
-   - las horas sin zona leídas en la del negocio (`instanteDelNegocio`), que evita que el
-     agente busque en la franja equivocada;
-   - los horarios que la app devuelve ya formateados en la zona del negocio;
-   - el respaldo veraz: si la revisión bloquea el texto del modelo pero la acción **sí** se
-     hizo, el cliente oye lo que de verdad pasó en vez de "no pude completar eso".
-
-   Cómo: **EasyPanel** → proyecto **`agen-prod`** → servicio de la **app web** (el que corre
-   `npm start`, no Evolution ni n8n) → botón **"Implementar"**. Después, desde el repositorio:
+   **Cuando vuelvas a desplegar** —no corre prisa; lo único pendiente es una mejora, no un
+   arreglo— el procedimiento es siempre este:
 
    ```bash
-   npm run app -- version                              # tiene que decir "al día con main"
-   npm run n8n -- subir n8n-workflows/01-agen-agent.json
+   npm run app -- version    # "Producción está al día con main"
+   npm run app -- prod-sondeo
+   npm run n8n -- subir n8n-workflows/01-agen-agent.json   # solo si el workflow cambió
    ```
 
-   Ese `subir` está **bloqueado a propósito** mientras la ruta no exista en producción: subir
-   el workflow antes dejaría al agente llamando a un 404, que es un cliente sin respuesta. En
-   cuanto la ruta esté, deja de negarse.
+   Ese `subir` se **niega a propósito** mientras una ruta nueva del workflow no exista en
+   producción: subirlo antes dejaría al agente llamando a un 404, que es un cliente sin
+   respuesta.
 
    Nota: en EasyPanel el contenedor de compilación no trae `.git`, así que `commit` sale
    `desconocido` en `/api/health`. Por eso existe la **huella** — un hash del código
