@@ -87,7 +87,10 @@ const LE_ACOMODA_O_NO = {
 }
 const YA_ESTA_CANCELADA = {
   ifYes: 'Quiere otro horario: ofrécele horarios con buscar_horarios. Esa hora ya está cancelada, así que no llames liberar_reserva ni confirmar_reserva.',
-  ifNo: 'Por ahora no quiere otro horario: contesta una línea amable y no insistas.',
+  // Un «no» a una cancelación casi nunca es un no a secas: suele venir con un día nuevo
+  // («no, mejor el martes»). Visto en producción: sin esta aclaración el agente volvía a llamar
+  // a liberar_reserva sobre una hora ya cancelada y decía «dejé sin efecto la reserva anterior».
+  ifNo: 'Si pide otro día u otra hora, búscalos con buscar_horarios y ofréceselos; si simplemente no quiere nada, una línea amable y no insistas. En ningún caso llames liberar_reserva ni confirmar_reserva: esa hora ya está cancelada.',
 }
 const OFRECER_HORARIOS = {
   ifYes: 'Quiere volver: ofrécele horarios con buscar_horarios.',
