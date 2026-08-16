@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { motivoDeError } from '@/lib/agent-errors'
+import { revisarRespuesta } from '@/lib/agent-reply'
 import { cargarWorkflow, promptDelSistema } from '../support/n8n'
 import { POST as POST_contexto } from '@/app/api/agent/context/route'
 import { levantarSupabaseFalso, peticionAgente, usarSupabaseFalso, type SupabaseFalso, type Tablas } from '../support/supabase-fake'
@@ -120,6 +121,35 @@ test.describe('Mover una hora es una operación, no dos', () => {
     expect(prompt).toContain('NO uses liberar_reserva')
     expect(prompt).toContain('Nunca liberes primero')
     expect(prompt).toContain('rescheduled:true')
+  })
+})
+
+/*
+ * Ejecución 9548: a «¿Y el martes a las 11 tienes?» el modelo escribió la respuesta entera —el
+ * aviso, los tres horarios y la pregunta final— y la volvió a escribir debajo, idéntica. Al
+ * cliente le llega el doble de texto y parece un error del negocio.
+ */
+test.describe('Una respuesta no se manda dos veces', () => {
+  const UNA = 'A las 11 no queda disponibilidad ese martes.\n\n09:00 con Camila Rojas\n\n¿Cuál prefieres?'
+  const SIN_EVIDENCIA = { reservo: false, cancelo: false, confirmo: false, ultima: null }
+
+  test('un texto que es su propia mitad repetida sale una sola vez', () => {
+    const revision = revisarRespuesta(`${UNA}${UNA}`, SIN_EVIDENCIA)
+    expect(revision.bloqueada).toBe(false)
+    expect(revision.texto).toBe(UNA)
+    expect(revision.motivos).toContain('respuesta_repetida')
+  })
+
+  test('dos mitades parecidas pero distintas no se tocan', () => {
+    const distinto = `${UNA}\n\nTambién tengo el miércoles a las 10:00 con Valentina Soto.`
+    expect(revisarRespuesta(distinto, SIN_EVIDENCIA).texto).toBe(distinto)
+  })
+
+  test('un mensaje normal nunca pierde su segunda mitad', () => {
+    // Nada que afirme una acción: eso lo bloquea la revisión por falta de evidencia, y con razón.
+    for (const texto of [UNA, 'Tenemos Corte y Peinado, Manicura Semipermanente y Pedicura Spa. ¿Cuál te interesa?', 'Claro, dime.']) {
+      expect(revisarRespuesta(texto, SIN_EVIDENCIA).texto, texto).toBe(texto)
+    }
   })
 })
 

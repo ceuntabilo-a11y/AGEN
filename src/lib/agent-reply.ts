@@ -32,6 +32,29 @@ export const RESPALDO_SEGUN_ACCION: Record<'reservo' | 'confirmo' | 'cancelo', s
   cancelo: 'Listo, cancelé tu hora. ¿Quieres que te busque otro horario?',
 }
 
+/**
+ * El modelo a veces escribe su respuesta DOS veces seguidas, pegada.
+ *
+ * Visto en producción (ejecución 9548): a «¿Y el martes a las 11 tienes?» contestó el aviso, los
+ * tres horarios y la pregunta final… y volvió a escribir exactamente lo mismo debajo. El cliente
+ * recibe el doble de texto y parece un error del negocio.
+ *
+ * Se corta solo cuando las dos mitades son idénticas letra por letra, así que jamás puede
+ * recortar un mensaje que de verdad decía dos cosas parecidas. No es una heurística: o el texto
+ * es exactamente su primera mitad repetida, o no se toca.
+ */
+function sinRepeticionEntera(texto: string) {
+  const base = texto.trim()
+  if (base.length < 40) return texto
+  const mitad = Math.floor(base.length / 2)
+  for (const corte of [mitad, mitad + 1]) {
+    const primera = base.slice(0, corte).trim()
+    const segunda = base.slice(corte).trim()
+    if (primera && primera === segunda) return primera
+  }
+  return texto
+}
+
 /** Tope de un mensaje de WhatsApp del agente. Más largo que esto no es una respuesta, es un volcado. */
 const LARGO_MAXIMO = 1200
 const LARGO_MINIMO = 2
@@ -39,7 +62,7 @@ const LARGO_MINIMO = 2
 export type MotivoRevision =
   | 'id_interno' | 'markdown_tecnico'
   | 'vacia' | 'datos_crudos' | 'error_tecnico' | 'interno_del_sistema'
-  | 'razonamiento_del_modelo' | 'idioma_incorrecto' | 'razonamiento_recortado'
+  | 'razonamiento_del_modelo' | 'idioma_incorrecto' | 'razonamiento_recortado' | 'respuesta_repetida'
   | 'reserva_sin_evidencia' | 'cancelacion_sin_evidencia' | 'confirmacion_sin_evidencia'
 
 export type EvidenciaDelTurno = {
@@ -236,6 +259,13 @@ export function sanitizarRespuesta(texto: string): { texto: string; motivos: Mot
   UUID.lastIndex = 0
 
   limpio = limpio.replace(/[ \t]{2,}/g, ' ').replace(/\(\s*(ref\.?|id)?\s*\)/gi, '').replace(/\n{3,}/g, '\n\n').trim()
+
+  const unaVez = sinRepeticionEntera(limpio)
+  if (unaVez !== limpio) {
+    limpio = unaVez
+    motivos.push('respuesta_repetida')
+  }
+
   if (limpio.length > LARGO_MAXIMO) limpio = `${limpio.slice(0, LARGO_MAXIMO - 1).trimEnd()}…`
   return { texto: limpio, motivos }
 }
