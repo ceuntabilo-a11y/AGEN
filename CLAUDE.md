@@ -399,6 +399,24 @@ NO…», el cliente escribió «No» y el agente contestó «¿A qué te refiere
   `appointments` y no desde la aplicación: la misma cita se confirma, se mueve o se cancela
   desde el agente, desde el panel y desde el portal del cliente, y las tres tienen que cerrarlo.
 
+## 6.8 Cómo se ve la respuesta del agente en WhatsApp
+
+Añadido el 2026-08-16. `src/lib/whatsapp-format.ts` es una capa de **presentación**, no de
+contenido: ordena el texto que el modelo ya decidió enviar (quita viñetas, deja cada opción en su
+bloque con la cabecera en negrita y el precio o la duración debajo, y despega la pregunta final).
+
+- **Dónde corre:** en `/api/agent/reply`, **después** de `revisarRespuesta` y solo sobre un texto
+  aprobado. Los respaldos ya son una línea limpia y no se tocan. El texto formateado es el que se
+  guarda para un reintento, así que un reenvío manda exactamente lo mismo.
+- **Garantía por construcción, no por cuidado:** `firma()` compara el texto sin espacios,
+  viñetas, asteriscos ni separadores. Si la firma cambia, se devuelve el original. Por eso la capa
+  no puede añadir, quitar, reordenar ni reformular nada — ni una letra, ni un dígito, ni un emoji.
+  Un número de lista se conserva (es un dígito, o sea contenido).
+- **No toca los mensajes automáticos** (recordatorios, avisos, campañas): esos tienen sus
+  plantillas en `@/lib/notification-templates`. Ni el prompt, ni las herramientas, ni n8n.
+- **Coste:** una función pura sobre una cadena. Sin red, sin base de datos, sin segunda llamada al
+  modelo.
+
 ## 7. Entorno y despliegue
 
 Variables nuevas: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` (Evolution API compartida por la

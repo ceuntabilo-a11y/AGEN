@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { isRealClientPhone, normalizePhone } from '@/lib/phone'
 import { sendWhatsApp } from '@/lib/whatsapp'
 import { reunirEvidencia, revisarRespuesta } from '@/lib/agent-reply'
+import { formatearParaWhatsApp } from '@/lib/whatsapp-format'
 import { guardarRespuestaPendiente, marcarRespuestaEnviada, marcarRespuestaFallida } from '@/lib/agent-reply-delivery'
 
 /**
@@ -43,6 +44,16 @@ export async function POST(request: Request) {
   const evidencia = await reunirEvidencia(db, { businessId: body.businessId, clientId: client?.id ?? null, desde })
   const revision = revisarRespuesta(String(body.reply ?? ''), evidencia)
 
+  /*
+   * Presentación, y solo presentación (ver `@/lib/whatsapp-format`).
+   *
+   * Va DESPUÉS de la revisión y solo sobre un texto aprobado: los respaldos ya son una línea
+   * limpia y no hay nada que ordenar en ellos. La capa no puede cambiar ni una letra —lo
+   * comprueba comparando la firma del texto—, así que no altera lo que el agente decidió decir
+   * ni lo que hizo; solo cómo se ve.
+   */
+  const texto = revision.bloqueada ? revision.texto : formatearParaWhatsApp(revision.texto)
+
   // Si el negocio todavía no tiene proveedor guardado, se usa la instancia de Evolution por
   // la que entró el mensaje: es la que venía usando el workflow y no se puede romper.
   const instancia = body.instance?.trim() || null
@@ -56,11 +67,11 @@ export async function POST(request: Request) {
   // pendiente y otra pasada la reintenta tal cual, sin volver a correr el modelo.
   const clave = body.messageId ? { businessId: body.businessId, phone, messageId: body.messageId } : null
   const guardado = clave
-    ? await guardarRespuestaPendiente(db, { ...clave, texto: revision.texto })
+    ? await guardarRespuestaPendiente(db, { ...clave, texto })
     : { durable: false, guardada: false }
 
-  const envio = await sendWhatsApp(proveedor, { phone, text: revision.texto })
-  const cuerpo = { text: revision.texto, blocked: revision.bloqueada, reasons: revision.motivos, durable: guardado.guardada }
+  const envio = await sendWhatsApp(proveedor, { phone, text: texto })
+  const cuerpo = { text: texto, blocked: revision.bloqueada, reasons: revision.motivos, durable: guardado.guardada }
 
   if (!envio.success) {
     if (clave && guardado.guardada) await marcarRespuestaFallida(db, clave, envio.error ?? 'envio_fallido')
