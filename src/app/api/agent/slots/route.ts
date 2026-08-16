@@ -5,15 +5,46 @@ import {rejectTeamActor} from '@/lib/agent-actor'
 import { liberarHoldsPrevios } from '@/lib/agent-holds'
 import { dateKeyInZone, formatInZone, formatTimeInZone, instanteDelNegocio } from '@/lib/timezone'
 import { money } from '@/lib/money'
+import { motivoDeError } from '@/lib/agent-errors'
+import { normalizeBusinessHours } from '@/lib/business-hours'
+
+/**
+ * Cuántas horas se apartan por consulta, y por cuánto.
+ *
+ * Cada búsqueda bloquea cupos reales que nadie más puede tomar mientras duran. Con 15 minutos,
+ * una persona que solo preguntaba «¿tienes hora el martes?» dejaba tres horarios congelados un
+ * cuarto de hora. Diez minutos siguen sobrando para el camino normal —ofrecer, elegir y
+ * reservar toma menos de dos— y liberan el triple de rápido cuando la conversación se corta.
+ *
+ * La seguridad contra doble reserva no depende de esto: la da la restricción EXCLUDE de
+ * `appointments` y el cerrojo de `create_safe_appointment`. El apartado solo evita ofrecerle a
+ * dos personas el mismo cupo a la vez.
+ */
+const MAXIMO_APARTADOS = 3
+const MINUTOS_APARTADO = 10
+
+/** ¿Hay algún día abierto dentro de la ventana buscada? Sin `business_hours`, se asume que sí. */
+function abiertoEnLaVentana(horario: unknown, desde: Date, hasta: Date, timezone: string) {
+  const dias = normalizeBusinessHours(horario)
+  if (!dias) return true
+  for (let cursor = new Date(desde); cursor < hasta; cursor = new Date(cursor.getTime() + 86400000)) {
+    // 1 = lunes, 7 = domingo, en la zona del negocio.
+    const nombre = formatInZone(cursor, timezone, { weekday: 'short' })
+    const indice = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom']
+      .findIndex((corto) => nombre.toLowerCase().startsWith(corto))
+    if (indice >= 0 && dias[indice]?.enabled) return true
+  }
+  return false
+}
 
 export async function POST(request: Request) {
   if (!isAuthorizedAgent(request)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   const body = await request.json() as { businessId?: string; serviceId?: string; from?: string; until?: string; clientId?: string; contactKey?: string }
-  if (!body.businessId || !body.serviceId || !body.from || !body.until || !body.contactKey) return NextResponse.json({ error: 'Faltan datos obligatorios' }, { status: 400 })
+  if (!body.businessId || !body.serviceId || !body.from || !body.until || !body.contactKey) return NextResponse.json({ error: 'Faltan datos obligatorios', motivo: 'DATO_INVALIDO' }, { status: 400 })
   const db=createAdminClient()
-  if(await rejectTeamActor(db,body.businessId,body.contactKey))return NextResponse.json({error:'El equipo solo puede consultar; usa el panel para gestionar reservas'},{status:403})
+  if(await rejectTeamActor(db,body.businessId,body.contactKey))return NextResponse.json({error:'El equipo solo puede consultar; usa el panel para gestionar reservas',motivo:'NO_AUTORIZADO'},{status:403})
   const {data:business}=await db.from('businesses').select('settings,timezone,currency').eq('id',body.businessId).eq('active',true).maybeSingle()
-  if(!business)return NextResponse.json({error:'Negocio inexistente o inactivo'},{status:404})
+  if(!business)return NextResponse.json({error:'Negocio inexistente o inactivo',motivo:'NO_EXISTE'},{status:404})
 
   /*
    * La ventana se lee en la zona del NEGOCIO cuando el modelo no manda zona.
@@ -24,21 +55,21 @@ export async function POST(request: Request) {
    * sí las había. Ver `instanteDelNegocio`.
    */
   const from = instanteDelNegocio(body.from, business.timezone), until = instanteDelNegocio(body.until, business.timezone)
-  if (!from || !until || until <= from) return NextResponse.json({ error: 'Ventana de búsqueda inválida' }, { status: 400 })
-  if (until.getTime() - from.getTime() > 14 * 86400000) return NextResponse.json({ error: 'La ventana máxima es de 14 días' }, { status: 400 })
+  if (!from || !until || until <= from) return NextResponse.json({ error: 'Ventana de búsqueda inválida', motivo: 'DATO_INVALIDO' }, { status: 400 })
+  if (until.getTime() - from.getTime() > 14 * 86400000) return NextResponse.json({ error: 'La ventana máxima es de 14 días', motivo: 'DATO_INVALIDO' }, { status: 400 })
   const interval=Math.min(120,Math.max(5,Number(business.settings?.booking_interval_minutes??15)))
   // Antes de apartar de nuevo se sueltan los apartados previos de ESTE contacto, por sus dos
   // claves: si solo se mirara una, una búsqueda repetida iría acumulando cupos bloqueados.
   await liberarHoldsPrevios(db, { businessId: body.businessId, clientId: body.clientId, contactKey: body.contactKey })
   const { data, error } = await db.rpc('find_service_slots', { p_business_id: body.businessId, p_service_id: body.serviceId, p_from: from.toISOString(), p_until: until.toISOString(), p_interval_minutes: interval, p_limit: 8 })
-  if (error) return NextResponse.json({ error: 'No se pudo buscar disponibilidad' }, { status: 500 })
+  if (error) return NextResponse.json({ error: 'No se pudo buscar disponibilidad', motivo: motivoDeError(error) }, { status: 500 })
   const held=[]
   for(const slot of data??[]){
-    if(held.length>=3)break
+    if(held.length>=MAXIMO_APARTADOS)break
     const result=await db.rpc('create_slot_hold',{
       p_business_id:body.businessId,p_professional_id:slot.professional_id,p_service_id:body.serviceId,
       p_desired_start:slot.service_start,p_client_id:body.clientId??null,p_contact_key:body.contactKey?.trim()||null,
-      p_minutes:15,p_origin:'AI_AGENT',
+      p_minutes:MINUTOS_APARTADO,p_origin:'AI_AGENT',
     })
     if(!result.error&&result.data){
       /*
@@ -89,5 +120,17 @@ export async function POST(request: Request) {
       })
     }
   }
-  return NextResponse.json({ slots: held, holdMinutes:15, zona: business.timezone })
+  /*
+   * Sin horarios hay DOS situaciones distintas y el cliente merece respuestas distintas: si el
+   * negocio abre ese día pero está lleno, se le ofrece otro horario; si ese día no se atiende,
+   * se le ofrece otro DÍA. Antes las dos llegaban al modelo como una lista vacía y él elegía
+   * qué decir. Ver `@/lib/agent-errors`.
+   */
+  if (!held.length) {
+    const motivo = abiertoEnLaVentana(business.settings?.business_hours, from, until, business.timezone)
+      ? 'SIN_CUPOS'
+      : 'NEGOCIO_CERRADO'
+    return NextResponse.json({ slots: [], motivo, holdMinutes: MINUTOS_APARTADO, zona: business.timezone })
+  }
+  return NextResponse.json({ slots: held, motivo: 'OK', holdMinutes: MINUTOS_APARTADO, zona: business.timezone })
 }

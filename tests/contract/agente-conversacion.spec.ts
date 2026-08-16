@@ -123,7 +123,8 @@ test.describe('Conversación 1 — "Hola, quiero una hora de corte"', () => {
     const horarios = await buscarHorarios({ businessId: NEGOCIO, serviceId: SERVICIO, ...VENTANA, clientId, contactKey: TELEFONO })
     expect(horarios.estado).toBe(200)
     expect(horarios.cuerpo.slots.length).toBeGreaterThan(0)
-    expect(horarios.cuerpo.holdMinutes).toBe(15)
+    // 10 minutos: un apartado más corto congela menos agenda ajena por cada consulta.
+    expect(horarios.cuerpo.holdMinutes).toBe(10)
     // Cada horario ofrecido viene con su apartado: el agente nunca ofrece algo que no reservó.
     for (const slot of horarios.cuerpo.slots) expect(slot.holdId).toBeTruthy()
 
