@@ -198,7 +198,7 @@ export async function cargarAvisoPendiente(
   if (!pareceRespuestaAlAviso(datos.message)) return null
 
   const { data, error } = await db.from('outbound_prompts')
-    .select('kind,expects,question,if_yes,if_no,summary,sent_at,appointment_id,campaign_id')
+    .select('id,kind,expects,question,if_yes,if_no,summary,sent_at,appointment_id,campaign_id')
     .eq('business_id', datos.businessId)
     .eq('client_id', datos.clientId)
     .is('answered_at', null)
@@ -234,6 +234,20 @@ export async function cargarAvisoPendiente(
       professionalName: ((cita.data as { professional?: { display_name?: string } }).professional?.display_name) ?? null,
     }
     : null
+
+  /*
+   * El aviso se entrega UNA vez y queda cerrado.
+   *
+   * Fallo real: quedó vivo un aviso de cancelación y, tres mensajes después, un «sí por favor»
+   * —que contestaba a la última pregunta del agente— se leyó contra ese aviso viejo. El agente
+   * repitió «ese horario ya no está disponible» y la conversación entró en bucle.
+   *
+   * Si el cliente escribió algo que puede ser su respuesta, esa ES su respuesta: a partir de
+   * ahí manda la conversación en curso, no un mensaje automático de hace horas.
+   */
+  await db.from('outbound_prompts')
+    .update({ answered_at: new Date().toISOString(), resolution: 'ANSWERED', answer: String(datos.message ?? '').slice(0, 500) })
+    .eq('id', (data as { id?: string }).id ?? '')
 
   return {
     kind: fila.kind,

@@ -392,6 +392,10 @@ NO…», el cliente escribió «No» y el agente contestó «¿A qué te refiere
   contestó al seguimiento en vez de saludar, porque el aviso se entregaba en todos los turnos.
   La decisión se toma en la app —determinista y probada—, y **sin `message` no se entrega nada**,
   así que un despliegue a medias vuelve a la conducta segura.
+- **Y se entrega UNA sola vez:** al devolverlo queda `answered_at`/`resolution='ANSWERED'` con la
+  respuesta del cliente. Sin esto, un aviso vivo secuestraba los «sí» posteriores: pasó con una
+  cancelación de horas antes y un «sí por favor» que contestaba al agente, y la conversación
+  entró en bucle. Si el cliente ya contestó, a partir de ahí manda la conversación en curso.
 - **El agente lo recibe en el mismo contexto del turno** (`cargarContexto` →
   `pendingNotice`, inyectado en el prompt como `AVISO_PENDIENTE`), sin una llamada extra.
   Incluye `repliesSince`: cuántos mensajes escribió el cliente desde que salió el aviso. Con 1
