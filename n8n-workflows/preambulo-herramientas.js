@@ -35,3 +35,33 @@ if (q && typeof q === 'object' && typeof q.input === 'string') {
   try { q = JSON.parse(q.input || '{}'); } catch (e) { q = {}; }
 }
 if (!q || typeof q !== 'object') q = {};
+
+// Una herramienta que no contesta NO puede tumbar la ejecución.
+//
+// `this.helpers.httpRequest` ignora los códigos HTTP (`ignoreHttpStatusErrors`), pero un timeout,
+// un DNS caído o una conexión cortada LANZAN. Sin este envoltorio el nodo reventaba, la ejecución
+// moría y el cliente se quedaba esperando para siempre: ni respuesta, ni disculpa, ni reintento.
+// Ahora eso vuelve como un resultado más, con su `motivo`, y el modelo sabe qué decir (la tabla
+// de motivos está en el prompt del sistema).
+//
+// `this` no llega dentro de una función anidada en este entorno, así que los helpers se capturan
+// antes.
+const _helpers = this.helpers;
+async function pedirALaApp(opciones) {
+  try {
+    const r = await _helpers.httpRequest(Object.assign({
+      json: true, returnFullResponse: true, ignoreHttpStatusErrors: true, timeout: 20000,
+    }, opciones));
+    return { status: r.statusCode, body: r.body };
+  } catch (e) {
+    const texto = String((e && (e.message || e.description || e)) || '');
+    const seAcaboElTiempo = /timeout|timedout|ETIMEDOUT|ESOCKETTIMEDOUT|aborted|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up/i.test(texto);
+    return {
+      status: 0,
+      body: {
+        error: seAcaboElTiempo ? 'La app no respondió a tiempo' : 'No se pudo llamar a la app',
+        motivo: seAcaboElTiempo ? 'TIMEOUT' : 'ERROR_TECNICO',
+      },
+    };
+  }
+}

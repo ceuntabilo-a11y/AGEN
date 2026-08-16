@@ -14,8 +14,10 @@ const RUTA_WORKFLOW = path.resolve(__dirname, '..', '..', 'n8n-workflows', '01-a
 
 type NodoN8n = { name: string; type: string; parameters: Record<string, unknown> }
 
-export function cargarWorkflow(): { nodes: NodoN8n[] } {
-  return JSON.parse(readFileSync(RUTA_WORKFLOW, 'utf8')) as { nodes: NodoN8n[] }
+type Conexiones = Record<string, Record<string, Array<Array<{ node: string; type: string; index: number }>>>>
+
+export function cargarWorkflow(): { nodes: NodoN8n[]; connections: Conexiones } {
+  return JSON.parse(readFileSync(RUTA_WORKFLOW, 'utf8')) as { nodes: NodoN8n[]; connections: Conexiones }
 }
 
 export function nodo(nombre: string): NodoN8n {

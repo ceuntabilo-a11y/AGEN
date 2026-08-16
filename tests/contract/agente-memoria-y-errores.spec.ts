@@ -74,8 +74,24 @@ test.describe('El modelo no improvisa qué salió mal', () => {
     expect(motivoDeError({ code: 'XX999' })).toBe('ERROR_TECNICO')
   })
 
+  /*
+   * Una herramienta que no contesta reventaba el nodo y mataba la ejecución entera: el cliente
+   * se quedaba esperando para siempre, sin respuesta ni disculpa. Ahora el fallo vuelve como un
+   * resultado con `motivo`, y las ocho herramientas pasan por el mismo envoltorio.
+   */
+  test('ninguna herramienta puede tumbar la ejecución por un timeout', () => {
+    const herramientas = workflow.nodes.filter((nodo) => String(nodo.type).includes('toolCode'))
+    expect(herramientas.length).toBeGreaterThanOrEqual(8)
+    for (const nodo of herramientas) {
+      const codigo = String((nodo.parameters as { jsCode?: string }).jsCode ?? '')
+      expect(codigo, `${nodo.name} no usa el envoltorio`).toContain('await pedirALaApp(')
+      expect(codigo, `${nodo.name} sigue llamando sin protección`).not.toContain('this.helpers.httpRequest(')
+      expect(codigo, `${nodo.name} sin captura de fallo`).toContain("motivo: seAcaboElTiempo ? 'TIMEOUT'")
+    }
+  })
+
   test('la tabla de motivos está en el prompt, con la diferencia que importa', () => {
-    for (const motivo of ['SIN_CUPOS', 'NEGOCIO_CERRADO', 'CUPO_OCUPADO', 'NO_EXISTE', 'DATO_INVALIDO', 'NO_AUTORIZADO', 'ERROR_TECNICO']) {
+    for (const motivo of ['SIN_CUPOS', 'NEGOCIO_CERRADO', 'CUPO_OCUPADO', 'NO_EXISTE', 'DATO_INVALIDO', 'NO_AUTORIZADO', 'ERROR_TECNICO', 'TIMEOUT']) {
       expect(prompt, motivo).toContain(motivo)
     }
     // Las dos que el modelo confundía: sin cupos se ofrece otro día, cerrado también, pero
@@ -83,6 +99,27 @@ test.describe('El modelo no improvisa qué salió mal', () => {
     expect(prompt).toContain('Nunca digas que el negocio está cerrado')
     expect(prompt).toContain('Nunca ofrezcas otra hora del mismo día')
     expect(prompt).toContain('NUNCA digas que no hay horas')
+  })
+})
+
+/*
+ * Hasta ahora reagendar era «liberar y volver a reservar»: dos pasos, y entre uno y otro el cupo
+ * viejo se ofrecía a la lista de espera mientras el nuevo podía no existir. El cliente se
+ * quedaba sin hora justo por pedir cambiarla.
+ */
+test.describe('Mover una hora es una operación, no dos', () => {
+  test('existe la herramienta y cuelga del agente', () => {
+    const mover = workflow.nodes.find((nodo) => nodo.name === 'mover_reserva')
+    expect(mover, 'falta la herramienta mover_reserva').toBeTruthy()
+    expect(String((mover?.parameters as { jsCode?: string })?.jsCode)).toContain("action: 'reschedule'")
+    expect(workflow.connections?.mover_reserva?.ai_tool?.[0]?.[0]?.node).toBe('Agente Agen')
+  })
+
+  test('el prompt distingue mover de cancelar, y prohíbe liberar por si acaso', () => {
+    expect(prompt).toContain('MOVER NO ES CANCELAR')
+    expect(prompt).toContain('NO uses liberar_reserva')
+    expect(prompt).toContain('Nunca liberes primero')
+    expect(prompt).toContain('rescheduled:true')
   })
 })
 
