@@ -130,7 +130,16 @@ export function DashboardShell({ children, role = 'admin' }: { children: React.R
     {open && <button aria-label="Cerrar menú" onClick={() => setOpen(false)} className="fixed inset-0 z-30 bg-black/30 lg:hidden"/>}
     <aside className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-[#19162b] p-4 text-white transition-transform lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="mb-7 flex items-center justify-between px-2 pt-2">
-        <Link href="/" className="flex items-center gap-3">
+        {/*
+          El logo lleva al panel de QUIEN está dentro, no a la portada.
+
+          Con `href="/"` se salía de la aplicación a la landing pública, que muestra "Iniciar
+          sesión" arriba: la sesión seguía viva, pero para el usuario era indistinguible de
+          haber sido expulsado, y desde ahí el único camino de vuelta era volver a entrar.
+          `items[0][0]` es siempre la primera entrada del menú de ese rol — /admin, /profesional,
+          /plataforma o /cliente— así que un rol nuevo no puede volver a caerse a la portada.
+        */}
+        <Link href={items[0][0]} className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#6c4cff] text-xl font-black">A</span>
           <span><b className="block text-xl">Agen</b><small className="text-white/50">{session?.businessName ?? 'Tu negocio'}</small></span>
         </Link>
