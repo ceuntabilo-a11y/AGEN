@@ -94,7 +94,7 @@ export async function cargarCatalogo(db: SupabaseClient, businessId: string) {
  */
 export async function cargarContexto(
   db: SupabaseClient,
-  datos: { businessId: string; phone: string },
+  datos: { businessId: string; phone: string; message?: string | null },
 ): Promise<{ error: 'inexistente' | 'catalogo' | 'agenda' } | ContextoDelAgente> {
   // Primera oleada: todo lo que solo necesita el negocio o el teléfono. Nada de esto depende
   // de nada, así que encadenarlo era tiempo regalado.
@@ -156,7 +156,7 @@ export async function cargarContexto(
         .order('service_period').limit(5),
       // Lo último que el negocio le mandó por su cuenta y sigue esperando respuesta. Sin esto,
       // un "No" llega sin la pregunta y el agente contesta "¿a qué te refieres con no?".
-      cargarAvisoPendiente(db, { businessId: datos.businessId, clientId: cliente.data.id, phone: datos.phone, timezone }),
+      cargarAvisoPendiente(db, { businessId: datos.businessId, clientId: cliente.data.id, phone: datos.phone, timezone, message: datos.message }),
     ])
     appointments = formatearReservas(vigentes.data ?? [], timezone)
     pendingNotice = aviso

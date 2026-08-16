@@ -20,13 +20,19 @@ import { createAdminClient } from '@/lib/supabase-admin'
 export async function POST(request: Request) {
   if (!isAuthorizedAgent(request)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const body = await request.json() as { businessId?: string; phone?: string }
+  const body = await request.json() as { businessId?: string; phone?: string; message?: string }
   const phone = normalizePhone(body.phone)
   if (!body.businessId || !phone) {
     return NextResponse.json({ error: 'businessId y phone son obligatorios' }, { status: 400 })
   }
 
-  const contexto = await cargarContexto(createAdminClient(), { businessId: body.businessId, phone })
+  // El mensaje se usa SOLO para decidir si el último aviso automático viene al caso: un «Hola»
+  // no contesta a un seguimiento pendiente. Ver `pareceRespuestaAlAviso`.
+  const contexto = await cargarContexto(createAdminClient(), {
+    businessId: body.businessId,
+    phone,
+    message: typeof body.message === 'string' ? body.message.slice(0, 500) : null,
+  })
   if ('error' in contexto) {
     if (contexto.error === 'inexistente') return NextResponse.json({ error: 'Negocio inexistente o inactivo' }, { status: 404 })
     if (contexto.error === 'agenda') return NextResponse.json({ error: 'No se pudo consultar la agenda del equipo' }, { status: 500 })
