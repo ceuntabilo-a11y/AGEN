@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { findAgentTeamActor } from '@/lib/agent-actor'
+import { money } from '@/lib/money'
 import { cargarAvisoPendiente } from '@/lib/outbound-context'
 import { dateKeyInZone, formatInZone, formatTimeInZone, referenciasTemporales, zonedDayRange } from '@/lib/timezone'
 
@@ -58,6 +59,49 @@ async function cargarNegocio(db: SupabaseClient, businessId: string) {
   return sinMapa.data
 }
 
+/** Cuántos mensajes del hilo se le dan al modelo. Diez son cinco idas y vueltas. */
+const TURNOS_RECIENTES = 10
+
+/**
+ * Lo que se habló, leído de la base — la ÚNICA fuente de la conversación reciente.
+ *
+ * Antes esto lo ponía el nodo `Memoria reciente` de n8n (`memoryBufferWindow`), que guarda los
+ * mensajes en la memoria del proceso. Dos problemas, los dos vistos en el diseño y no en una
+ * teoría: un reinicio o un redespliegue de n8n borraba el hilo de todos los clientes a mitad de
+ * conversación, y además el modelo recibía la conversación DOS veces (su buffer más el resumen
+ * de `client_memory`), pagando los mismos tokens dos veces y pudiendo leer dos versiones
+ * distintas de lo mismo.
+ *
+ * Ahora la conversación vive donde ya vivía de verdad: `conversations` + `messages`, que es lo
+ * que se ve en el panel. Sobrevive a los reinicios porque nunca estuvo en un proceso.
+ *
+ * El reparto queda así, sin solaparse:
+ * - CONVERSACION (esto) → lo que se dijo, literal y reciente.
+ * - MEMORIA (`client_memory`) → lo que hay que recordar del cliente a largo plazo.
+ */
+async function cargarConversacion(
+  db: SupabaseClient,
+  datos: { businessId: string; phone: string; clientId: string | null },
+) {
+  let consulta = db.from('conversations').select('id')
+    .eq('business_id', datos.businessId).eq('channel', 'WHATSAPP').neq('status', 'CLOSED')
+  consulta = datos.clientId
+    ? consulta.or(`client_id.eq.${datos.clientId},external_id.eq.${datos.phone}`)
+    : consulta.eq('external_id', datos.phone)
+
+  const { data: hilo } = await consulta.order('updated_at', { ascending: false }).limit(1).maybeSingle()
+  if (!hilo?.id) return []
+
+  const { data } = await db.from('messages').select('sender,content,created_at')
+    .eq('conversation_id', hilo.id).order('created_at', { ascending: false }).limit(TURNOS_RECIENTES)
+
+  // De vuelta al orden en que se dijeron: el modelo lee una conversación, no una pila.
+  return (data ?? []).reverse().map((fila) => ({
+    quien: fila.sender === 'CLIENT' ? 'cliente' : fila.sender === 'AI' ? 'agen' : 'sistema',
+    texto: String(fila.content ?? '').slice(0, 600),
+  }))
+}
+
 /** Catálogo publicable del negocio: lo que el agente puede ofrecer. */
 export async function cargarCatalogo(db: SupabaseClient, businessId: string) {
   const [negocio, especialidades, servicios, sucursales] = await Promise.all([
@@ -74,11 +118,22 @@ export async function cargarCatalogo(db: SupabaseClient, businessId: string) {
   if (especialidades.error || servicios.error || sucursales.error) return { error: 'catalogo' as const }
 
   const timezone = (negocio as { timezone?: string }).timezone || ZONA_POR_DEFECTO
+  const moneda = (negocio as { currency?: string }).currency || 'CLP'
   return {
     business: { ...negocio, maps_url: (negocio as { maps_url?: string | null }).maps_url ?? null },
     branches: sucursales.data,
     specialties: especialidades.data,
-    services: servicios.data,
+    /*
+     * El precio YA escrito como lo lee el cliente, junto al número crudo.
+     *
+     * Con solo `price: 14000` delante, el agente contesta «cuesta $14000» — sin el punto de los
+     * miles. Formatear moneda es presentación, y la presentación la resuelve el servidor: es la
+     * misma decisión que ya estaba tomada para las fechas y las horas (CLAUDE.md §1).
+     */
+    services: (servicios.data ?? []).map((servicio) => ({
+      ...servicio,
+      precio: money(Number((servicio as { price?: number }).price ?? 0), moneda),
+    })),
     // El agente no debe deducir qué día es "mañana" a partir de un instante UTC: las fechas
     // relativas se calculan acá, en la zona real del negocio y respetando el horario de verano.
     time: referenciasTemporales(new Date(), timezone),
@@ -146,6 +201,11 @@ export async function cargarContexto(
   // dependen entre sí, así que van juntas.
   let appointments: Array<Record<string, unknown>> = []
   let pendingNotice = null
+  // El hilo no depende de que la persona sea cliente: alguien que escribe por primera vez
+  // también tiene conversación, y perderla era justo perder el principio de todas.
+  const recientePromesa = cargarConversacion(db, {
+    businessId: datos.businessId, phone: datos.phone, clientId: cliente.data?.id ?? null,
+  })
   if (cliente.data) {
     const [vigentes, aviso] = await Promise.all([
       db.from('appointments')
@@ -169,6 +229,7 @@ export async function cargarContexto(
     client: cliente.data,
     appointments,
     pendingNotice,
+    recent: await recientePromesa,
     timezone,
   }
 }

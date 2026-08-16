@@ -26,7 +26,7 @@ const VIGENTES = ['PENDING', 'CONFIRMED']
 
 /** `confirm` y `release` mutan: necesitan saber exactamente sobre qué reserva actúan. */
 export function requiereIdDeReserva(accion: string) {
-  return accion === 'confirm' || accion === 'release'
+  return accion === 'confirm' || accion === 'release' || accion === 'reschedule'
 }
 
 /** Próximas reservas vigentes del cliente (lo que devuelve `mis_reservas`). */

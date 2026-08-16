@@ -223,16 +223,17 @@ Añadido en `20260805000001_platform_saas_layer.sql` (aplicar después de la 14)
   proveedor (`sendWhatsApp()`); si el negocio no tiene proveedor configurado, cae al flujo
   histórico por gateway n8n. **DIALOG360 no está verificado con envío real** (tampoco lo
   estaba en el origen MediCore) — probarlo con una cuenta real antes de depender de él.
-- **Capacidades multimedia del agente:** `businesses.feature_image` / `feature_voice`
-  (apagadas por defecto). El workflow `01-agen-agent.json` llama a `/api/agent/media` (nuevo)
-  para transcribir audio (Whisper) o describir imágenes (Vision) solo si el negocio activó la
-  capacidad; si no, el agente sigue como si fuera solo texto.
-- **Voz de salida:** `agent_settings.voice`/`agent_settings.behavior` (5ª pestaña de
-  `/admin/agente`). `src/lib/voice.ts` implementa Qwen3-TTS/DashScope (clave
-  `businesses.dashscope_api_key`, con respaldo de plataforma). `POST /api/agent/voice/reply`
-  (llamado por el nodo "Responder con voz" de n8n) nunca deja al agente mudo: cualquier
-  fallo devuelve `speak:false,sendText:true`. Nunca responde con voz en modo equipo
-  (`actorType==='TEAM'`). Botón "Probar voz" → `/api/admin/agent/voice-preview`.
+- **Capacidades multimedia del agente: construidas y NO conectadas** (comprobado el 2026-08-16
+  leyendo `01-agen-agent.json`; la versión anterior de este documento decía que sí lo estaban y
+  era falso). `businesses.feature_image` / `feature_voice` existen y están apagadas por defecto;
+  `/api/agent/media` (Whisper/Vision) y `POST /api/agent/voice/reply` (Qwen3-TTS/DashScope, ver
+  `src/lib/voice.ts`) existen y tienen pruebas, pero **ningún nodo del workflow los llama**: el
+  agente es solo texto. Se dejan documentados como no usados a propósito — conectarlos añade una
+  llamada más al camino crítico de un flujo que hoy pelea por bajar de los 15 s, y ninguna de
+  las dos capacidades está pedida por un negocio real. Antes de conectarlos: medir primero.
+  `POST /api/agent/voice/reply` nunca deja al agente mudo (cualquier fallo devuelve
+  `speak:false,sendText:true`) y nunca responde con voz en modo equipo (`actorType==='TEAM'`).
+  El botón "Probar voz" de `/admin/agente` sí funciona hoy → `/api/admin/agent/voice-preview`.
 - **Copiloto real:** `/api/admin/copilot` ahora llama a OpenAI (`gpt-4o-mini`) con los mismos
   datos ya calculados por el servidor — el modelo nunca toca la base de datos ni inventa
   cifras. Límite 30/min por negocio (`src/lib/rate-limit.ts`). Si OpenAI falla, cae al texto

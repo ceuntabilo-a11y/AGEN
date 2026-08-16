@@ -37,9 +37,11 @@ const preambulo = () =>
 const workflow = cargarWorkflow()
 
 /** Nodos que se ejecutan DESPUÉS del `Esperar`, donde el emparejado de items ya no vale. */
+// "Memoria reciente" salió del workflow: la conversación ya no vive en un buffer del proceso de
+// n8n, viene en el contexto (`$json.recent`) leída de `messages`.
 const TRAS_LA_ESPERA = [
-  'Agrupar', 'Cargar contexto', 'Agente Agen',
-  'Memoria reciente', 'Enviar a WhatsApp', 'Persistir interacción', 'Responder',
+  'Agrupar', 'Cargar contexto', 'Agente Agen', '¿Respuesta rápida?', 'Respuesta directa',
+  'Enviar a WhatsApp', 'Persistir interacción', 'Responder',
 ]
 
 test.describe('El emparejado de items no puede volver a romper la respuesta', () => {

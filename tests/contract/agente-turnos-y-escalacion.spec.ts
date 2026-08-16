@@ -42,6 +42,26 @@ test.describe('P3 — una reserva sencilla se cierra en pocos turnos', () => {
     expect(prompt).toContain('tres intercambios')
   })
 
+  /*
+   * Regresión real, ejecución 9343 del n8n de producción, provocada por reescribir el prompt en
+   * pasos numerados: a "Tienes hora para manicura mañana?" el agente llamó buscar_horarios y
+   * acto seguido crear_reserva, y le contestó al cliente "te reservé Manicura Semipermanente…".
+   * Una pregunta por disponibilidad se convirtió en una reserva que nadie pidió.
+   *
+   * La regla que lo cierra es de turno, no de intención: buscar y reservar no pueden ocurrir en
+   * el mismo turno, porque entre las dos cosas tiene que caber un mensaje del cliente eligiendo.
+   */
+  test('preguntar por horarios no puede convertirse en una reserva', () => {
+    expect(prompt).toContain('PROHIBIDO llamar crear_reserva en el mismo turno')
+    expect(prompt).toContain('en un mensaje POSTERIOR')
+    expect(prompt).toContain('Preguntar por horarios NO es reservar')
+  })
+
+  test('el precio no se ofrece solo: se da cuando lo piden', () => {
+    expect(prompt).toContain('EL PRECIO NO SE DA SI NO LO PIDEN')
+    expect(prompt).toContain('Solo lo escribes cuando el cliente pregunta')
+  })
+
   test('un día de la semana a secas no se pregunta: se resuelve', () => {
     /*
      * Observado en producción: a "quiero hora para Corte y Peinado el martes en la tarde" el

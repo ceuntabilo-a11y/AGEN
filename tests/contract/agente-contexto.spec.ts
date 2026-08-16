@@ -104,7 +104,7 @@ test.describe('C1 — contexto del equipo', () => {
  * pero si la especialidad no viaja el modelo solo puede adivinar por el nombre.
  */
 test.describe('C3 — especialidad de los servicios', () => {
-  type Servicio = { id: string; nombre: string; min: number; precio: number; especialidad: { id: string; nombre: string; slug: string } | null }
+  type Servicio = { id: string; nombre: string; min: number; precio: string; especialidad: { id: string; nombre: string; slug: string } | null }
 
   test('cada servicio lleva id, nombre, duración, precio y especialidad', () => {
     const servicios = campoJson<Servicio[]>(construir('¿Qué servicios tienen?', memoriaCliente), 'SERVICIOS')
@@ -113,7 +113,8 @@ test.describe('C3 — especialidad de los servicios', () => {
       expect(servicio.id).toBeTruthy()
       expect(servicio.nombre).toBeTruthy()
       expect(typeof servicio.min).toBe('number')
-      expect(typeof servicio.precio).toBe('number')
+      // El precio viaja YA escrito en es-CL: el modelo lo copia, no lo formatea.
+      expect(servicio.precio).toMatch(/^[$][0-9.]+$/)
       // Debe existir el objeto completo: `undefined` también es un fallo.
       expect(servicio.especialidad, `${servicio.nombre} llegó sin especialidad`).toBeTruthy()
       expect(servicio.especialidad?.nombre, `${servicio.nombre} sin nombre de especialidad`).toBeTruthy()
@@ -134,7 +135,7 @@ test.describe('C3 — especialidad de los servicios', () => {
   test('"¿Cuánto cuesta la Manicura Semipermanente?" — precio y duración exactos', () => {
     const servicios = campoJson<Servicio[]>(construir('¿Cuánto cuesta la Manicura Semipermanente?', memoriaCliente), 'SERVICIOS')
     const manicura = servicios.find((servicio) => servicio.nombre === 'Manicura Semipermanente')
-    expect(manicura?.precio).toBe(14000)
+    expect(manicura?.precio).toBe('$14.000')
     expect(manicura?.min).toBe(50)
   })
 })

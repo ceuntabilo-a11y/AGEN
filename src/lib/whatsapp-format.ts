@@ -34,10 +34,22 @@ const VINETA = /^\s*(?:[•·▪◦]|[-–—]\s|\*\s)\s*/
 const NUMERACION = /^\s*\d+[.)]\s/
 
 /**
- * Cola de dato de una opción: el precio o la duración que va al final, tras un separador.
- * Es lo que se baja a su propia línea para que la hora y el profesional queden solos arriba.
+ * Un dato secundario de una opción: el precio o la duración.
+ *
+ * Se buscan TODAS las apariciones, no la primera. Esa es la corrección del fallo que se veía en
+ * producción: una opción puede llevar dos servicios («Corte — Valentina — $15.000 + Manicura —
+ * Fernanda — $14.000») y ahí no hay un dato final que bajar, hay dos opciones encadenadas.
  */
-const COLA_DE_DATO = /\s*[—–·|-]\s*((?:\$\s?[\d.,]+|\d+\s*(?:min|minutos|hrs?|horas?))\b.*)$/i
+const DATO = /(?:\$\s?[\d.,]+|\b\d+\s*(?:min|minutos|hrs?\.?|horas?)\b)/gi
+
+/** Separadores que pueden preceder al dato secundario dentro de una opción. */
+const SEPARADOR = /[—–·|-]/
+
+/**
+ * El `+` que encadena dos servicios en una misma opción. Se parte por él para que cada servicio
+ * quede con SU precio y no con el del vecino.
+ */
+const ENCADENADOR = /\s+\+\s+/
 
 /** Una cabecera se pone en negrita solo si es corta: una frase entera en negrita no es jerarquía. */
 const LARGO_MAXIMO_DE_CABECERA = 64
@@ -65,19 +77,66 @@ function yaEstaEnNegrita(linea: string) {
   return /^\*[^*]+\*$/.test(linea.trim())
 }
 
+/** La negrita solo se pone si la cabecera es corta y no traía asteriscos propios. */
+function enNegrita(cabeza: string) {
+  if (yaEstaEnNegrita(cabeza) || cabeza.includes('*') || cabeza.length > LARGO_MAXIMO_DE_CABECERA) return cabeza
+  return `*${cabeza}*`
+}
+
 /**
- * Una opción de la lista pasa de «• 13:00 con Camila Rojas — $15.000» a dos líneas:
+ * Corta la opción justo antes de su dato secundario, por el separador que lo antecede.
+ *
+ * Devuelve `null` si no hay separador antes del dato: sin él no hay dónde cortar sin inventarse
+ * un salto en mitad de una frase.
+ */
+function partirPorElDato(item: string, posicionDelDato: number) {
+  const antes = item.slice(0, posicionDelDato)
+  const corte = antes.search(new RegExp(`\\s*${SEPARADOR.source}\\s*$`))
+  if (corte <= 0) return null
+  return { cabeza: antes.slice(0, corte).trim(), dato: item.slice(posicionDelDato).trim() }
+}
+
+/**
+ * Una opción con UN solo dato pasa de «• 13:00 con Camila Rojas — $15.000» a dos líneas:
  * la cabecera en negrita y el dato secundario debajo.
  */
-function bloqueDeOpcion(item: string) {
-  const cola = item.match(COLA_DE_DATO)
-  const cabeza = (cola ? item.slice(0, item.length - cola[0].length) : item).trim()
-  const resto = cola ? cola[1].trim() : ''
+function bloqueSimple(item: string, posicionDelDato: number) {
+  const partido = partirPorElDato(item, posicionDelDato)
+  if (!partido || !partido.cabeza) return enNegrita(item)
+  return `${enNegrita(partido.cabeza)}\n${partido.dato}`
+}
 
-  const enNegrita = !yaEstaEnNegrita(cabeza) && cabeza.length <= LARGO_MAXIMO_DE_CABECERA && !cabeza.includes('*')
-    ? `*${cabeza}*`
-    : cabeza
-  return resto ? `${enNegrita}\n${resto}` : enNegrita
+/**
+ * Una opción que encadena dos servicios con `+` se parte por el `+`, un servicio por línea.
+ *
+ * No se le baja el precio a su propia línea: con dos precios en juego, bajar el primero lo dejaba
+ * pegado al nombre del segundo profesional. Visto en producción (ejecución 9236 del n8n):
+ * «*1) Corte y Peinado — Valentina Soto*\n$15.000 + Manicura Semipermanente — Fernanda Muñoz —
+ * $14.000», donde $15.000 parecía el precio de la manicura.
+ */
+function bloqueEncadenado(item: string) {
+  const partes = item.split(ENCADENADOR)
+  if (partes.length < 2) return item
+  /*
+   * Sin negrita, a propósito: acá la cabecera ya lleva su precio dentro, y marcar en negrita la
+   * línea entera —precio incluido— no señala nada. La jerarquía la da el salto de línea.
+   * El `+` es contenido: se conserva al principio de cada línea siguiente.
+   */
+  const [primera, ...resto] = partes
+  return [primera.trim(), ...resto.map((parte) => `+ ${parte.trim()}`)].join('\n')
+}
+
+/**
+ * Ordena una opción de la lista. La decisión se toma contando sus datos secundarios, no buscando
+ * el primero que aparezca.
+ */
+function bloqueDeOpcion(item: string) {
+  DATO.lastIndex = 0
+  const posiciones: number[] = []
+  for (let hallazgo = DATO.exec(item); hallazgo; hallazgo = DATO.exec(item)) posiciones.push(hallazgo.index)
+  if (posiciones.length === 0) return enNegrita(item)
+  if (posiciones.length > 1) return bloqueEncadenado(item)
+  return bloqueSimple(item, posiciones[0])
 }
 
 /**

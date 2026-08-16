@@ -14,8 +14,10 @@ const RUTA_WORKFLOW = path.resolve(__dirname, '..', '..', 'n8n-workflows', '01-a
 
 type NodoN8n = { name: string; type: string; parameters: Record<string, unknown> }
 
-export function cargarWorkflow(): { nodes: NodoN8n[] } {
-  return JSON.parse(readFileSync(RUTA_WORKFLOW, 'utf8')) as { nodes: NodoN8n[] }
+type Conexiones = Record<string, Record<string, Array<Array<{ node: string; type: string; index: number }>>>>
+
+export function cargarWorkflow(): { nodes: NodoN8n[]; connections: Conexiones } {
+  return JSON.parse(readFileSync(RUTA_WORKFLOW, 'utf8')) as { nodes: NodoN8n[]; connections: Conexiones }
 }
 
 export function nodo(nombre: string): NodoN8n {
@@ -71,14 +73,32 @@ export function ejecutarNodoCodigo(
   nodos: Record<string, Record<string, unknown>>,
   ejecucion?: { id?: string },
 ): Record<string, unknown> {
-  const { jsCode } = nodo(nombre).parameters as { jsCode?: string }
-  if (typeof jsCode !== 'string') throw new Error(`El nodo "${nombre}" no es un nodo Code`)
+  const { jsCode, jsonOutput } = nodo(nombre).parameters as { jsCode?: string; jsonOutput?: string }
 
   const referencia = (referido: string) => {
     const valor = nodos[referido]
     if (!valor) throw new Error(`El nodo "${nombre}" usa $('${referido}') y la prueba no lo definió`)
     return { item: { json: valor }, first: () => ({ json: valor }) }
   }
+
+  /*
+   * Dos formas, la misma lógica.
+   *
+   * `Entrada` dejó de ser un nodo Code y pasó a ser un Set con una expresión: el sandbox del
+   * Code node tardaba ~2 s en arrancar en CADA mensaje. Estas pruebas siguen ejecutando la
+   * lógica REAL del workflow versionado, venga en `jsCode` o en `jsonOutput`, así que la puerta
+   * de entrada sigue estando probada con los mismos casos que antes.
+   */
+  if (typeof jsonOutput === 'string') {
+    const cuerpo = jsonOutput.replace(/^=\{\{/, '').replace(/\}\}$/, '').trim()
+    const evaluar = new Function('$', '$execution', `return (${cuerpo})`) as (
+      ref: typeof referencia,
+      execution: { id?: string } | undefined,
+    ) => string
+    return JSON.parse(evaluar(referencia, ejecucion)) as Record<string, unknown>
+  }
+
+  if (typeof jsCode !== 'string') throw new Error(`El nodo "${nombre}" no tiene código ni expresión`)
 
   const ejecutar = new Function('$', '$execution', jsCode) as (
     ref: typeof referencia,
