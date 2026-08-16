@@ -24,7 +24,8 @@
     "app": "node scripts/servicio.mjs",
     "n8n": "node scripts/n8n.mjs",
     "db": "node scripts/db.mjs",
-    "git": "node scripts/git-agen.mjs"
+    "git": "node scripts/git-agen.mjs",
+    "verificar-agente": "node scripts/verificar-agente.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
