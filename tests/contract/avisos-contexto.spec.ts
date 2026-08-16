@@ -255,9 +255,21 @@ test.describe('El aviso solo aparece cuando el mensaje puede estar contestándol
   test('un sí, un no o una respuesta mixta sí lo traen', async () => {
     await despachar()
     for (const respuesta of ['No', 'sí', 'ok', 'No, mejor cámbiamela para mañana', 'no puedo ir', 'después']) {
+      // El aviso se consume al entregarlo, así que cada respuesta se prueba sobre uno vivo.
+      avisos()[0].answered_at = null
       const turno = await contexto(respuesta)
       expect(turno.pendingNotice, `"${respuesta}" sí contesta al aviso`).toBeTruthy()
     }
+  })
+
+  test('el aviso se entrega UNA vez: después manda la conversación en curso', async () => {
+    // Fallo real: un aviso de cancelación siguió vivo y, tres mensajes más tarde, un "sí por
+    // favor" que contestaba al agente se leyó contra ese aviso. La conversación entró en bucle.
+    await despachar()
+    expect((await contexto('No')).pendingNotice).toBeTruthy()
+    expect((await contexto('sí por favor')).pendingNotice, 'ese "sí" ya es de la conversación, no del aviso').toBeNull()
+    expect(avisos()[0].resolution).toBe('ANSWERED')
+    expect(avisos()[0].answer).toBe('No')
   })
 
   test('sin mensaje no se entrega el aviso: la conducta segura es la de antes', async () => {
