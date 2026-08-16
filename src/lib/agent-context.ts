@@ -59,8 +59,15 @@ async function cargarNegocio(db: SupabaseClient, businessId: string) {
   return sinMapa.data
 }
 
-/** Cuántos mensajes del hilo se le dan al modelo. Diez son cinco idas y vueltas. */
-const TURNOS_RECIENTES = 10
+/**
+ * Cuántos mensajes del hilo se le dan al modelo. Seis son tres idas y vueltas.
+ *
+ * No es un número estético: el turno hace entre dos y cuatro llamadas al modelo y CADA una
+ * reenvía la conversación entera. Medido en producción, un turno de reserva movía 6.500-8.200
+ * tokens de entrada por llamada. Con tres idas y vueltas alcanza de sobra para entender de qué
+ * se está hablando, y lo anterior ya está resumido en MEMORIA.
+ */
+const TURNOS_RECIENTES = 6
 
 /**
  * Lo que se habló, leído de la base — la ÚNICA fuente de la conversación reciente.
