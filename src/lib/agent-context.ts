@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { findAgentTeamActor } from '@/lib/agent-actor'
+import { money } from '@/lib/money'
 import { cargarAvisoPendiente } from '@/lib/outbound-context'
 import { dateKeyInZone, formatInZone, formatTimeInZone, referenciasTemporales, zonedDayRange } from '@/lib/timezone'
 
@@ -74,11 +75,22 @@ export async function cargarCatalogo(db: SupabaseClient, businessId: string) {
   if (especialidades.error || servicios.error || sucursales.error) return { error: 'catalogo' as const }
 
   const timezone = (negocio as { timezone?: string }).timezone || ZONA_POR_DEFECTO
+  const moneda = (negocio as { currency?: string }).currency || 'CLP'
   return {
     business: { ...negocio, maps_url: (negocio as { maps_url?: string | null }).maps_url ?? null },
     branches: sucursales.data,
     specialties: especialidades.data,
-    services: servicios.data,
+    /*
+     * El precio YA escrito como lo lee el cliente, junto al número crudo.
+     *
+     * Con solo `price: 14000` delante, el agente contesta «cuesta $14000» — sin el punto de los
+     * miles. Formatear moneda es presentación, y la presentación la resuelve el servidor: es la
+     * misma decisión que ya estaba tomada para las fechas y las horas (CLAUDE.md §1).
+     */
+    services: (servicios.data ?? []).map((servicio) => ({
+      ...servicio,
+      precio: money(Number((servicio as { price?: number }).price ?? 0), moneda),
+    })),
     // El agente no debe deducir qué día es "mañana" a partir de un instante UTC: las fechas
     // relativas se calculan acá, en la zona real del negocio y respetando el horario de verano.
     time: referenciasTemporales(new Date(), timezone),

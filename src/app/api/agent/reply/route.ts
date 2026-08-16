@@ -22,8 +22,16 @@ import { guardarRespuestaPendiente, marcarRespuestaEnviada, marcarRespuestaFalli
  *    un reintento no puede producir una segunda reserva).
  */
 
-/** Ventana en la que se busca evidencia de lo que hizo el agente en este turno. */
+/**
+ * Ventana de respaldo para buscar evidencia cuando no se sabe cuándo empezó el turno.
+ *
+ * Se usa SOLO si el mensaje no trae `messageId`; con él, la ventana empieza en el instante en
+ * que entró ese mensaje, que es lo que de verdad significa "este turno".
+ */
 const VENTANA_MINUTOS = 15
+
+/** Margen hacia atrás sobre la llegada del mensaje, por el desfase de relojes entre servicios. */
+const MARGEN_SEGUNDOS = 30
 
 export async function POST(request: Request) {
   if (!isAuthorizedAgent(request)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -32,15 +40,45 @@ export async function POST(request: Request) {
   if (!body.businessId || !isRealClientPhone(phone)) return NextResponse.json({ error: 'Negocio o teléfono inválido' }, { status: 400 })
 
   const db = createAdminClient()
-  const { data: business } = await db.from('businesses')
-    .select('id,whatsapp_provider,whatsapp_instance,whatsapp_phone_id,whatsapp_token,whatsapp_360_api_key')
-    .eq('id', body.businessId).eq('active', true).maybeSingle()
+  /*
+   * El negocio y el cliente no dependen el uno del otro: pedirlos en fila era un viaje de ida y
+   * vuelta a la base regalado en CADA respuesta, y este endpoint está en el camino crítico —
+   * hasta que termina, el cliente no ha visto nada. Medido contra producción, el nodo "Enviar a
+   * WhatsApp" tardaba 3–4,3 s.
+   */
+  const [negocio, cliente, entrada] = await Promise.all([
+    db.from('businesses')
+      .select('id,whatsapp_provider,whatsapp_instance,whatsapp_phone_id,whatsapp_token,whatsapp_360_api_key')
+      .eq('id', body.businessId).eq('active', true).maybeSingle(),
+    db.from('clients').select('id')
+      .eq('business_id', body.businessId).eq('phone', phone).maybeSingle(),
+    body.messageId
+      ? db.from('agent_inbox').select('created_at')
+        .eq('business_id', body.businessId).eq('phone', phone).eq('message_id', body.messageId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+  const business = negocio.data
+  const client = cliente.data
   if (!business) return NextResponse.json({ error: 'Negocio inexistente' }, { status: 404 })
 
-  const { data: client } = await db.from('clients').select('id')
-    .eq('business_id', body.businessId).eq('phone', phone).maybeSingle()
-
-  const desde = new Date(Date.now() - VENTANA_MINUTOS * 60000).toISOString()
+  /*
+   * "Este turno" empieza cuando llegó ESTE mensaje, no hace quince minutos.
+   *
+   * Fallo real (ejecuciones 9343 y 9345 del n8n de producción, con dos minutos de diferencia):
+   * en la primera el agente reservó una hora; en la segunda el cliente escribió "no puedo ir,
+   * cancela esa hora" y el modelo devolvió un texto vacío. La revisión lo bloqueó —bien— y
+   * eligió el respaldo mirando la evidencia de los últimos 15 minutos, así que encontró la
+   * reserva del turno ANTERIOR y le contestó "Listo, tu hora quedó reservada" a alguien que
+   * acababa de pedir cancelarla.
+   *
+   * Con la marca de llegada del mensaje, la evidencia solo puede ser de este turno. Sin
+   * `messageId` —o si la fila todavía no está— se conserva la ventana antigua: es peor, pero es
+   * exactamente lo que había, así que nada empeora.
+   */
+  const llegada = (entrada.data as { created_at?: string } | null)?.created_at
+  const desde = llegada
+    ? new Date(new Date(llegada).getTime() - MARGEN_SEGUNDOS * 1000).toISOString()
+    : new Date(Date.now() - VENTANA_MINUTOS * 60000).toISOString()
   const evidencia = await reunirEvidencia(db, { businessId: body.businessId, clientId: client?.id ?? null, desde })
   const revision = revisarRespuesta(String(body.reply ?? ''), evidencia)
 

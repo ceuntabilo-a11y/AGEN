@@ -79,6 +79,44 @@ test.describe('Varios profesionales y varios horarios', () => {
   })
 })
 
+/**
+ * El fallo real de la ejecución 9236 del n8n de producción: una opción que encadena dos
+ * servicios tiene DOS precios, y bajar el primero a su propia línea lo dejaba pegado al nombre
+ * del segundo profesional. El cliente leía «$15.000 + Manicura — Fernanda Muñoz — $14.000» y el
+ * precio del corte parecía el de la manicura.
+ */
+test.describe('Opciones que encadenan dos servicios', () => {
+  const original = [
+    'Mañana a las 15:00 no tenemos disponibilidad. Puedo agendarlos el lunes 17 de agosto a las 09:00 en estas combinaciones:',
+    '1) Corte y Peinado — Valentina Soto — $15.000 + Manicura Semipermanente — Fernanda Muñoz — $14.000.',
+    '2) Corte y Peinado — Camila Rojas — $15.000 + Manicura Semipermanente — Javiera Contreras — $14.000.',
+    '¿Cuál prefieres? 📝',
+  ].join('\n')
+
+  test('cada precio queda en la línea de SU servicio', () => {
+    const salida = ordenar(original)
+    expect(salida).toContain('1) Corte y Peinado — Valentina Soto — $15.000')
+    expect(salida).toContain('+ Manicura Semipermanente — Fernanda Muñoz — $14.000.')
+  })
+
+  test('nunca se separa un precio de su servicio dejándolo junto a otro nombre', () => {
+    const salida = ordenar(original)
+    // Esto era exactamente lo que salía antes y no puede volver a salir.
+    expect(salida).not.toContain('*1) Corte y Peinado — Valentina Soto*\n$15.000 +')
+    for (const linea of salida.split('\n')) {
+      expect((linea.match(/\$/g) ?? []).length, `dos precios en una misma línea: ${linea}`).toBeLessThan(2)
+    }
+  })
+
+  test('el segundo servicio empieza en su propia línea, no pegado al primero', () => {
+    expect(ordenar(original)).toMatch(/\$15\.000\n\+ Manicura/)
+  })
+
+  test('la pregunta final sigue respirando', () => {
+    expect(ordenar(original)).toMatch(/\n\n¿Cuál prefieres\? 📝$/)
+  })
+})
+
 test.describe('Duración y precio', () => {
   test('la duración también baja a su propia línea', () => {
     const salida = ordenar([
