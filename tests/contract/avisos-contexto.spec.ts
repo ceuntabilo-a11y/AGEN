@@ -72,7 +72,7 @@ const simularClaim = () => {
 }
 
 const despachar = () => POST_despachar(peticionAgente('http://localhost/api/automation/notifications/dispatch', {}))
-const contexto = async () => (await POST_contexto(peticionAgente('http://localhost/api/agent/context', { businessId: NEGOCIO, phone: TELEFONO }))).json()
+const contexto = async (message = 'No') => (await POST_contexto(peticionAgente('http://localhost/api/agent/context', { businessId: NEGOCIO, phone: TELEFONO, message }))).json()
 const avisos = () => falso.tablas.outbound_prompts ?? []
 
 test.beforeEach(async () => {
@@ -228,6 +228,45 @@ test.describe('El agente recibe el aviso en su contexto', () => {
   })
 })
 
+test.describe('El aviso solo aparece cuando el mensaje puede estar contestándolo', () => {
+  /*
+   * Fallo real en producción: había un seguimiento pendiente («hace tiempo que no vienes,
+   * ¿te busco hora?»), el cliente escribió «Hola» y el agente le contestó al seguimiento en vez
+   * de saludar. El aviso se entregaba en todos los turnos mientras siguiera vivo.
+   */
+  test('un saludo NO despierta un seguimiento pendiente', async () => {
+    falso.tablas.notification_outbox = [enCola({ event_type: 'FOLLOW_UP' })]
+    await despachar()
+    expect(avisos()).toHaveLength(1)
+
+    for (const saludo of ['Hola', 'hola!', 'Buenas tardes', 'Hey 👋', 'Buenos días']) {
+      const turno = await contexto(saludo)
+      expect(turno.pendingNotice, `"${saludo}" no contesta a nada`).toBeNull()
+    }
+  })
+
+  test('una petición nueva tampoco lo despierta', async () => {
+    falso.tablas.notification_outbox = [enCola({ event_type: 'FOLLOW_UP' })]
+    await despachar()
+    const turno = await contexto('¿Cuánto sale la manicura?')
+    expect(turno.pendingNotice).toBeNull()
+  })
+
+  test('un sí, un no o una respuesta mixta sí lo traen', async () => {
+    await despachar()
+    for (const respuesta of ['No', 'sí', 'ok', 'No, mejor cámbiamela para mañana', 'no puedo ir', 'después']) {
+      const turno = await contexto(respuesta)
+      expect(turno.pendingNotice, `"${respuesta}" sí contesta al aviso`).toBeTruthy()
+    }
+  })
+
+  test('sin mensaje no se entrega el aviso: la conducta segura es la de antes', async () => {
+    await despachar()
+    const turno = await (await POST_contexto(peticionAgente('http://localhost/api/agent/context', { businessId: NEGOCIO, phone: TELEFONO }))).json()
+    expect(turno.pendingNotice).toBeNull()
+  })
+})
+
 test.describe('Las reglas del agente para responder a un aviso', () => {
   const workflow = () => require('../../n8n-workflows/01-agen-agent.json') as { nodes: Array<{ name: string; parameters: any }> }
   const nodoAgente = () => workflow().nodes.find((nodo) => nodo.name === 'Agente Agen')!
@@ -235,6 +274,16 @@ test.describe('Las reglas del agente para responder a un aviso', () => {
   test('el contexto del prompt inyecta AVISO_PENDIENTE', () => {
     expect(nodoAgente().parameters.text).toContain('AVISO_PENDIENTE')
     expect(nodoAgente().parameters.text).toContain('pendingNotice')
+  })
+
+  test('el workflow le manda el mensaje del cliente al contexto', () => {
+    // Sin el mensaje, la app no puede decidir si el aviso viene al caso y no lo entrega.
+    const nodo = workflow().nodes.find((item) => item.name === 'Cargar contexto')!
+    expect(nodo.parameters.body).toContain('message')
+  })
+
+  test('prohíbe recitarle el aviso al cliente', () => {
+    expect(nodoAgente().parameters.options.systemMessage as string).toContain('NUNCA lo leas, lo copies ni se lo repitas')
   })
 
   test('prohíbe preguntar "¿a qué te refieres?" cuando hay un aviso pendiente', () => {

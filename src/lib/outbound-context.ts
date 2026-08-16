@@ -127,16 +127,76 @@ function haceCuanto(desde: string) {
   return `hace ${dias} ${dias === 1 ? 'día' : 'días'}`
 }
 
+/** Un saludo a secas nunca contesta a nada. */
+const SALUDO_SOLO = /^[\s¡]*(hola+|buenas?|buenos d[ií]as|buenas tardes|buenas noches|hey|holi|qu[eé] tal|saludos)[\s!¡.,:;)?😊🙂😀👋]*$/i
+
+/*
+ * Ojo con `\b` y los acentos: en JS `í` no es carácter de palabra, así que `/\bsí\b/` NUNCA casa
+ * con «sí» (la misma trampa que ya documenta `@/lib/agent-reply`). Por eso los límites se
+ * escriben a mano con lookarounds sobre el alfabeto español.
+ */
+const ANTES = '(?<![a-zA-Z0-9áéíóúüñ])'
+const DESPUES = '(?![a-zA-Z0-9áéíóúüñ])'
+const palabras = (alternativas: string) => new RegExp(`${ANTES}(?:${alternativas})${DESPUES}`, 'i')
+
+/** Formas en las que una persona contesta que sí, que no o que ahora no. */
+const RESPUESTA_SUELTA = [
+  palabras('s[ií]|sip|claro|dale|ok|okey|okay|listo|perfecto|bueno|de acuerdo|acepto|confirmo|confirmado|asisto|voy|ah[ií] estar[eé]|me sirve|me acomoda|quiero'),
+  palabras('no|nop|nel|imposible|no puedo|no podr[eé]|no voy|no ir[eé]|cancel(?:a|o|ar|ame|en|arla)?|an[uú]la(?:r|me)?|liberar?|no me sirve|no me acomoda'),
+  palabras('despu[eé]s|m[aá]s tarde|luego|otro d[ií]a|lo pienso|todav[ií]a no|a[uú]n no'),
+]
+
+/** Palabras que dicen que el mensaje habla de lo mismo que el aviso. */
+const SOBRE_EL_TEMA = palabras('hora|horas|horario|horarios|cita|reserva|reservar|agenda|agendar|cambiar|c[aá]mbia\\w*|mover|reagendar|reprogramar|confirmar|cancelar|promoci[oó]n|oferta')
+
+/** Una calificación del 1 al 5, que es lo que espera una encuesta. */
+const CALIFICACION = /(^\s*[1-5]\s*$)|\b[1-5]\s*(\/|de)\s*5\b/
+
+/** Un mensaje largo ya no es "una respuesta suelta": tiene que hablar del tema para contar. */
+const LARGO_DE_UNA_RESPUESTA = 120
+
 /**
- * El último mensaje automático que sigue esperando respuesta de esta persona.
+ * ¿Este mensaje puede estar contestando al aviso?
+ *
+ * Existe por un fallo real: había un seguimiento pendiente («hace tiempo que no vienes,
+ * ¿te busco hora?»), el cliente escribió **«Hola»** y el agente le contestó al seguimiento en vez
+ * de saludar. El aviso se le entregaba en todos los turnos mientras siguiera vivo, así que
+ * cualquier mensaje —incluido un saludo— parecía tener esa pregunta delante.
+ *
+ * La decisión se toma acá, en la app, y no en el prompt: es determinista, se puede probar, y
+ * además ahorra la consulta en la mayoría de los turnos.
+ */
+export function pareceRespuestaAlAviso(mensaje: string | null | undefined): boolean {
+  const texto = String(mensaje ?? '').trim()
+  if (!texto) return false
+  if (SALUDO_SOLO.test(texto)) return false
+  // Una nota suelta del 1 al 5 solo puede ser la respuesta a una encuesta.
+  if (CALIFICACION.test(texto)) return true
+  if (SOBRE_EL_TEMA.test(texto)) return true
+  if (texto.length > LARGO_DE_UNA_RESPUESTA) return false
+  return RESPUESTA_SUELTA.some((patron) => patron.test(texto))
+}
+
+/**
+ * El último mensaje automático que sigue esperando respuesta de esta persona, **y solo si el
+ * mensaje que acaba de llegar puede estar contestándolo**.
  *
  * Se pide junto al resto del contexto del turno (`cargarContexto`), no en una llamada aparte:
  * el agente ya iba justo de tiempo y esto tiene que ser gratis.
  */
 export async function cargarAvisoPendiente(
   db: SupabaseClient,
-  datos: { businessId: string; clientId: string; phone: string; timezone: string },
+  datos: { businessId: string; clientId: string; phone: string; timezone: string; message?: string | null },
 ): Promise<AvisoPendiente | null> {
+  /*
+   * Sin mensaje no se entrega el aviso.
+   *
+   * Es deliberado: si el workflow todavía no manda el texto del cliente (despliegue a medias),
+   * la conducta vuelve a ser la de antes de existir esta función, que es la segura. Entregar el
+   * aviso "por si acaso" es justo lo que hizo que un «Hola» disparara un seguimiento.
+   */
+  if (!pareceRespuestaAlAviso(datos.message)) return null
+
   const { data, error } = await db.from('outbound_prompts')
     .select('kind,expects,question,if_yes,if_no,summary,sent_at,appointment_id,campaign_id')
     .eq('business_id', datos.businessId)

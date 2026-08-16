@@ -387,6 +387,11 @@ NO…», el cliente escribió «No» y el agente contestó «¿A qué te refiere
   una cancelación pide horarios nuevos; un «sí» a un cambio de hora confirma la hora nueva:
   son opuestos, y por eso `CHANGED` se guarda como `CHANGED_CANCEL`, `CHANGED_MOVE`,
   `CHANGED_RESCHEDULE` o `CHANGED_RESIZE`, nunca a secas.
+- **El aviso solo se entrega si el mensaje puede estar contestándolo** (`pareceRespuestaAlAviso`).
+  Fallo real del 2026-08-16: había un seguimiento vivo, el cliente escribió «Hola» y el agente le
+  contestó al seguimiento en vez de saludar, porque el aviso se entregaba en todos los turnos.
+  La decisión se toma en la app —determinista y probada—, y **sin `message` no se entrega nada**,
+  así que un despliegue a medias vuelve a la conducta segura.
 - **El agente lo recibe en el mismo contexto del turno** (`cargarContexto` →
   `pendingNotice`, inyectado en el prompt como `AVISO_PENDIENTE`), sin una llamada extra.
   Incluye `repliesSince`: cuántos mensajes escribió el cliente desde que salió el aviso. Con 1
