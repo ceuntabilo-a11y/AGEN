@@ -56,9 +56,17 @@ async function apartadosVivos(
   db: ReturnType<typeof createAdminClient>,
   datos: { businessId: string; clientId: string | null; phone: string; timezone: string },
 ): Promise<ApartadoVivo[]> {
+  /*
+   * Se busca por las dos claves y por las dos formas del teléfono.
+   *
+   * `claveDeContacto` deja una sola forma al guardar, pero un apartado creado por una versión
+   * anterior puede tener el `+` delante: si no se mirara, el cliente elegiría un horario que se
+   * le ofreció hace un minuto y el sistema no encontraría nada que reservar.
+   */
   const claves = [
     ...(datos.clientId ? [`client_id.eq.${datos.clientId}`] : []),
     `contact_key.eq.${datos.phone}`,
+    `contact_key.eq.+${datos.phone}`,
   ]
   const { data } = await db.from('appointment_holds')
     .select('id,service_id,professional_id,period,expires_at,service:services(name),professional:professionals(display_name)')

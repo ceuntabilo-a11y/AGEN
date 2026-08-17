@@ -52,6 +52,23 @@ test.describe('Una búsqueda repetida no acumula apartados', () => {
     expect(vivos(), 'ningún apartado del mismo contacto puede sobrevivir').toEqual([])
   })
 
+  test('el teléfono se guarda y se busca con UNA sola forma', async () => {
+    /*
+     * Fallo real (ejecución 10685 del n8n de producción): el apartado se guardaba con «+» y se
+     * buscaba sin él, así que el cliente elegía un horario recién ofrecido y el sistema no
+     * encontraba ningún apartado vivo. Ahora la clave se normaliza al escribir, y al soltar se
+     * miran las dos formas para no dejar huérfanos los apartados anteriores al arreglo.
+     */
+    falso.tablas.appointment_holds = [
+      hold('normalizado', { contact_key: '56911112222' }),
+      hold('con-mas', { contact_key: '+56911112222' }),
+    ]
+
+    await liberarHoldsPrevios(db, { businessId: NEGOCIO, contactKey: '+56 9 1111 2222' })
+
+    expect(vivos(), 'las dos formas del mismo teléfono son el mismo contacto').toEqual([])
+  })
+
   test('los apartados de otro contacto no se tocan', async () => {
     falso.tablas.appointment_holds = [
       hold('mio'),

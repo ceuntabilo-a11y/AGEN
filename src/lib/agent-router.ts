@@ -184,6 +184,17 @@ export type ResultadoGuarda = {
 export function aplicarGuardas(intencion: Intencion, estado: EstadoDelTurno): ResultadoGuarda {
   const sinReservas = estado.reservas.length === 0
 
+  /*
+   * "Confirmar" con horarios apartados y sin ninguna reserva es ELEGIR, no confirmar.
+   *
+   * Visto probando en producción: a «sí, la de las 09:00 con Fernanda» el clasificador contestó
+   * CONFIRMAR, y sin esta corrección el turno terminaba en «no tengo ninguna hora reservada a
+   * tu nombre» — justo después de habérsela ofrecido.
+   */
+  if (intencion === 'CONFIRMAR' && sinReservas && estado.apartados.length) {
+    return { intencion: 'ELEGIR', corregidaPor: 'confirma_un_horario_ofrecido' }
+  }
+
   if ((intencion === 'CANCELAR' || intencion === 'MOVER' || intencion === 'CONFIRMAR') && sinReservas) {
     return {
       intencion: 'AGENDAR',

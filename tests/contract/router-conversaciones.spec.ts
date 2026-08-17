@@ -236,6 +236,40 @@ test.describe('Reagendar', () => {
   })
 })
 
+/* ───────── El horario ofrecido tiene que poder elegirse (fallo real) ───────── */
+
+test.describe('Elegir un horario recién ofrecido', () => {
+  /*
+   * Ejecución 10685 del n8n de producción, encontrada probando este mismo cambio: se le
+   * ofrecieron horarios y, al contestar «sí, la de las 09:00 con Fernanda», el agente respondió
+   * «no tengo ninguna hora reservada a tu nombre».
+   *
+   * Dos causas, las dos cerradas acá: el apartado se guardaba con el teléfono con «+» y se
+   * buscaba sin él, y el clasificador leía ese «sí» como CONFIRMAR en vez de como elegir.
+   */
+  test('el apartado se encuentra aunque el teléfono se guardara con "+"', async () => {
+    falso.tablas.appointment_holds = [{ ...apartado('hold-1', `+${ANA}`, MANANA) }]
+    const { cuerpo } = await turno({ businessId: NEGOCIO, phone: ANA, message: 'sí, la de las 09:00' })
+    expect(cuerpo.diagnostico.apartados, 'el apartado ofrecido tiene que seguir encontrándose').toBe(1)
+    expect(cuerpo.ruta).toBe('DECIDIR')
+  })
+
+  test('un "sí" con horarios apartados y sin reservas es elegir, no confirmar', async () => {
+    falso.tablas.appointment_holds = [apartado('hold-1', ANA, MANANA)]
+    const { cuerpo } = await turno({ businessId: NEGOCIO, phone: ANA, message: 'sí' })
+    expect(cuerpo.ruta).toBe('DECIDIR')
+    expect(cuerpo.intencion).toBe('ELEGIR')
+    expect(cuerpo.texto, 'no puede contestar que no tiene ninguna hora').toBeNull()
+  })
+
+  test('el contexto le enseña al decisor los apartados con su holdId', async () => {
+    falso.tablas.appointment_holds = [apartado('hold-1', ANA, MANANA)]
+    const { cuerpo } = await turno({ businessId: NEGOCIO, phone: ANA, message: 'sí' })
+    expect(cuerpo.userMessage).toContain('APARTADOS')
+    expect(cuerpo.userMessage).toContain('hold-1')
+  })
+})
+
 /* ────────────── 5. Dos clientes pidiendo el mismo horario ────────────── */
 
 test.describe('Dos clientes, un solo cupo', () => {
