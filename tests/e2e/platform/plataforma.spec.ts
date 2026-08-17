@@ -19,11 +19,14 @@ test.describe('Plataforma (super admin)', () => {
     }
   })
 
-  test('el resumen muestra las tarjetas de salud del SaaS', async ({ page }) => {
+  test('el resumen muestra el estado comercial y operativo', async ({ page }) => {
     await irA(page, '/plataforma', 'Resumen de plataforma')
-    for (const tarjeta of ['Negocios activos', 'Profesionales activos', 'MRR estimado', 'Salud']) {
-      await expect(page.getByText(tarjeta, { exact: true })).toBeVisible({ timeout: 60000 })
+    // Los bloques que hacen falta para decidir una venta, no tarjetas decorativas.
+    for (const bloque of ['Demos y conversión', 'Ingresos mensuales recurrentes estimados', 'Próximos a vencer', 'Operación']) {
+      await expect(page.getByText(bloque, { exact: true }).first()).toBeVisible({ timeout: 60000 })
     }
+    // Y «MRR» explicado en español: por sí solo no le dice nada a quien vende.
+    await expect(page.getByText(/También llamado MRR/)).toBeVisible()
   })
 
   test('negocios: lista los tenants y ofrece acciones de administración', async ({ page }) => {
@@ -38,6 +41,9 @@ test.describe('Plataforma (super admin)', () => {
     // Suspender y Eliminar existen pero NO se ejecutan: son acciones destructivas sobre un tenant.
     await expect(page.getByRole('button', { name: /Suspender|Reactivar/ }).first()).toBeVisible()
     await expect(page.getByRole('button', { name: 'Eliminar' }).first()).toBeVisible()
+    // Editar y reenviar la invitación: las dos que faltaban para administrar sin borrar nada.
+    await expect(page.getByRole('button', { name: 'Editar' }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /Reenviar invitación/ }).first()).toBeVisible()
   })
 
   test('negocios: el alta pide lo mínimo, resume antes de crear y no crea nada vacío', async ({ page }) => {
