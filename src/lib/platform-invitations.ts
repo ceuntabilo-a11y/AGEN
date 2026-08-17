@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { registrarAviso } from '@/lib/observabilidad'
-import { resendConfigured, sendMarketingEmail } from '@/lib/resend'
+import { resendConfigured, sendTransactionalEmail } from '@/lib/resend'
 
 /**
  * Invitación del dueño de un negocio: emitir el enlace, mandarlo y llevar su estado.
@@ -22,24 +22,56 @@ export type EstadoInvitacion = 'PENDING' | 'ACCEPTED' | 'EXPIRED'
 const appUrl = () => (process.env.NEXT_PUBLIC_APP_URL || 'https://agen.synetia.site').replace(/\/+$/, '')
 
 /**
+ * A dónde lleva el botón del correo.
+ *
+ * Se construye a mano sobre `/auth/confirm?token_hash=…`, que es el camino que Supabase
+ * documenta para cuando el correo lo manda uno mismo, y NO se usa el `action_link` que devuelve
+ * `generateLink`.
+ *
+ * La diferencia no es estética. `action_link` acaba en `/auth/callback?code=…`, y canjear ese
+ * código exige el «code verifier» que el navegador guardó al INICIAR el flujo. Acá el flujo lo
+ * inicia el servidor cuando el administrador crea el negocio, así que el navegador del invitado
+ * —otro navegador, en otro equipo, días después— nunca tuvo ese verificador: el canje falla y la
+ * persona aterriza en el login con un error que no puede resolver.
+ *
+ * `token_hash` se verifica entero en el servidor (`verifyOtp`), sin nada guardado en el
+ * navegador, así que funciona se abra donde se abra.
+ */
+function enlaceDeActivacion(hash: string, negocio: string) {
+  const destino = `/auth/set-password?negocio=${encodeURIComponent(negocio)}`
+  return `${appUrl()}/auth/confirm?token_hash=${encodeURIComponent(hash)}&type=invite&next=${encodeURIComponent(destino)}`
+}
+
+/**
  * El usuario del dueño y el enlace para que entre.
  *
  * Devuelve `enlace: null` cuando la cuenta ya existía: en ese caso no hay invitación que emitir
  * —la persona ya tiene su clave— y lo correcto es que entre por el login de siempre.
+ *
+ * Se usa `generateLink` y no `inviteUserByEmail` a propósito: el segundo manda el correo por el
+ * SMTP de Supabase, con su plantilla y su remitente. Acá el correo lo manda Agen por Resend, con
+ * el dominio verificado y la plantilla propia, que es justo lo que hace falta para que llegue a
+ * la bandeja y no a spam. `generateLink` crea el usuario y emite el token, sin enviar nada.
  */
 export async function emitirAcceso(
   db: SupabaseClient,
   email: string,
+  negocio = '',
 ): Promise<{ userId: string; enlace: string | null; yaExistia: boolean } | { error: string }> {
   const correo = email.trim().toLowerCase()
   const enlace = await db.auth.admin.generateLink({
     type: 'invite',
     email: correo,
-    options: { redirectTo: `${appUrl()}/auth/callback` },
+    options: { redirectTo: `${appUrl()}/auth/confirm` },
   })
 
   if (!enlace.error) {
-    return { userId: enlace.data.user.id, enlace: enlace.data.properties.action_link, yaExistia: false }
+    const hash = enlace.data.properties.hashed_token
+    return {
+      userId: enlace.data.user.id,
+      enlace: hash ? enlaceDeActivacion(hash, negocio) : enlace.data.properties.action_link,
+      yaExistia: false,
+    }
   }
 
   // Ya registrado: se reutiliza. Crear otro usuario con el mismo correo es imposible en
@@ -61,12 +93,16 @@ export async function enviarInvitacion(datos: {
   diasDeVigencia?: number
 }): Promise<{ enviado: boolean; motivo?: string }> {
   if (!(await resendConfigured())) return { enviado: false, motivo: 'sin_resend' }
-  const asunto = `Te damos acceso a ${datos.negocio} en Agen`
-  const resultado = await sendMarketingEmail({
+  /*
+   * Transaccional, no marketing. El envío de marketing reescribe el nombre visible del
+   * remitente con el nombre del negocio, así que la invitación salía como
+   * «Estética Bella Vida <notificaciones@synetia.site>»: un nombre visible que no tiene nada que
+   * ver con el dominio que firma el correo, que es de las señales de spam más clásicas.
+   */
+  const resultado = await sendTransactionalEmail({
     to: datos.email,
-    subject: asunto,
+    subject: `Activa tu acceso a ${datos.negocio} en Agen`,
     html: plantillaInvitacion({ ...datos, diasDeVigencia: datos.diasDeVigencia ?? DIAS_DE_VIGENCIA }),
-    businessName: datos.negocio,
   })
   if (!resultado.success) {
     registrarAviso('plataforma_invitacion_no_enviada', { motivo: resultado.error })
