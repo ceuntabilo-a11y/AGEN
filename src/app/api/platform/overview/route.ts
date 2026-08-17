@@ -3,6 +3,7 @@ import { requirePlatformAdmin } from '@/lib/platform-context'
 import { apiError } from '@/lib/http-errors'
 import { AVISO_VENCIMIENTO_DIAS, diasRestantes, estadoDeNegocio } from '@/lib/platform-business'
 import { urlDeN8n } from '@/lib/platform-settings'
+import { negociosConVigencia } from '@/lib/platform-schema'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,7 +68,10 @@ export async function GET() {
     const hace30 = diaISO(new Date(ahora.getTime() - 30 * 86400000))
 
     const [negocios, profesionales, citas, ping, n8n] = await Promise.all([
-      db.from('businesses').select('id,name,active,suspended_at,is_demo,starts_on,expires_on,converted_at,created_at,membership_plans(code,name,price)'),
+      negociosConVigencia(
+        (columnas) => db.from('businesses').select(columnas),
+        'id,name,active,suspended_at,created_at,membership_plans(code,name,price)',
+      ),
       db.from('professionals').select('id', { count: 'exact', head: true }).eq('active', true),
       db.from('appointments').select('id', { count: 'exact', head: true }).not('status', 'eq', 'CANCELLED'),
       db.from('businesses').select('id', { count: 'exact', head: true }).limit(1).then(

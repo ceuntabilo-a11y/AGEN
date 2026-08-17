@@ -3,6 +3,7 @@ import { requirePlatformAdmin } from '@/lib/platform-context'
 import { apiError } from '@/lib/http-errors'
 import { diasRestantes, estadoDeNegocio, slugDesdeNombre, slugValido, vencimientoDesdeDuracion } from '@/lib/platform-business'
 import { emitirAcceso, enviarInvitacion, registrarInvitacion } from '@/lib/platform-invitations'
+import { insertarNegocio, negociosConVigencia } from '@/lib/platform-schema'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,9 +18,10 @@ export async function GET() {
     await db.rpc('expire_stale_invitations').then(() => undefined, () => undefined)
 
     const [negocios, invitaciones] = await Promise.all([
-      db.from('businesses')
-        .select('id,name,slug,active,suspended_at,plan_id,created_at,timezone,currency,logo_url,is_demo,starts_on,expires_on,converted_at,whatsapp_provider,membership_plans(code,name,price)')
-        .order('created_at', { ascending: false }),
+      negociosConVigencia<{ id: string; created_at?: string | null }>(
+        (columnas) => db.from('businesses').select(columnas).order('created_at', { ascending: false }),
+        'id,name,slug,active,suspended_at,plan_id,created_at,timezone,currency,whatsapp_provider,membership_plans(code,name,price)',
+      ),
       db.from('business_invitations').select('business_id,email,status,sent_at,expires_at,accepted_at,sent_count'),
     ])
     if (negocios.error) throw negocios.error
@@ -73,7 +75,7 @@ export async function POST(request: Request) {
       : vencimientoDesdeDuracion(inicio, body.durationDays ?? null)
     if (vence && vence < inicio) return NextResponse.json({ error: 'El vencimiento no puede ser anterior al inicio' }, { status: 400 })
 
-    const { data: negocio, error: errorNegocio } = await db.from('businesses').insert({
+    const { data: negocio, error: errorNegocio } = await insertarNegocio(db, {
       name: nombre,
       slug,
       timezone: body.timezone || 'America/Santiago',
@@ -82,12 +84,12 @@ export async function POST(request: Request) {
       is_demo: body.isDemo === true,
       starts_on: inicio,
       expires_on: vence,
-    }).select().single()
+    })
     if (errorNegocio) {
       if (errorNegocio.code === '23505') return NextResponse.json({ error: 'Ya existe un negocio con esa dirección web' }, { status: 409 })
       throw errorNegocio
     }
-    creado = negocio
+    creado = negocio as { id: string }
 
     const deshacer = async () => {
       if (usuarioNuevo) { try { await db.auth.admin.deleteUser(usuarioNuevo) } catch { /* ya no existe */ } }
@@ -99,7 +101,7 @@ export async function POST(request: Request) {
     if (!acceso.yaExistia) usuarioNuevo = acceso.userId
 
     const { error: errorMiembro } = await db.from('business_members')
-      .insert({ business_id: negocio.id, user_id: acceso.userId, role: 'OWNER' })
+      .insert({ business_id: negocio!.id, user_id: acceso.userId, role: 'OWNER' })
     if (errorMiembro) { await deshacer(); throw errorMiembro }
 
     let correoEnviado = false
@@ -107,7 +109,7 @@ export async function POST(request: Request) {
       const envio = await enviarInvitacion({ email: correo, negocio: nombre, enlace: acceso.enlace })
       correoEnviado = envio.enviado
     }
-    await registrarInvitacion(db, { businessId: negocio.id, email: correo, userId: acceso.userId, aceptada: acceso.yaExistia })
+    await registrarInvitacion(db, { businessId: String(negocio!.id), email: correo, userId: acceso.userId, aceptada: acceso.yaExistia })
 
     return NextResponse.json({
       business: negocio,

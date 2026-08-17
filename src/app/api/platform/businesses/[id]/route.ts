@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requirePlatformAdmin } from '@/lib/platform-context'
 import { apiError } from '@/lib/http-errors'
 import { slugValido, vencimientoDesdeDuracion } from '@/lib/platform-business'
+import { actualizarNegocio } from '@/lib/platform-schema'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,7 +78,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'El vencimiento no puede ser anterior al inicio' }, { status: 400 })
     }
 
-    const { data, error } = await db.from('businesses').update(cambios).eq('id', id).select().single()
+    const { data, error } = await actualizarNegocio(db, id, cambios)
     if (error) {
       if (error.code === '23505') return NextResponse.json({ error: 'Ya existe un negocio con esa dirección web' }, { status: 409 })
       throw error

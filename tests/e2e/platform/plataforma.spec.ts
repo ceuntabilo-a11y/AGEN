@@ -33,30 +33,56 @@ test.describe('Plataforma (super admin)', () => {
     // Hay que esperar a que llegue la lista: las acciones viven dentro de cada fila.
     const filas = page.locator('main table tbody tr')
     await expect.poll(() => filas.count(), { timeout: 60000 }).toBeGreaterThan(0)
-    await expect(page.getByText('estetica-bella-vida')).toBeVisible({ timeout: 60000 })
+    await expect(page.getByText(/estetica-bella-vida/).first()).toBeVisible({ timeout: 60000 })
 
     // Suspender y Eliminar existen pero NO se ejecutan: son acciones destructivas sobre un tenant.
     await expect(page.getByRole('button', { name: /Suspender|Reactivar/ }).first()).toBeVisible()
     await expect(page.getByRole('button', { name: 'Eliminar' }).first()).toBeVisible()
   })
 
-  test('negocios: el modal de alta pide los datos mínimos y no crea nada vacío', async ({ page }) => {
+  test('negocios: el alta pide lo mínimo, resume antes de crear y no crea nada vacío', async ({ page }) => {
     await irA(page, '/plataforma/negocios', 'Negocios')
     await page.getByRole('button', { name: 'Nuevo negocio' }).click()
 
-    const nombre = page.locator('input[name="name"]')
-    const correo = page.locator('input[name="ownerEmail"]')
+    const nombre = page.getByLabel('Nombre del negocio')
+    const correo = page.getByLabel('Correo del dueño')
     await expect(nombre).toBeVisible()
     await expect(correo).toBeVisible()
-    await expect(page.locator('input[name="timezone"]')).toHaveValue('America/Santiago')
-    await expect(page.locator('input[name="currency"]')).toHaveValue('CLP')
+
+    // Zona horaria y moneda son elegibles, con América/Santiago y CLP por defecto.
+    await expect(page.getByLabel('Zona horaria')).toHaveValue('America/Santiago')
+    await expect(page.getByLabel('Moneda')).toHaveValue('CLP')
 
     // Enviar vacío: la validación del navegador lo detiene y no se llama a la API.
     let llamadas = 0
     page.on('request', (r) => { if (r.url().includes('/api/platform/businesses') && r.method() === 'POST') llamadas++ })
-    await page.getByRole('button', { name: 'Crear negocio' }).click()
+    await page.getByRole('button', { name: 'Revisar' }).click()
     await expect(nombre).toHaveJSProperty('validity.valid', false)
     expect(llamadas, 'no debe intentar crear un negocio sin datos').toBe(0)
+  })
+
+  test('negocios: la dirección web se genera sola y se puede revisar antes de crear', async ({ page }) => {
+    await irA(page, '/plataforma/negocios', 'Negocios')
+    await page.getByRole('button', { name: 'Nuevo negocio' }).click()
+
+    // El administrador escribe el nombre; el slug sale solo, sin que tenga que saber qué es.
+    await page.getByLabel('Nombre del negocio').fill('Peluquería Prueba Ñandú')
+    await expect(page.getByText('peluqueria-prueba-nandu')).toBeVisible()
+
+    await page.getByLabel('Correo del dueño').fill('nadie@prueba.invalid')
+
+    // El resumen previo: se ve todo lo que se va a crear, y NO se ha llamado a la API todavía.
+    let llamadas = 0
+    page.on('request', (r) => { if (r.url().includes('/api/platform/businesses') && r.method() === 'POST') llamadas++ })
+    await page.getByRole('button', { name: 'Revisar' }).click()
+    await expect(page.getByRole('heading', { name: '¿Creamos este negocio?' })).toBeVisible()
+    await expect(page.getByText('peluqueria-prueba-nandu')).toBeVisible()
+    await expect(page.getByText('nadie@prueba.invalid')).toBeVisible()
+    expect(llamadas, 'el resumen no puede crear nada por sí solo').toBe(0)
+
+    // Se cancela: esta prueba no crea negocios reales.
+    await page.getByRole('button', { name: 'Volver a editar' }).click()
+    await expect(page.getByRole('heading', { name: 'Nuevo negocio' })).toBeVisible()
   })
 
   test('planes: se puede abrir el alta de plan', async ({ page }) => {
