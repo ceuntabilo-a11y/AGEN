@@ -22,8 +22,10 @@ export const dynamic='force-dynamic'
 async function encolarEncuestas(db:ReturnType<typeof createAdminClient>,businessId:string):Promise<number>{
   try{
     const {data:negocio}=await db.from('businesses').select('settings').eq('id',businessId).maybeSingle()
-    const horas=Number((negocio?.settings as Record<string,unknown>|null)?.survey_hours_after??3)
-    if(!Number.isFinite(horas)||horas<=0||horas>720)return 0
+    const ajustes=(negocio?.settings??{}) as Record<string,unknown>
+    if(ajustes.survey_enabled===false)return 0
+    const pedidas=Number(ajustes.survey_hours_after??0)
+    const horas=Number.isFinite(pedidas)&&pedidas>0&&pedidas<=720?pedidas:0
 
     const hasta=new Date(Date.now()-horas*3600000).toISOString()
     // Solo citas ya atendidas, y de los últimos días: una encuesta de hace un mes no se manda.

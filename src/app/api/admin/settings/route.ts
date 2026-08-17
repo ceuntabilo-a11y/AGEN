@@ -3,6 +3,7 @@ import { requireBusinessContext } from '@/lib/supabase-server'
 import { apiError } from '@/lib/http-errors'
 import { validTimeZone } from '@/lib/timezone'
 import { errorDeRecordatorios } from '@/lib/reminders'
+import { esEnlaceDeResena } from '@/lib/agent-encuesta'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,6 +54,15 @@ export async function PATCH(request: Request) {
     // el negocio se queda sin avisos y nadie se entera hasta que un cliente no llega.
     const errorRecordatorios = errorDeRecordatorios((body.settings as Record<string, unknown> | undefined)?.reminders)
     if (errorRecordatorios) return NextResponse.json({ error: errorRecordatorios }, { status: 400 })
+
+    /*
+     * El enlace de reseña se le manda tal cual a los clientes que ponen 9 o 10: si estuviera
+     * mal, cada promotor recibiría una dirección rota. Se valida al guardar, no al enviar.
+     */
+    const enlaceResena = (body.settings as Record<string, unknown> | undefined)?.google_review_url
+    if (enlaceResena !== undefined && String(enlaceResena ?? '').trim() && !esEnlaceDeResena(enlaceResena)) {
+      return NextResponse.json({ error: 'El enlace de reseñas tiene que empezar por https:// (cópialo desde tu ficha de Google)' }, { status: 400 })
+    }
 
     const allowed = ['name','timezone','currency','phone','email','address','maps_url','logo_url','settings','agent_settings']
     const changes = Object.fromEntries(Object.entries(body).filter(([key]) => allowed.includes(key)))
