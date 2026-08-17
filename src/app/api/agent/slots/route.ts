@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { isAuthorizedAgent } from '@/lib/agent-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import {rejectTeamActor} from '@/lib/agent-actor'
-import { liberarHoldsPrevios } from '@/lib/agent-holds'
+import { claveDeContacto, liberarHoldsPrevios } from '@/lib/agent-holds'
 import { dateKeyInZone, formatInZone, formatTimeInZone, instanteDelNegocio } from '@/lib/timezone'
 import { money } from '@/lib/money'
 import { motivoDeError } from '@/lib/agent-errors'
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     if(held.length>=MAXIMO_APARTADOS)break
     const result=await db.rpc('create_slot_hold',{
       p_business_id:body.businessId,p_professional_id:slot.professional_id,p_service_id:body.serviceId,
-      p_desired_start:slot.service_start,p_client_id:body.clientId??null,p_contact_key:body.contactKey?.trim()||null,
+      p_desired_start:slot.service_start,p_client_id:body.clientId??null,p_contact_key:claveDeContacto(body.contactKey),
       p_minutes:MINUTOS_APARTADO,p_origin:'AI_AGENT',
     })
     if(!result.error&&result.data){

@@ -309,7 +309,19 @@ const workflow = {
     'Modelo · info': { ai_languageModel: [[{ node: 'Redactor', type: 'ai_languageModel', index: 0 }]] },
   },
   pinData: {},
-  settings: viejo.settings ?? { executionOrder: 'v1' },
+  /*
+   * Solo los ajustes que acepta la API pública de n8n.
+   *
+   * El workflow exportado del servidor trae además `binaryMode`, que el panel guarda pero el
+   * esquema de `PUT /workflows/{id}` rechaza con «settings must NOT have additional
+   * properties». Copiar los ajustes tal cual hacía imposible subirlo.
+   */
+  settings: Object.fromEntries(
+    Object.entries(viejo.settings ?? { executionOrder: 'v1' })
+      .filter(([clave]) => ['executionOrder', 'saveManualExecutions', 'callerPolicy', 'timezone',
+        'saveDataErrorExecution', 'saveDataSuccessExecution', 'saveExecutionProgress',
+        'executionTimeout', 'errorWorkflow'].includes(clave)),
+  ),
   active: false,
   versionId: 'router-de-intencion-1',
   meta: { templateCredsSetupCompleted: false },

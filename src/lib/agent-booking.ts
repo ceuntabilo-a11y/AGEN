@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { motivoDeError } from '@/lib/agent-errors'
+import { claveDeContacto } from '@/lib/agent-holds'
 import { registrarAviso } from '@/lib/observabilidad'
 import { instanteDelNegocio } from '@/lib/timezone'
 
@@ -57,7 +58,7 @@ export async function reservarConApartado(
     const renovado = await db.rpc('create_slot_hold', {
       p_business_id: datos.businessId, p_professional_id: datos.professionalId, p_service_id: datos.serviceId,
       p_desired_start: desiredStart.toISOString(), p_client_id: datos.clientId,
-      p_contact_key: datos.contactKey?.trim() || null, p_minutes: 15, p_origin: 'AI_AGENT',
+      p_contact_key: claveDeContacto(datos.contactKey), p_minutes: 15, p_origin: 'AI_AGENT',
     })
     if (renovado.error || !renovado.data) {
       registrarAviso('agente_reserva_apartado_perdido', { businessId: datos.businessId, motivo: hold ? 'vencido' : 'inexistente' })
