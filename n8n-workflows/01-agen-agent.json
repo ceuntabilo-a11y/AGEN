@@ -89,7 +89,7 @@
     },
     {
       "parameters": {
-        "modelName": "gpt-4.1-mini",
+        "modelName": "gpt-4o-mini",
         "options": {
           "timeout": 60000,
           "maxRetries": 2
