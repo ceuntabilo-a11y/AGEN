@@ -123,7 +123,7 @@ const agente = (id, nombre, posicion, nota) => ({
  * Sin la variable, `gpt-4o`, que es el que está probado en producción.
  */
 const modelo = (id, nombre, posicion) => ({
-  parameters: { modelName: "={{ $env.AGEN_AGENT_MODEL || 'gpt-4o' }}", options: { timeout: 45000, maxRetries: 2 } },
+  parameters: { modelName: "={{ $env.AGEN_AGENT_MODEL || 'gpt-5.6-luna' }}", options: { timeout: 45000, maxRetries: 2 } },
   id,
   name: nombre,
   type: '@n8n/n8n-nodes-langchain.lmChatOpenAi',
