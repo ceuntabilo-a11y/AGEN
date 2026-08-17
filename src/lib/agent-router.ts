@@ -73,6 +73,12 @@ export type EstadoDelTurno = {
   apartados: ApartadoVivo[]
   avisoPendiente: { tipo?: string; expects?: string; question?: string; ifYes?: string; ifNo?: string; appointmentId?: string | null; repliesSince?: number } | null
   timezone: string
+  /** El cliente pide un horario distinto de los que ya se le apartaron (ver `pideOtroHorario`). */
+  pideOtroHorario?: boolean
+  /** Qué día, franja y hora pidió, ya resueltos por código (ver `interpretarCuando`). */
+  cuando?: { fecha: string | null; dia: string | null; franja: string | null; hora: string | null; desde: string | null; hasta: string | null } | null
+  /** Lo último que contestó el agente, para no repetirlo palabra por palabra. */
+  ultimaRespuesta?: string | null
 }
 
 export type Clasificacion = { intencion: Intencion; confianza: 'ALTA' | 'BAJA' }
@@ -172,6 +178,15 @@ export function clasificarPorReglas(mensaje: string, estado: EstadoDelTurno): Cl
    * exceptúa la pregunta clara por precios, dirección u horarios, que se contesta como INFO.
    */
   if (estado.apartados.length) {
+    /*
+     * …salvo que esté pidiendo OTRO horario.
+     *
+     * Fallo real (conversación del 2026-08-17, 16:33): con las 09:00 apartadas, el cliente pidió
+     * «para mañana a las 3 de la tarde» y el turno se fue al decisor, que no puede buscar. Le
+     * contestó «no hay apartados a las 15:00» y el cliente repitió lo mismo tres veces.
+     * Pedir una hora distinta de la ofrecida es una búsqueda nueva, no una elección.
+     */
+    if (estado.pideOtroHorario) return { intencion: 'AGENDAR', confianza: 'ALTA' }
     if (PALABRAS.INFO.test(texto) && !dijoSi) return { intencion: 'INFO', confianza: 'BAJA' }
     return { intencion: 'ELEGIR', confianza: 'ALTA' }
   }
@@ -305,6 +320,9 @@ const VOZ = [
   '- SIEMPRE hay que contestar algo. Si no sabes qué hacer, escribe una línea preguntando lo que falta; nunca te quedes callado.',
   '- Máximo 5 líneas, una idea por línea, línea en blanco entre bloques. La pregunta final va sola al final.',
   '- Nada de títulos con #, tablas, listas anidadas ni negritas puestas por ti. Máximo un emoji por mensaje.',
+  '- PROHIBIDAS las palabras internas del sistema: nunca escribas "apartado", "apartados", "hold", "slot", "cupo bloqueado", "sistema", "base de datos" ni "herramienta". El cliente no sabe ni tiene por qué saber que existen. Habla de "horas" y "horarios".',
+  '- Si el cliente tiene nombre en CLIENTE, úsalo al saludarlo y de vez en cuando; si no lo tiene, no inventes ninguno ni uses el del perfil de WhatsApp.',
+  '- No repitas la respuesta anterior. Si ya preguntaste algo y el cliente contestó, NO vuelvas a preguntarlo aunque su respuesta te parezca incompleta: quédate con lo que dijo y avanza.',
 ].join('\n')
 
 const CONTEXTO = [
@@ -389,7 +407,9 @@ const INSTRUCCIONES: Record<Ruta, string> = {
     '# ESTA RAMA',
     'Tu única herramienta es buscar_horarios. NO puedes reservar: en este turno solo se ofrece, y reservar es un paso posterior que ejecuta el sistema cuando el cliente elige.',
     'Prohibido decir que reservaste, dejaste tomada o confirmaste una hora. Preguntar por horarios NO es reservar.',
-    'Llama buscar_horarios con el serviceId real del catálogo y el rango de TIEMPO, y ofrece SOLO los profesionales y horas que devuelva. Cada horario que ofreces queda apartado unos minutos.',
+    'PEDIDO trae ya resuelto lo que el cliente pidió (fecha, franja, hora y la ventana desde/hasta). Si tiene `desde` y `hasta`, llama buscar_horarios con ESOS valores TAL CUAL: no los recalcules ni preguntes a qué se refería.',
+    'Si PEDIDO trae una hora y la herramienta no devuelve esa hora, dilo en la primera línea ("a las 15:00 no me queda") y ofrece lo que sí haya, o pregúntale si quiere otro día. NUNCA vuelvas a preguntarle a qué hora quiere: ya te lo dijo.',
+    'Llama buscar_horarios con el serviceId real del catálogo y la ventana de PEDIDO (o el rango de TIEMPO si PEDIDO viene vacío), y ofrece SOLO los profesionales y horas que devuelva. Cada horario que ofreces queda reservado unos minutos.',
     'Si el cliente no expresó preferencia de profesional, no preguntes: ofrécele los horarios y di con quién es cada uno.',
     'Formato de los horarios: uno por línea, con la forma "- HH:MM con <Profesional>". Termina preguntándole cuál prefiere.',
     'Si el cliente pidió una hora concreta y no está entre las que devolvió la herramienta, dilo en la primera línea antes de ofrecer las que sí hay.',
@@ -503,6 +523,11 @@ export function armarContexto(
         ? { id: servicio.specialty.id, nombre: servicio.specialty.name, slug: servicio.specialty.slug }
         : null,
     })))}`,
+    /*
+     * Lo que el cliente pidió, ya resuelto. El modelo no tiene que deducir que «3pm» son las
+     * 15:00 ni que «después del almuerzo» es la tarde: se le da hecho, con la ventana lista.
+     */
+    `PEDIDO: ${JSON.stringify(estado.cuando ?? null)}`,
     `RESERVAS: ${JSON.stringify(estado.reservas)}`,
     `APARTADOS: ${JSON.stringify(estado.apartados.map((apartado) => ({
       holdId: apartado.holdId, dia: apartado.dia, hora: apartado.hora,

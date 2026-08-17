@@ -249,7 +249,7 @@ test.describe('Elegir un horario recién ofrecido', () => {
    */
   test('el apartado se encuentra aunque el teléfono se guardara con "+"', async () => {
     falso.tablas.appointment_holds = [{ ...apartado('hold-1', `+${ANA}`, MANANA) }]
-    const { cuerpo } = await turno({ businessId: NEGOCIO, phone: ANA, message: 'sí, la de las 09:00' })
+    const { cuerpo } = await turno({ businessId: NEGOCIO, phone: ANA, message: 'sí, esa misma' })
     expect(cuerpo.diagnostico.apartados, 'el apartado ofrecido tiene que seguir encontrándose').toBe(1)
     expect(cuerpo.ruta).toBe('DECIDIR')
   })

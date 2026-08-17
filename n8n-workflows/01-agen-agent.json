@@ -227,7 +227,7 @@
     },
     {
       "parameters": {
-        "amount": 0.6,
+        "amount": 2.5,
         "unit": "seconds"
       },
       "id": "esperar-mas-mensajes",
@@ -676,7 +676,7 @@
     },
     {
       "parameters": {
-        "modelName": "gpt-4.1-mini",
+        "modelName": "={{ $env.AGEN_AGENT_MODEL || 'gpt-4o' }}",
         "options": {
           "timeout": 45000,
           "maxRetries": 2
@@ -699,7 +699,7 @@
     },
     {
       "parameters": {
-        "modelName": "gpt-4.1-mini",
+        "modelName": "={{ $env.AGEN_AGENT_MODEL || 'gpt-4o' }}",
         "options": {
           "timeout": 45000,
           "maxRetries": 2
@@ -722,7 +722,7 @@
     },
     {
       "parameters": {
-        "modelName": "gpt-4.1-mini",
+        "modelName": "={{ $env.AGEN_AGENT_MODEL || 'gpt-4o' }}",
         "options": {
           "timeout": 45000,
           "maxRetries": 2

@@ -114,8 +114,16 @@ const agente = (id, nombre, posicion, nota) => ({
   notes: nota,
 })
 
+/*
+ * El modelo se elige por variable de entorno, no queda clavado en el lienzo.
+ *
+ * Cambiar de modelo es la decisión que más veces se quiere probar y la que más caro sale
+ * equivocarse: un identificador que no existe devuelve 400 en CADA mensaje. Con `AGEN_AGENT_MODEL`
+ * el dueño lo cambia en n8n y lo revierte en segundos, sin desplegar la app ni tocar el workflow.
+ * Sin la variable, `gpt-4o`, que es el que está probado en producción.
+ */
 const modelo = (id, nombre, posicion) => ({
-  parameters: { modelName: 'gpt-4.1-mini', options: { timeout: 45000, maxRetries: 2 } },
+  parameters: { modelName: "={{ $env.AGEN_AGENT_MODEL || 'gpt-4o' }}", options: { timeout: 45000, maxRetries: 2 } },
   id,
   name: nombre,
   type: '@n8n/n8n-nodes-langchain.lmChatOpenAi',
@@ -158,6 +166,10 @@ const marcarLeido = nodoViejo('Marcar leído')
 const escribiendo = nodoViejo('Escribiendo…')
 const registrar = nodoViejo('Registrar')
 const esperar = nodoViejo('Esperar')
+// La espera de agrupado sube de 0,6 s a 2,5 s: con 0,6 s dos mensajes seguidos de una persona
+// entraban como conversaciones distintas y el agente saludaba tres veces seguidas (visto en
+// producción el 2026-08-17, 16:26). Sigue muy por debajo de lo que tarda el modelo.
+esperar.parameters = { ...esperar.parameters, amount: 2.5, unit: 'seconds' }
 const agrupar = nodoViejo('Agrupar')
 const respondeEste = nodoViejo('¿Responde este?')
 const buscarHorarios = nodoViejo('buscar_horarios')
