@@ -23,15 +23,42 @@ const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const ENV = path.join(RAIZ, '.env.local')
 if (existsSync(ENV) && typeof process.loadEnvFile === 'function') process.loadEnvFile(ENV)
 
-const workflow = JSON.parse(readFileSync(path.join(RAIZ, 'n8n-workflows', '01-agen-agent.json'), 'utf8'))
-const agente = workflow.nodes.find((nodo) => nodo.name === 'Agente Agen')
-const sistema = String(agente?.parameters?.options?.systemMessage ?? '')
+/*
+ * Con el router de intención no hay UN prompt: hay uno corto por rama, y cada turno paga solo
+ * el de su rama. Se miden todos para poder comparar con el monolito anterior (~18.000 car.).
+ */
+const fuente = readFileSync(path.join(RAIZ, 'src', 'lib', 'agent-router.ts'), 'utf8')
 
-const tokens = (texto) => Math.round(texto.length / 4)
-const linea = (nombre, texto) => `  ${nombre.padEnd(22)} ${String(texto.length).padStart(7)} car.  ≈ ${String(tokens(texto)).padStart(5)} tokens`
+/** Largo de un bloque `const X = [ … ].join('\n')`, contando solo el texto de las líneas. */
+const largoDeBloque = (cuerpo) => cuerpo
+  .split('\n')
+  .map((linea) => /^\s*'(.*)',?\s*$/.exec(linea.trim().replace(/^"(.*)",?$/, "'$1',")))
+  .filter(Boolean)
+  .reduce((total, encontrado) => total + encontrado[1].length + 1, 0)
 
-console.log('Parte fija (igual en todos los turnos):')
-console.log(linea('prompt del sistema', sistema))
+const compartidos = {}
+for (const [, nombre, cuerpo] of fuente.matchAll(/const ([A-Z_]+) = \[([\s\S]*?)\n\]\.join/g)) {
+  compartidos[nombre] = largoDeBloque(cuerpo)
+}
+
+const ramas = {}
+for (const rama of ['INFO', 'BUSCAR', 'DECIDIR']) {
+  const bloque = new RegExp(`\\n  ${rama}: \\[([\\s\\S]*?)\\n  \\]\\.join`).exec(fuente)
+  if (!bloque) { ramas[rama] = 0; continue }
+  const propio = largoDeBloque(bloque[1])
+  const referenciados = Object.keys(compartidos)
+    .filter((nombre) => new RegExp(`(^|[\\s,\\[])${nombre}([,\\s]|$)`, 'm').test(bloque[1]))
+    .reduce((total, nombre) => total + compartidos[nombre], 0)
+  ramas[rama] = propio + referenciados
+}
+
+const tokens = (largo) => Math.round(largo / 4)
+const linea = (nombre, largo) => `  ${nombre.padEnd(22)} ${String(largo).padStart(7)} car.  ≈ ${String(tokens(largo)).padStart(5)} tokens`
+
+console.log('Instrucciones por rama (solo se paga la del turno):')
+for (const [rama, largo] of Object.entries(ramas)) console.log(linea(rama, largo))
+console.log(linea('la más cara', Math.max(...Object.values(ramas))))
+const sistema = ''
 
 const id = process.argv[2]
 if (!id) {

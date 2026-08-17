@@ -74,6 +74,19 @@ export type EvidenciaDelTurno = {
    * respaldo correcto cuando en el mismo turno hubo más de una (reservar y luego cancelar).
    */
   ultima?: 'reservo' | 'confirmo' | 'cancelo' | null
+  /**
+   * La rama por la que fue este turno NO podía ejecutar ninguna acción (requisito D2).
+   *
+   * Con el router de intención, las ramas INFO y BUSCAR salen a un modelo que no tiene ninguna
+   * herramienta de mutación conectada: es materialmente imposible que en ese turno se haya
+   * reservado, cancelado o confirmado algo. Así que cualquier frase que lo afirme es falsa por
+   * construcción, y se bloquea sin mirar la evidencia.
+   *
+   * Esto sustituye a la guarda anterior, que solo comparaba contra las citas creadas en una
+   * ventana de tiempo: una reserva del turno ANTERIOR podía dar por buena una afirmación falsa
+   * de ESTE turno.
+   */
+  ramaSinAcciones?: boolean
 }
 export type RevisionRespuesta = { texto: string; bloqueada: boolean; motivos: MotivoRevision[] }
 
@@ -286,9 +299,13 @@ function motivosGraves(texto: string, evidencia: EvidenciaDelTurno): MotivoRevis
   if (pareceOtroIdioma(texto)) graves.push('idioma_incorrecto')
 
   const afirmaciones = detectarAfirmaciones(texto)
-  if (afirmaciones.reservo && !evidencia.reservo) graves.push('reserva_sin_evidencia')
-  if (afirmaciones.cancelo && !evidencia.cancelo) graves.push('cancelacion_sin_evidencia')
-  if (afirmaciones.confirmo && !evidencia.confirmo) graves.push('confirmacion_sin_evidencia')
+  // En una rama sin herramientas de mutación no pudo pasar nada: la evidencia no cuenta.
+  const pudoReservar = evidencia.reservo && !evidencia.ramaSinAcciones
+  const pudoCancelar = evidencia.cancelo && !evidencia.ramaSinAcciones
+  const pudoConfirmar = evidencia.confirmo && !evidencia.ramaSinAcciones
+  if (afirmaciones.reservo && !pudoReservar) graves.push('reserva_sin_evidencia')
+  if (afirmaciones.cancelo && !pudoCancelar) graves.push('cancelacion_sin_evidencia')
+  if (afirmaciones.confirmo && !pudoConfirmar) graves.push('confirmacion_sin_evidencia')
   return graves
 }
 
@@ -321,8 +338,10 @@ export function revisarRespuesta(original: string, evidencia: EvidenciaDelTurno)
      * el respaldo dice la verdad; solo cuando no hay nada que respalde una acción se usa el
      * "no pude".
      */
-    const accion = evidencia.ultima
-      ?? (evidencia.cancelo ? 'cancelo' : evidencia.confirmo ? 'confirmo' : evidencia.reservo ? 'reservo' : null)
+    const accion = evidencia.ramaSinAcciones
+      ? null
+      : evidencia.ultima
+        ?? (evidencia.cancelo ? 'cancelo' : evidencia.confirmo ? 'confirmo' : evidencia.reservo ? 'reservo' : null)
     const respaldo = accion ? RESPALDO_SEGUN_ACCION[accion] : RESPUESTA_DE_RESPALDO
     return { texto: respaldo, bloqueada: true, motivos: [...motivos, ...graves] }
   }

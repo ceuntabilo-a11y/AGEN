@@ -13,6 +13,7 @@ export type NotificationEventType =
   | 'CHANGED'
   | 'CONFIRM_REQUEST'
   | 'DAY_OF_REMINDER'
+  | 'REMINDER'
   | 'REMINDER_24H'
   | 'REMINDER_2H'
   | 'RESCHEDULED'
@@ -339,6 +340,37 @@ export function buildNotification(eventType: string, context: NotificationContex
           'Responde *SÍ* para confirmar que vienes.\nSi no puedes, responde *NO* y liberamos el cupo. 🙏',
         ]),
       }
+
+    /*
+     * Recordatorio configurable (una o varias antelaciones, las que elija el negocio).
+     *
+     * Es el tipo que sustituye a `CONFIRM_REQUEST` y `DAY_OF_REMINDER`, que estaban clavados a
+     * «la tarde anterior» y «la mañana del día». El texto no dice cuántas horas faltan: dice
+     * cuándo es la hora, y de eso ya se encarga `longDate` («Hoy», «Mañana» o el día escrito).
+     *
+     * Y ofrece las DOS salidas, no solo cancelar: quien no puede venir recibe horarios nuevos.
+     */
+    case 'REMINDER': {
+      if (!appointment) return null
+      const horas = Number(payload.hoursBefore)
+      const antelacion = Number.isFinite(horas) && horas >= 20 ? '📅' : '⏰'
+      return {
+        espera: {
+          expects: 'YES_NO',
+          question: 'Le recordamos su hora y le pedimos que responda SÍ para confirmar que viene, o NO para cambiarla o liberarla.',
+          ttlHours: Number.isFinite(horas) && horas >= 1 ? Math.min(24, Math.max(2, Math.round(horas))) : 12,
+          ...CONFIRMAR_O_LIBERAR,
+        },
+        subject: `Recordatorio de tu hora en ${business.name}`,
+        text: compose([
+          header(antelacion, 'Recordatorio de tu hora', business.name),
+          greeting(context.clientName),
+          appointmentBlock(business, appointment),
+          SEPARATOR,
+          'Responde *SÍ* si vas a venir y la dejo confirmada.\nSi no puedes, responde *NO* y te busco otro horario. 🙌',
+        ]),
+      }
+    }
 
     case 'REMINDER_24H':
     case 'REMINDER_2H':

@@ -147,7 +147,7 @@ switch (orden) {
      * La sonda es un GET a una ruta que solo exporta POST: 405 = existe, 404 = no existe. No
      * manda datos ni credenciales.
      */
-    const RUTAS_NUEVAS = ['/api/agent/context', '/api/agent/escalate']
+    const RUTAS_NUEVAS = ['/api/agent/context', '/api/agent/escalate', '/api/agent/turn', '/api/agent/act']
     const texto = JSON.stringify(local)
     const mencionadas = RUTAS_NUEVAS.filter((ruta) => texto.includes(ruta))
     for (const ruta of mencionadas) {

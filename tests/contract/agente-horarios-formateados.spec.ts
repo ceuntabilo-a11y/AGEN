@@ -102,24 +102,27 @@ test.describe('La herramienta del workflow también los resuelve', () => {
     cargarWorkflow().nodes.find((n) => n.name === 'buscar_horarios')!.parameters as { jsCode: string }
   ).jsCode)
 
-  test('convierte con Intl y la zona del negocio, no con aritmética a mano', () => {
-    expect(codigo).toContain('Intl.DateTimeFormat')
-    expect(codigo).toContain('timeZone: zona')
-    // Un offset escrito a mano se rompe con el horario de verano.
-    expect(codigo).not.toMatch(/[+-]\s*4\s*\*\s*3600/)
+  /*
+   * Ahora hay UNA sola fuente: la app.
+   *
+   * La herramienta tenía una copia del formateo «por si la app todavía no lo mandaba», y esa
+   * copia intentaba adivinar la zona leyendo un nodo llamado "Cargar catálogo" que en este
+   * workflow no existe (defecto D5): el `try/catch` se lo tragaba y caía siempre a
+   * America/Santiago. Dos implementaciones del mismo cálculo, una de ellas rota en silencio.
+   */
+  test('la herramienta ya no duplica el formateo: lo resuelve la app', () => {
+    expect(codigo).not.toContain('Intl.DateTimeFormat')
+    expect(codigo, 'la referencia rota al nodo inexistente tiene que estar fuera').not.toContain('Cargar cat')
   })
 
-  test('añade día, hora, fecha y franja', () => {
-    for (const campo of ['hora', 'dia', 'fecha', 'franja']) expect(codigo).toContain(campo)
+  test('la herramienta sigue devolviendo lo que la app le dé, sin tocarlo', () => {
+    expect(codigo).toContain('/api/agent/slots')
+    expect(codigo).toContain('return JSON.stringify({ status: res.status, body: res.body })')
   })
 
-  test('respeta lo que ya venga resuelto de la app', () => {
-    expect(codigo).toContain('if (s && s.hora && s.dia) return s;')
-  })
-
-  test('si algo falla, devuelve los horarios igual en vez de romper el turno', () => {
-    // Un fallo al formatear no puede dejar al cliente sin respuesta: es cosmético.
-    expect(codigo).toContain('catch (e) {}')
+  test('y sigue sin poder tumbar la ejecución', () => {
+    expect(codigo).toContain('await pedirALaApp(')
+    expect(codigo).toContain("motivo: seAcaboElTiempo ? 'TIMEOUT'")
   })
 })
 

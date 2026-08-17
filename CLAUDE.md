@@ -427,6 +427,55 @@ bloque con la cabecera en negrita y el precio o la duración debajo, y despega l
 - **Coste:** una función pura sobre una cadena. Sin red, sin base de datos, sin segunda llamada al
   modelo.
 
+## 6.9 Router de intención: el modelo entiende, el código ejecuta
+
+Añadido el 2026-08-17 (`20260818000001_recordatorios_configurables.sql`). Cierra el fallo que
+originó el encargo: el chat daba por hecha una reserva que nunca se creó, y después el sistema
+decía «no hay reserva activa».
+
+- **Se acabaron las nueve herramientas colgando de un agente único.** `crear_reserva`,
+  `liberar_reserva`, `mover_reserva`, `confirmar_reserva` y `registrar_cliente` ya NO son
+  herramientas del modelo. La única que queda es `buscar_horarios`, y solo en la rama que busca.
+- **`POST /api/agent/turn`** es la nueva puerta del workflow (sustituye a `/api/agent/context`,
+  que se conserva). Devuelve la **rama** del turno, las **instrucciones exactas** de esa rama y
+  el contexto ya resuelto. La rama se decide en dos capas (`src/lib/agent-router.ts`): reglas
+  sobre el mensaje, y después **guardas contra el estado real de la base**. Sin reservas
+  vigentes no se puede cancelar, mover ni confirmar — la corrección ocurre antes de llamar a
+  ningún modelo. El clasificador del modelo solo desempata, y si falla manda la regla.
+- **`POST /api/agent/act`** es el único sitio donde ocurren las acciones. No se fía del JSON del
+  decisor: relee cliente, reservas y apartados, y solo acepta ids que estén en esas listas. Sin
+  `confirmado: true` no ejecuta nada. **El texto de confirmación lo escribe él** con los campos
+  que devolvió la base (`src/lib/agent-textos.ts`), nunca el modelo: por construcción no puede
+  afirmar una reserva que no existe.
+- **Reservar exige un apartado vivo creado en un turno ANTERIOR.** Eso convierte en imposible el
+  «buscó horarios y reservó en el mismo turno» que antes solo prohibía el prompt.
+- **La guarda de `/api/agent/reply` pasó de frases a estado** (defecto D2): las ramas INFO y
+  BUSCAR no tienen herramientas de mutación, así que cualquier afirmación de reserva, cancelación
+  o confirmación es falsa por construcción y se bloquea sin mirar evidencia. Los textos que vienen
+  de `/api/agent/act` llegan con `origen: 'CODIGO'` y no se revisan.
+- **Sin contexto no hay turno** (defecto D1): si `/api/agent/turn` falla, un IF corta el flujo y
+  sale un mensaje honesto. Antes el nodo seguía con `onError: continueRegularOutput` y el agente
+  contestaba sin catálogo ni reservas.
+- **Recordatorios configurables por negocio** (`businesses.settings.reminders`,
+  `[{hoursBefore, enabled}]`, editable en `/admin/configuracion`). `schedule_appointment_reminders`
+  los lee de ahí; sin la clave, 24 h y 2 h antes. Sustituye a `CONFIRM_REQUEST` +
+  `DAY_OF_REMINDER`, que estaban clavados a horas del reloj. Tipo de cola nuevo: `REMINDER`, con
+  las horas en el payload y unicidad por `(cita, tipo, canal, hoursBefore)`.
+- **Multimedia y voz conectadas** (estaban construidas y sin usar desde hacía meses):
+  `Bajar multimedia` pide el contenido a Evolution (la URL del webhook viene cifrada por
+  WhatsApp) y lo manda como data URI; `/api/agent/turn` transcribe o describe solo si el negocio
+  encendió la capacidad; `/api/agent/reply` manda la nota de voz y adjunta fotos reales del
+  portafolio (`portfolio_items` publicadas y con consentimiento), elegidas por una consulta y no
+  por el modelo.
+- **Captación progresiva:** un correo o una fecha de nacimiento escritos en el mensaje se
+  reconocen y se guardan **sin modelo** (`src/lib/agent-datos.ts`); del resto se pide UN dato por
+  turno, en orden nombre → correo → nacimiento, y el correo siempre con su motivo.
+- **Regenerar el workflow:** `node scripts/construir-workflow-router.mjs`, que copia del respaldo
+  los nodos ya probados en producción. El workflow vivo anterior está en
+  `n8n-workflows/respaldo/01-agen-agent.ANTES-DEL-ROUTER.json`.
+- **Orden de despliegue, obligatorio:** migración SQL → desplegar la app → subir el workflow.
+  `npm run n8n -- subir` lo comprueba solo y se niega si las rutas nuevas no existen todavía.
+
 ## 7. Entorno y despliegue
 
 Variables nuevas: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` (Evolution API compartida por la

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { cargarWorkflow, promptDelSistema } from '../support/n8n'
+import { textoEquipoAvisado } from '@/lib/agent-textos'
 
 /**
  * Tres conductas del agente observadas en conversaciones reales, y las reglas que las cierran.
@@ -51,9 +52,13 @@ test.describe('P3 — una reserva sencilla se cierra en pocos turnos', () => {
    * La regla que lo cierra es de turno, no de intención: buscar y reservar no pueden ocurrir en
    * el mismo turno, porque entre las dos cosas tiene que caber un mensaje del cliente eligiendo.
    */
+  /*
+   * Ahora esto no depende del prompt: la rama que busca horarios NO tiene ninguna herramienta
+   * capaz de reservar, y reservar exige un apartado creado en un turno anterior. Aun así la
+   * regla sigue escrita, porque el modelo tampoco puede DECIR que reservó.
+   */
   test('preguntar por horarios no puede convertirse en una reserva', () => {
-    expect(prompt).toContain('PROHIBIDO llamar crear_reserva en el mismo turno')
-    expect(prompt).toContain('en un mensaje POSTERIOR')
+    expect(prompt).toContain('NO puedes reservar')
     expect(prompt).toContain('Preguntar por horarios NO es reservar')
   })
 
@@ -87,35 +92,29 @@ test.describe('P3 — una reserva sencilla se cierra en pocos turnos', () => {
   })
 })
 
+/*
+ * Avisar al equipo dejó de ser una herramienta del modelo.
+ *
+ * Antes el modelo decidía por su cuenta si llamaba `avisar_al_equipo`, y la frase "ya le avisé
+ * al equipo" dependía de que quisiera hacerlo. Ahora la intención ESCALAR la resuelve el router
+ * y la ejecuta `/api/agent/act`, que además redacta la respuesta según lo que de verdad pasó:
+ * el modelo ya no puede prometer un aviso que no ocurrió.
+ */
 test.describe('P4 — avisar al equipo tiene que ocurrir de verdad', () => {
-  test('existe la herramienta avisar_al_equipo y está conectada al agente', () => {
-    const herramienta = workflow.nodes.find((n) => n.name === 'avisar_al_equipo')
-    expect(herramienta, 'sin herramienta, la frase "aviso al equipo" es mentira').toBeTruthy()
-    expect(herramienta!.type).toBe('@n8n/n8n-nodes-langchain.toolCode')
-    const conexiones = (JSON.parse(JSON.stringify(
-      (workflow as unknown as { connections: Record<string, unknown> }).connections ?? {},
-    )) as Record<string, { ai_tool?: { node: string }[][] }>).avisar_al_equipo
-    expect(conexiones?.ai_tool?.[0]?.[0]?.node).toBe('Agente Agen')
+  test('la escalación la ejecuta código, no una herramienta del modelo', () => {
+    expect(workflow.nodes.find((n) => n.name === 'avisar_al_equipo'), 'ya no puede ser una herramienta del modelo').toBeFalsy()
+    const ejecutor = workflow.nodes.find((n) => n.name === 'Ejecutar acción')!
+    expect(String((ejecutor.parameters as { url: string }).url)).toContain('/api/agent/act')
   })
 
-  test('la herramienta llama al endpoint real de escalación', () => {
-    const codigo = String((workflow.nodes.find((n) => n.name === 'avisar_al_equipo')!.parameters as { jsCode: string }).jsCode)
-    expect(codigo).toContain('/api/agent/escalate')
-    expect(codigo).toContain('businessId')
-    expect(codigo).toContain('reason')
+  test('el texto del aviso lo escribe la app según el resultado real', () => {
+    expect(textoEquipoAvisado(true, '+56911112222')).toContain('Ya le avisé al equipo')
+    // Sin equipo a quien avisar, se dice la verdad y se da el teléfono del negocio.
+    expect(textoEquipoAvisado(false, '+56911112222')).toContain('No pude dejar el aviso')
+    expect(textoEquipoAvisado(false, '+56911112222')).toContain('+56911112222')
   })
 
-  test('está prohibido decir que avisó sin haberlo hecho', () => {
-    expect(prompt).toContain('PROHIBIDO decir que vas a avisar')
-    expect(prompt).toContain('escalated:true')
-  })
-
-  test('si no se pudo avisar, se dice la verdad y se da el teléfono', () => {
-    expect(prompt).toContain('escalated:false')
-    expect(prompt).toContain('businessPhone')
-  })
-
-  test('los motivos del prompt son exactamente los que acepta el endpoint', () => {
+  test('los motivos que el decisor puede pedir son exactamente los que acepta el ejecutor', () => {
     // Si el prompt inventa un motivo, la llamada vuelve con 400 y el cliente se queda esperando.
     for (const motivo of ['PAGO', 'QUEJA', 'SEGURIDAD', 'PETICION_CLIENTE', 'FUERA_DE_ALCANCE']) {
       expect(prompt).toContain(motivo)

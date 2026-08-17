@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server'
 import { isAuthorizedAgent } from '@/lib/agent-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { isRealClientPhone, normalizePhone } from '@/lib/phone'
-import { sendWhatsApp } from '@/lib/whatsapp'
-import { reunirEvidencia, revisarRespuesta } from '@/lib/agent-reply'
+import { sendWhatsApp, sendWhatsAppAudio } from '@/lib/whatsapp'
+import { vozParaRespuesta } from '@/lib/agent-voz'
+import { reunirEvidencia, revisarRespuesta, type RevisionRespuesta } from '@/lib/agent-reply'
 import { formatearParaWhatsApp } from '@/lib/whatsapp-format'
 import { guardarRespuestaPendiente, marcarRespuestaEnviada, marcarRespuestaFallida } from '@/lib/agent-reply-delivery'
 
@@ -35,7 +36,16 @@ const MARGEN_SEGUNDOS = 30
 
 export async function POST(request: Request) {
   if (!isAuthorizedAgent(request)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  const body = await request.json() as { businessId?: string; phone?: string; reply?: string; instance?: string; messageId?: string }
+  const body = await request.json() as {
+    businessId?: string; phone?: string; reply?: string; instance?: string; messageId?: string
+    /** Rama del router por la que salió este texto. INFO y BUSCAR no pueden mutar nada. */
+    rama?: string
+    /** `CODIGO` = el texto lo construyó `/api/agent/act` con datos de la base: no se revisa. */
+    origen?: string
+    imageUrl?: string | null
+    wasAudio?: boolean
+    actorType?: string
+  }
   const phone = normalizePhone(body.phone)
   if (!body.businessId || !isRealClientPhone(phone)) return NextResponse.json({ error: 'Negocio o teléfono inválido' }, { status: 400 })
 
@@ -79,8 +89,21 @@ export async function POST(request: Request) {
   const desde = llegada
     ? new Date(new Date(llegada).getTime() - MARGEN_SEGUNDOS * 1000).toISOString()
     : new Date(Date.now() - VENTANA_MINUTOS * 60000).toISOString()
-  const evidencia = await reunirEvidencia(db, { businessId: body.businessId, clientId: client?.id ?? null, desde })
-  const revision = revisarRespuesta(String(body.reply ?? ''), evidencia)
+  /*
+   * Texto escrito por código (`/api/agent/act`): no se revisa, porque no hay nada que revisar.
+   * Sale de los campos que devolvió la base de datos después de ejecutar la acción, así que no
+   * puede afirmar algo que no ocurrió — que es justo lo único que la revisión buscaba.
+   */
+  const deCodigo = String(body.origen ?? '').toUpperCase() === 'CODIGO'
+  const ramaSinAcciones = ['INFO', 'BUSCAR'].includes(String(body.rama ?? '').toUpperCase())
+
+  const evidencia = deCodigo
+    ? { reservo: false, cancelo: false, confirmo: false, ultima: null }
+    : { ...await reunirEvidencia(db, { businessId: body.businessId, clientId: client?.id ?? null, desde }), ramaSinAcciones }
+  const textoDeCodigo = String(body.reply ?? '').trim()
+  const revision: RevisionRespuesta = deCodigo && textoDeCodigo
+    ? { texto: textoDeCodigo, bloqueada: false, motivos: [] }
+    : revisarRespuesta(String(body.reply ?? ''), evidencia)
 
   /*
    * Presentación, y solo presentación (ver `@/lib/whatsapp-format`).
@@ -108,8 +131,30 @@ export async function POST(request: Request) {
     ? await guardarRespuestaPendiente(db, { ...clave, texto })
     : { durable: false, guardada: false }
 
-  const envio = await sendWhatsApp(proveedor, { phone, text: texto })
-  const cuerpo = { text: texto, blocked: revision.bloqueada, reasons: revision.motivos, durable: guardado.guardada }
+  /*
+   * Voz (requisito F). La decisión es del negocio y está en `agent_settings`; acá solo se
+   * ejecuta. Si el negocio no la activó, si no hay clave o si el proveedor no soporta audio,
+   * `speak` es false y sale el texto de siempre: el cliente nunca se queda sin respuesta.
+   */
+  const voz = revision.bloqueada
+    ? { speak: false, sendText: true }
+    : await vozParaRespuesta(db, { businessId: body.businessId, text: texto, wasAudio: body.wasAudio, actorType: body.actorType })
+
+  let audioEnviado = false
+  if (voz.speak && voz.audio) {
+    const envioAudio = await sendWhatsAppAudio(proveedor, { phone, audioBase64: voz.audio })
+    audioEnviado = envioAudio.success
+  }
+
+  // Con el audio entregado y el negocio configurado para no duplicar, no se manda el texto.
+  const envio = audioEnviado && voz.sendText === false
+    ? { success: true as const, error: undefined }
+    : await sendWhatsApp(proveedor, { phone, text: texto, imageUrl: body.imageUrl ?? null })
+
+  const cuerpo = {
+    text: texto, blocked: revision.bloqueada, reasons: revision.motivos, durable: guardado.guardada,
+    voice: audioEnviado, image: Boolean(body.imageUrl),
+  }
 
   if (!envio.success) {
     if (clave && guardado.guardada) await marcarRespuestaFallida(db, clave, envio.error ?? 'envio_fallido')

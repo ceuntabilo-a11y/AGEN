@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { motivoDeError } from '@/lib/agent-errors'
 import { revisarRespuesta } from '@/lib/agent-reply'
-import { cargarWorkflow, promptDelSistema } from '../support/n8n'
+import { cargarWorkflow, contextoDelAgente, promptDelSistema } from '../support/n8n'
+import { agrupar, contextoUnido, entrada, memoriaCliente } from './fixtures'
 import { POST as POST_contexto } from '@/app/api/agent/context/route'
 import { levantarSupabaseFalso, peticionAgente, usarSupabaseFalso, type SupabaseFalso, type Tablas } from '../support/supabase-fake'
 
@@ -25,9 +26,11 @@ test.describe('Una sola fuente de conversación', () => {
   })
 
   test('la conversación viaja en el turno, leída de la base', () => {
-    const agente = workflow.nodes.find((nodo) => nodo.name === 'Agente Agen')
-    expect(String(agente?.parameters?.text)).toContain('CONVERSACION')
-    expect(String(agente?.parameters?.text)).toContain('$json.recent')
+    // El contexto lo arma la app (`armarContexto`), no una expresión del lienzo.
+    expect(contextoDelAgente({
+      json: { ...contextoUnido(memoriaCliente), recent: [{ quien: 'cliente', texto: 'hola' }] },
+      nodos: { Entrada: entrada('hola'), Agrupar: agrupar('hola') },
+    })).toContain('CONVERSACION: [{"quien":"cliente","texto":"hola"}]')
   })
 
   test('CONVERSACION y MEMORIA tienen jerarquía escrita, no implícita', () => {
@@ -48,10 +51,14 @@ test.describe('Una sola fuente de conversación', () => {
   })
 
   test('el modelo no lleva la conversación duplicada dentro de CLIENTE', () => {
-    const texto = String(workflow.nodes.find((nodo) => nodo.name === 'Agente Agen')?.parameters?.text)
+    const contexto = contextoDelAgente({
+      json: contextoUnido(memoriaCliente),
+      nodos: { Entrada: entrada('hola'), Agrupar: agrupar('hola') },
+    })
     // CLIENTE pasa a ser una ficha corta; el bloque de memoria va aparte y una sola vez.
-    expect(texto).toContain('MEMORIA')
-    expect(texto).not.toContain("JSON.stringify($json.client || null)")
+    expect(contexto).toContain('MEMORIA')
+    expect(contexto).not.toContain('client_memory')
+    expect(contexto.match(/^CLIENTE: /m)).toBeTruthy()
   })
 })
 
@@ -81,8 +88,9 @@ test.describe('El modelo no improvisa qué salió mal', () => {
    * resultado con `motivo`, y las ocho herramientas pasan por el mismo envoltorio.
    */
   test('ninguna herramienta puede tumbar la ejecución por un timeout', () => {
+    // Con el router queda una sola herramienta; las acciones ya no pasan por el modelo.
     const herramientas = workflow.nodes.filter((nodo) => String(nodo.type).includes('toolCode'))
-    expect(herramientas.length).toBeGreaterThanOrEqual(8)
+    expect(herramientas.length).toBeGreaterThanOrEqual(1)
     for (const nodo of herramientas) {
       const codigo = String((nodo.parameters as { jsCode?: string }).jsCode ?? '')
       expect(codigo, `${nodo.name} no usa el envoltorio`).toContain('await pedirALaApp(')
@@ -109,18 +117,18 @@ test.describe('El modelo no improvisa qué salió mal', () => {
  * quedaba sin hora justo por pedir cambiarla.
  */
 test.describe('Mover una hora es una operación, no dos', () => {
-  test('existe la herramienta y cuelga del agente', () => {
-    const mover = workflow.nodes.find((nodo) => nodo.name === 'mover_reserva')
-    expect(mover, 'falta la herramienta mover_reserva').toBeTruthy()
-    expect(String((mover?.parameters as { jsCode?: string })?.jsCode)).toContain("action: 'reschedule'")
-    expect(workflow.connections?.mover_reserva?.ai_tool?.[0]?.[0]?.node).toBe('Agente Agen')
+  test('mover lo ejecuta el código, en una sola transacción', () => {
+    // Ya no es una herramienta que el modelo decide llamar: es una intención que valida y
+    // ejecuta `/api/agent/act`, que llama a `reschedule_safe_appointment` sin cancelar antes.
+    expect(workflow.nodes.find((nodo) => nodo.name === 'mover_reserva'), 'ya no puede ser una herramienta del modelo').toBeFalsy()
+    const ejecutor = workflow.nodes.find((nodo) => nodo.name === 'Ejecutar acción')!
+    expect(String((ejecutor.parameters as { url?: string }).url)).toContain('/api/agent/act')
   })
 
   test('el prompt distingue mover de cancelar, y prohíbe liberar por si acaso', () => {
     expect(prompt).toContain('MOVER NO ES CANCELAR')
-    expect(prompt).toContain('NO uses liberar_reserva')
     expect(prompt).toContain('Nunca liberes primero')
-    expect(prompt).toContain('rescheduled:true')
+    expect(prompt).toContain('CANCELAR es solo cuando no puede venir')
   })
 })
 

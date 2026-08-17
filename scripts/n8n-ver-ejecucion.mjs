@@ -60,6 +60,13 @@ if (envio) {
   console.log(recortar(envio.text, 1500))
   if (envio.reasons?.length) console.log(`motivos de la revisión: ${envio.reasons.join(', ')}`)
 } else {
-  const salida = corridas['Agente Agen']?.[0]?.data?.main?.[0]?.[0]?.json?.output
-  console.log(`\nAGENTE RESPONDIÓ (sin llegar al envío):\n${recortar(salida, 1500) ?? '(nada)'}`)
+  // Con el router hay una rama por intención: se mira la que corrió.
+  const rama = ['Respuesta directa', 'Buscador', 'Redactor', 'Decisor', 'Ejecutar acción', 'No pude consultar']
+    .find((nombre) => corridas[nombre]?.[0])
+  const json = rama ? corridas[rama][0]?.data?.main?.[0]?.[0]?.json : null
+  const salida = json?.output ?? json?.text ?? json?.texto
+  console.log(`\nAGENTE RESPONDIÓ (rama ${rama ?? 'desconocida'}, sin llegar al envío):\n${recortar(salida, 1500) ?? '(nada)'}`)
 }
+
+const turno = corridas['Turno']?.[0]?.data?.main?.[0]?.[0]?.json
+if (turno?.ruta) console.log(`\nRUTA DEL TURNO: ${turno.ruta} · intención ${turno.intencion} · ${JSON.stringify(turno.diagnostico ?? {})}`)
