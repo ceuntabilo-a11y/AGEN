@@ -29,7 +29,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const correo = (body.email?.trim() || invitacion?.email || '').toLowerCase()
     if (!correo) return NextResponse.json({ error: 'Este negocio no tiene un correo de dueño registrado' }, { status: 400 })
 
-    const acceso = await emitirAcceso(db, correo)
+    const acceso = await emitirAcceso(db, correo, negocio.name)
     if ('error' in acceso) return NextResponse.json({ error: acceso.error }, { status: 409 })
 
     // Si la cuenta ya existe no hay enlace que mandar: esa persona ya tiene su clave y entra
