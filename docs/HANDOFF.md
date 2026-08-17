@@ -20,30 +20,23 @@ Cómo mantenerlo:
 
 | Dato | Valor |
 |---|---|
-| Rama | `docs/cierre-avisos` |
-| HEAD local | `66a8a9a` — docs: refrescar el estado de retoma después de los dos merges |
-| HEAD remoto | `66a8a9a` (sincronizado) |
-| Commits por delante de `main` | 4 |
-| Árbol de trabajo | **sucio** — 2 archivo(s) |
-| PR abierto | [#24](https://github.com/ceuntabilo-a11y/AGEN/pull/24) — Refresca el bloque automático de `docs/HANDOFF.md` (`npm run handoff`) con la rama, el HEAD, el (listo) |
-| Último CI | ninguna ejecución |
-
-Archivos sin commitear:
-
-```
-?? .claude/skills/playwright-cli/
-?? public/brand/synetia-logo.png
-```
+| Rama | `contexto-sin-vuelta-extra` |
+| HEAD local | `56b029c` — feat: la plataforma se puede vender — ciclo comercial, acceso del dueño y panel real |
+| HEAD remoto | `56b029c` (sincronizado) |
+| Commits por delante de `main` | 2 |
+| Árbol de trabajo | limpio |
+| PR abierto | [#34](https://github.com/ceuntabilo-a11y/AGEN/pull/34) — feat: la plataforma se puede vender — ciclo comercial, acceso del dueño y panel real (listo) |
+| Último CI | completed / **cancelled** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31980226371 |
 
 Últimos commits:
 
 ```
-66a8a9a docs: refrescar el estado de retoma después de los dos merges
-2f0ec57 chore: poner main al día también es trabajo rutinario
-7ce56c9 fix: el cliente contestó "No" y el agente preguntó a qué se refería
-393c59f docs: the second deploy, verified against production step by step
-f6bd748 fix: keep the good half when the model tacks its reasoning onto the answer (#20)
-18288df docs: the third finding, and what still needs a deploy (#19)
+56b029c feat: la plataforma se puede vender — ciclo comercial, acceso del dueño y panel real
+a69d21f perf: el agente dejó de pedir lo que ya tenía delante, y el prompt adelgaza
+23cdc7c fix: el turno nunca muere en silencio y la respuesta no sale dos veces (#31)
+2b615ca Sale de probar el agente contra producción con WhatsApp real y de leer el desglose de latencia por nodo del n8n, no de leer el código. (#29)
+0e5c3c6 Encontrado probando el agente contra producción con WhatsApp real. (#28)
+eda4651 Dos afinados salidos de probar el agente contra producción con WhatsApp real. (#27)
 ```
 
 <!-- AUTO:FIN -->
