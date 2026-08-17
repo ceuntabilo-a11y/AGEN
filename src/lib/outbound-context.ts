@@ -149,8 +149,15 @@ const RESPUESTA_SUELTA = [
 /** Palabras que dicen que el mensaje habla de lo mismo que el aviso. */
 const SOBRE_EL_TEMA = palabras('hora|horas|horario|horarios|cita|reserva|reservar|agenda|agendar|cambiar|c[aá]mbia\\w*|mover|reagendar|reprogramar|confirmar|cancelar|promoci[oó]n|oferta')
 
-/** Una calificación del 1 al 5, que es lo que espera una encuesta. */
-const CALIFICACION = /(^\s*[1-5]\s*$)|\b[1-5]\s*(\/|de)\s*5\b/
+/**
+ * Una calificación, que es lo que espera una encuesta.
+ *
+ * Iba del 1 al 5 mientras la tabla `survey_responses` aceptaba de 0 a 10 y el mensaje pedía
+ * "del 1 al 5": tres escalas distintas para lo mismo. Un cliente que contestaba «9» no pasaba
+ * este filtro, así que el aviso de la encuesta ni siquiera se le entregaba al agente. Ahora es
+ * 0–10 en los tres sitios.
+ */
+const CALIFICACION = /(^\s*(10|[0-9])\s*$)|\b(10|[0-9])\s*(\/|de)\s*10\b|^\s*(10|[0-9])\s*[,.;:!¡–—-]?\s+[a-záéíóúñ]/i
 
 /** Un mensaje largo ya no es "una respuesta suelta": tiene que hablar del tema para contar. */
 const LARGO_DE_UNA_RESPUESTA = 120

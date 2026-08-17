@@ -5,15 +5,63 @@ import {dateKeyInZone,zonedDayRange} from '@/lib/timezone'
 
 export const dynamic='force-dynamic'
 
+/**
+ * La encuesta de satisfacción, que hasta ahora no se enviaba nunca.
+ *
+ * `REVIEW_REQUEST` tenía plantilla y estaba permitido en la cola desde el primer día, pero
+ * NINGUNA función lo encolaba: la encuesta solo existía si alguien la escribía a mano en el
+ * panel. Se encola desde acá —el workflow 04 ya corre cada hora— y no desde un disparador de
+ * base de datos, para no necesitar una migración nueva.
+ *
+ * Cuándo se manda lo decide el negocio: `settings.survey_hours_after`, en horas después de la
+ * cita (por defecto 3; con `0` la encuesta queda apagada).
+ *
+ * Idempotente sin índice: la unicidad de `notification_outbox` solo cubre los avisos
+ * programados, así que antes de encolar se mira si esa cita ya tiene su encuesta.
+ */
+async function encolarEncuestas(db:ReturnType<typeof createAdminClient>,businessId:string):Promise<number>{
+  try{
+    const {data:negocio}=await db.from('businesses').select('settings').eq('id',businessId).maybeSingle()
+    const horas=Number((negocio?.settings as Record<string,unknown>|null)?.survey_hours_after??3)
+    if(!Number.isFinite(horas)||horas<=0||horas>720)return 0
+
+    const hasta=new Date(Date.now()-horas*3600000).toISOString()
+    // Solo citas ya atendidas, y de los últimos días: una encuesta de hace un mes no se manda.
+    const desde=new Date(Date.now()-(horas+72)*3600000).toISOString()
+    const {data:citas,error}=await db.from('appointments')
+      .select('id,service_period').eq('business_id',businessId).eq('status','COMPLETED')
+      .overlaps('service_period',`[${desde},${hasta})`).limit(50)
+    if(error||!citas?.length)return 0
+
+    const ids=citas.map(cita=>cita.id)
+    const {data:yaEncoladas}=await db.from('notification_outbox')
+      .select('appointment_id').eq('event_type','REVIEW_REQUEST').in('appointment_id',ids)
+    const conEncuesta=new Set((yaEncoladas??[]).map(fila=>fila.appointment_id))
+
+    let encoladas=0
+    for(const cita of citas){
+      if(conEncuesta.has(cita.id))continue
+      const fin=String(cita.service_period??'').replace(/[[\]()"]/g,'').split(',')[1]
+      if(fin&&new Date(fin).getTime()>Date.now()-horas*3600000)continue
+      const {error:fallo}=await db.rpc('enqueue_appointment_event',{
+        p_appointment_id:cita.id,p_event_type:'REVIEW_REQUEST',p_scheduled_at:new Date().toISOString(),
+      })
+      if(!fallo)encoladas+=1
+    }
+    return encoladas
+  }catch{return 0}
+}
+
 export async function POST(request:Request){
   if(!isAuthorizedAgent(request))return NextResponse.json({error:'No autorizado'},{status:401})
   const db=createAdminClient(),now=new Date()
   const {data:businesses,error}=await db.from('businesses').select('id,timezone').eq('active',true)
   if(error)return NextResponse.json({error:'No se pudieron cargar los negocios'},{status:500})
-  let tasksCreated=0,summariesCreated=0
+  let tasksCreated=0,summariesCreated=0,surveysQueued=0
   for(const business of businesses??[]){
     const generated=await db.rpc('generate_follow_up_tasks',{p_business_id:business.id})
     if(!generated.error)tasksCreated+=Number(generated.data??0)
+    surveysQueued+=await encolarEncuestas(db,business.id)
     const timezone=business.timezone||'America/Santiago'
     let localDay:string,localHour:number
     try{
@@ -39,5 +87,5 @@ export async function POST(request:Request){
     const inserted=await db.from('team_notifications').upsert(notifications,{onConflict:'recipient_user_id,event_key',ignoreDuplicates:true}).select('id')
     if(!inserted.error)summariesCreated+=(inserted.data??[]).length
   }
-  return NextResponse.json({ok:true,businesses:(businesses??[]).length,tasksCreated,summariesCreated})
+  return NextResponse.json({ok:true,businesses:(businesses??[]).length,tasksCreated,summariesCreated,surveysQueued})
 }

@@ -71,7 +71,7 @@ export type EstadoDelTurno = {
   nacimientoCliente: string | null
   reservas: ReservaVigente[]
   apartados: ApartadoVivo[]
-  avisoPendiente: { tipo?: string; question?: string; ifYes?: string; ifNo?: string; appointmentId?: string | null; repliesSince?: number } | null
+  avisoPendiente: { tipo?: string; expects?: string; question?: string; ifYes?: string; ifNo?: string; appointmentId?: string | null; repliesSince?: number } | null
   timezone: string
 }
 

@@ -440,9 +440,10 @@ export function buildNotification(eventType: string, context: NotificationContex
       return {
         espera: {
           expects: 'RATING',
-          question: 'Le pedimos que califique su visita del 1 al 5 y, si quiere, que cuente por qué.',
+          // La escala es la que acepta `survey_responses` (0–10) y la que reconoce el agente.
+          question: 'Le pedimos que califique su visita del 1 al 10 y, si quiere, que cuente por qué.',
           ttlHours: 72,
-          ifYes: 'Agradécele en una línea y guarda lo que dijo con guardar_memoria. No ofrezcas nada más salvo que él lo pida.',
+          ifYes: 'Agradécele en una línea y no ofrezcas nada más salvo que él lo pida.',
           ifNo: 'No quiere responder: agradécele igual en una línea y no insistas.',
         },
         subject: `¿Cómo te fue en ${business.name}?`,
@@ -451,7 +452,7 @@ export function buildNotification(eventType: string, context: NotificationContex
           greeting(context.clientName),
           'Nos ayudaría mucho saber qué te pareció tu visita.',
           SEPARATOR,
-          'Respóndeme con una nota del 1 al 5 y, si quieres, cuéntame por qué. ¡Gracias! 🙏',
+          'Respóndeme con una nota del *1 al 10* y, si quieres, cuéntame por qué. ¡Gracias! 🙏',
         ]),
       }
 
