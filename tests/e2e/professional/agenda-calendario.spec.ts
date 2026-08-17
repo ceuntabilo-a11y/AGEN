@@ -15,8 +15,30 @@ import { irA } from '../../support/pages'
 
 const ZONA = 'America/Santiago'
 
-/** Lunes de una semana fija, para que la prueba no dependa del día en que se ejecute. */
-const LUNES = '2026-08-10'
+/**
+ * El lunes de la semana que la agenda está mostrando AHORA.
+ *
+ * Estaba fijo en `2026-08-10` con el comentario «para que la prueba no dependa del día en que se
+ * ejecute», y era justo al revés: la agenda abre siempre en la semana en curso, así que en
+ * cuanto pasó ese lunes las citas inventadas cayeron fuera de la vista y la prueba empezó a
+ * fallar sola, sin que nadie tocara la agenda. Una prueba con fecha de caducidad enseña a
+ * ignorar el rojo, que es peor que no tenerla.
+ *
+ * Se calcula en la zona del negocio, no en la del runner de CI: en Santiago puede ser lunes
+ * mientras en UTC todavía es domingo, y entonces la semana mostrada sería otra.
+ */
+function lunesDeEstaSemana() {
+  const hoy = new Date(new Date().toLocaleString('en-US', { timeZone: ZONA }))
+  // getDay(): 0 = domingo. El lunes es el día 1, y desde el domingo hay que retroceder seis.
+  const retroceso = (hoy.getDay() + 6) % 7
+  hoy.setDate(hoy.getDate() - retroceso)
+  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`
+}
+
+const LUNES = lunesDeEstaSemana()
+
+/** El día siguiente al lunes mostrado, para el bloqueo de la mañana del martes. */
+const MARTES = (() => { const d = new Date(`${LUNES}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10) })()
 
 /** `YYYY-MM-DD` + hora local de Santiago → ISO UTC (agosto: UTC-4). */
 const enSantiago = (dia: string, hora: string) => `${dia}T${String(Number(hora.slice(0, 2)) + 4).padStart(2, '0')}${hora.slice(2)}:00.000Z`
@@ -36,7 +58,7 @@ const respuesta = {
       id: 'cita-1',
       status: 'CONFIRMED',
       service_period: `["${enSantiago(LUNES, '10:00')}","${enSantiago(LUNES, '11:00')}")`,
-      client_confirmed_at: '2026-08-09T12:00:00Z',
+      client_confirmed_at: `${LUNES}T02:00:00Z`,
       client: { id: 'c1', full_name: 'Ana Pérez', phone: '56911112222' },
       service: { id: 's1', name: 'Corte y peinado' },
     },
@@ -52,7 +74,7 @@ const respuesta = {
   blocks: [
     {
       id: 'bloqueo-1',
-      period: `["${enSantiago('2026-08-11', '09:00')}","${enSantiago('2026-08-11', '11:00')}")`,
+      period: `["${enSantiago(MARTES, '09:00')}","${enSantiago(MARTES, '11:00')}")`,
       reason: 'Capacitación',
     },
   ],
