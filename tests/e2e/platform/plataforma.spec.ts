@@ -82,8 +82,10 @@ test.describe('Plataforma (super admin)', () => {
     page.on('request', (r) => { if (r.url().includes('/api/platform/businesses') && r.method() === 'POST') llamadas++ })
     await page.getByRole('button', { name: 'Revisar' }).click()
     await expect(page.getByRole('heading', { name: '¿Creamos este negocio?' })).toBeVisible()
-    await expect(page.getByText('peluqueria-prueba-nandu')).toBeVisible()
-    await expect(page.getByText('nadie@prueba.invalid')).toBeVisible()
+    // `.first()`: el correo del dueño sale dos veces a propósito —en la frase que avisa de que
+    // se le va a invitar y en la tabla del resumen—, así que sin acotar hay dos coincidencias.
+    await expect(page.getByText('peluqueria-prueba-nandu').first()).toBeVisible()
+    await expect(page.getByText('nadie@prueba.invalid').first()).toBeVisible()
     expect(llamadas, 'el resumen no puede crear nada por sí solo').toBe(0)
 
     // Se cancela: esta prueba no crea negocios reales.
