@@ -262,6 +262,36 @@ test.describe('Elegir un horario recién ofrecido', () => {
     expect(cuerpo.texto, 'no puede contestar que no tiene ninguna hora').toBeNull()
   })
 
+  /*
+   * Ejecución 10731 del n8n de producción: a «la de Fernanda, me llamo Ana Prueba» las reglas no
+   * veían ni un «sí» ni una hora, el clasificador contestó SALUDO y el turno acabó en la rama
+   * que NO puede reservar. El cliente recibió «voy a revisar y te aviso» y no se reservó nada.
+   *
+   * Con apartados vivos el turno va SIEMPRE al decisor, que es quien puede reservar — y que sin
+   * `confirmado:true` no ejecuta nada, así que mandarlo ahí no fuerza ninguna acción.
+   */
+  for (const mensaje of ['la de Fernanda, me llamo Ana Prueba', 'la primera', 'con Camila porfa', 'esa misma', 'dale']) {
+    test(`"${mensaje}" con horarios apartados llega al decisor`, async () => {
+      falso.tablas.appointment_holds = [apartado('hold-1', ANA, MANANA)]
+      const { cuerpo } = await turno({ businessId: NEGOCIO, phone: ANA, message: mensaje })
+      expect(cuerpo.ruta).toBe('DECIDIR')
+      expect(cuerpo.intencion).toBe('ELEGIR')
+    })
+  }
+
+  test('pero una pregunta por el precio sigue contestándose como información', async () => {
+    falso.tablas.appointment_holds = [apartado('hold-1', ANA, MANANA)]
+    const { cuerpo } = await turno({ businessId: NEGOCIO, phone: ANA, message: '¿y cuánto cuesta?' })
+    expect(cuerpo.ruta).toBe('INFO')
+  })
+
+  test('y cancelar sigue siendo cancelar, no elegir', async () => {
+    falso.tablas.appointment_holds = [apartado('hold-1', ANA, MANANA)]
+    falso.tablas.appointments = [reserva('cita-1', 'cli-ana', MANANA)]
+    const { cuerpo } = await turno({ businessId: NEGOCIO, phone: ANA, message: 'mejor cancela mi hora' })
+    expect(cuerpo.intencion).toBe('CANCELAR')
+  })
+
   test('el contexto le enseña al decisor los apartados con su holdId', async () => {
     falso.tablas.appointment_holds = [apartado('hold-1', ANA, MANANA)]
     const { cuerpo } = await turno({ businessId: NEGOCIO, phone: ANA, message: 'sí' })

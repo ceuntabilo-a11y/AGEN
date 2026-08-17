@@ -157,9 +157,24 @@ export function clasificarPorReglas(mensaje: string, estado: EstadoDelTurno): Cl
   if (PALABRAS.CANCELAR.test(texto)) return { intencion: 'CANCELAR', confianza: 'ALTA' }
   if (PALABRAS.CONFIRMAR.test(texto) && estado.reservas.length) return { intencion: 'CONFIRMAR', confianza: 'ALTA' }
 
-  // Con horarios apartados vivos, un «sí» suelto es elegir uno de ellos y nada más.
-  if (estado.apartados.length && dijoSi && !dijoNo) return { intencion: 'ELEGIR', confianza: 'ALTA' }
-  if (estado.apartados.length && /\b\d{1,2}([:.]\d{2})?\b/.test(texto)) return { intencion: 'ELEGIR', confianza: 'BAJA' }
+  /*
+   * Con horarios apartados vivos, el turno es SIEMPRE sobre ellos.
+   *
+   * Un apartado solo existe porque en el mensaje anterior se le ofrecieron horarios a esta
+   * persona y siguen reservados unos minutos: lo que conteste ahora es, casi por definición,
+   * elegir uno. Fallo real (ejecución 10731): a «la de Fernanda, me llamo Ana Prueba» las
+   * reglas no encontraban ni un «sí» ni una hora, el clasificador dijo SALUDO, y el turno acabó
+   * en la rama que no puede reservar — el cliente recibió «voy a revisar y te aviso» y nunca se
+   * reservó nada.
+   *
+   * Mandarlo a DECIDIR no fuerza ninguna acción: si el mensaje no era una elección, el decisor
+   * devuelve `confirmado:false` con la pregunta que corresponda y no se ejecuta nada. Solo se
+   * exceptúa la pregunta clara por precios, dirección u horarios, que se contesta como INFO.
+   */
+  if (estado.apartados.length) {
+    if (PALABRAS.INFO.test(texto) && !dijoSi) return { intencion: 'INFO', confianza: 'BAJA' }
+    return { intencion: 'ELEGIR', confianza: 'ALTA' }
+  }
 
   if (PALABRAS.AGENDAR.test(texto)) return { intencion: 'AGENDAR', confianza: 'BAJA' }
   if (PALABRAS.INFO.test(texto)) return { intencion: 'INFO', confianza: 'BAJA' }
@@ -401,6 +416,13 @@ const INSTRUCCIONES: Record<Ruta, string> = {
     '- Si hay varias reservas y el cliente no dijo cuál, confirmado:false y pregúntale cuál.',
     '- En "datos" copia solo lo que el cliente escribió literalmente en este mensaje; el resto va null.',
     '- Nunca inventes un id, una hora ni un motivo.',
+    '',
+    '# CÓMO SE ELIGE UN HORARIO',
+    'Si hay APARTADOS, el cliente casi siempre está eligiendo uno. Puede señalarlo de muchas formas y todas valen: por la hora ("la de las 9"), por el profesional ("la de Fernanda", "con Javiera"), por el orden ("la primera", "la segunda") o con un sí a secas si solo había uno.',
+    'En cuanto quede claro CUÁL, copia su holdId exacto de APARTADOS y pon confirmado:true. No hace falta que repita la hora ni que diga "confirmo": elegir ya es confirmar.',
+    'Si dice su nombre en el mismo mensaje ("me llamo Ana Pérez"), cópialo en datos.nombre y sigue con confirmado:true: el sistema lo registra y reserva en el mismo paso.',
+    'Solo si de verdad no se puede saber cuál de los apartados quiere, confirmado:false y pregúntale cuál en una línea.',
+    'Si con APARTADOS vivos el cliente pregunta otra cosa que no es elegir, confirmado:false, intencion NINGUNA y en "mensaje" la respuesta o la pregunta que corresponda.',
     '',
     '# MOVER NO ES CANCELAR',
     'Si el cliente quiere la misma hora en otro momento ("cámbiamela", "mejor el jueves"), la intención es MOVER con el appointmentId de su reserva y el holdId del horario nuevo. Nunca liberes primero "por si acaso": si mover falla, el cliente se queda sin su hora.',
