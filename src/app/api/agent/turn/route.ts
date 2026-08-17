@@ -10,7 +10,8 @@ import { comentarioDelMensaje, correspondePedirResena, guardarNotaDeEncuesta, no
 import { guardarClienteDelAgente } from '@/lib/agent-booking'
 import { describirMedia, fotosDelPortafolio } from '@/lib/agent-media'
 import { registrarAviso } from '@/lib/observabilidad'
-import { formatInZone, formatTimeInZone } from '@/lib/timezone'
+import { formatInZone, formatTimeInZone, type ReferenciasTemporales } from '@/lib/timezone'
+import { interpretarCuando, pideOtroHorario } from '@/lib/agent-tiempo'
 import {
   aplicarGuardas, armarContexto, clasificarPorReglas, instruccionesDe, lineaDeCumpleanos,
   preguntaPorElDato, rutaDe, siguienteDatoQueFalta,
@@ -176,6 +177,17 @@ export async function POST(request: Request) {
 
   const apartados = await apartadosVivos(db, { businessId: body.businessId, clientId: cliente?.id ?? null, phone, timezone })
 
+  /*
+   * Qué día y a qué hora pidió, entendido por código y con lo que ya se habló.
+   *
+   * Una persona dice el día en un mensaje y la hora en el siguiente («Para mañana» … «3pm»), y
+   * el modelo perdía el hilo entre turnos. Aquí se leen los dos: este mensaje y lo que dijo el
+   * cliente en la conversación reciente.
+   */
+  const dichoAntes = ((datos.recent ?? []) as Array<{ quien?: string; texto?: string }>)
+    .filter((linea) => linea.quien === 'cliente').map((linea) => String(linea.texto ?? '')).slice(-4).reverse()
+  const cuando = interpretarCuando(mensaje, (datos.time ?? null) as ReferenciasTemporales | null, dichoAntes)
+
   const estado: EstadoDelTurno = {
     actorType: datos.actorType === 'TEAM' ? 'TEAM' : 'CLIENT',
     clienteRegistrado: Boolean(cliente?.id),
@@ -186,6 +198,11 @@ export async function POST(request: Request) {
     apartados,
     avisoPendiente: datos.pendingNotice ?? null,
     timezone,
+    cuando,
+    // Solo el mensaje de ESTE turno decide si pide otra hora: lo de antes ya se le ofreció.
+    pideOtroHorario: pideOtroHorario(mensaje, apartados.map((item) => ({ hora: item.hora, fecha: item.start.slice(0, 10) })), (datos.time ?? null) as ReferenciasTemporales | null),
+    ultimaRespuesta: ((datos.recent ?? []) as Array<{ quien?: string; texto?: string }>)
+      .filter((linea) => linea.quien === 'agen').map((linea) => String(linea.texto ?? '')).pop() ?? null,
   }
 
   const cumple = esCumpleanosHoy(estado.nacimientoCliente, timezone)
@@ -289,6 +306,21 @@ export async function POST(request: Request) {
   if (linea) extras.push(linea)
   if (imageUrl) extras.push('Se le va a adjuntar una foto real de un trabajo del portafolio: preséntala en una línea, sin describir lo que no ves.')
   if (media.pareceComprobante) extras.push('El cliente mandó lo que parece un comprobante de pago: no confirmes ningún pago, dile que lo revisará el equipo.')
+
+  // El nombre, cuando se sabe: se usa; cuando no, se pide. Nunca se inventa.
+  if (estado.nombreCliente) {
+    extras.push(`El cliente se llama ${estado.nombreCliente.split(' ')[0]}: salúdalo por su nombre y no se lo vuelvas a preguntar.`)
+  }
+  if (estado.cuando?.hora || estado.cuando?.franja || estado.cuando?.fecha) {
+    extras.push(`El cliente YA dijo cuándo quiere: ${JSON.stringify(estado.cuando)}. No se lo vuelvas a preguntar.`)
+  }
+  /*
+   * Lo último que se contestó, para no repetirlo. Es la otra mitad del bucle que se vio en
+   * producción: el cliente insistía y el agente devolvía la misma pregunta palabra por palabra.
+   */
+  if (estado.ultimaRespuesta) {
+    extras.push(`Tu mensaje anterior fue: ${JSON.stringify(estado.ultimaRespuesta.slice(0, 300))}. PROHIBIDO repetirlo ni volver a hacer la misma pregunta: si el cliente insistió, es porque ya te contestó — actúa con lo que te dijo.`)
+  }
 
   const faltante = estado.actorType === 'CLIENT' ? siguienteDatoQueFalta(estado) : null
   if (ruta !== 'DECIDIR' && faltante && intencion !== 'FUERA_DE_ALCANCE') {

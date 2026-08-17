@@ -116,13 +116,19 @@ test.describe('Toda llamada de red tiene techo de tiempo', () => {
     expect(String((nodo('Turno').parameters as { url: string }).url)).toContain('/api/agent/turn')
   })
 
-  test('la espera de agrupación no puede volver a crecer', () => {
-    // Está para juntar los mensajes que alguien manda seguidos, y eso se cumple con segundo y
-    // medio. Cada décima de más es coste fijo en TODAS las conversaciones, incluidas las de un
-    // solo mensaje, que son casi todas.
+  test('la espera de agrupación junta los mensajes seguidos sin dispararse', () => {
+    /*
+     * Está para juntar los mensajes que alguien manda seguidos. Estaba en 0,6 s y eso no
+     * alcanzaba para una persona: el 2026-08-17 alguien escribió «Hola», «Buenas tardes» y
+     * «Hola» y recibió TRES saludos idénticos, porque cada mensaje entró como una conversación
+     * distinta. Con 2,5 s se agrupan y sigue siendo una fracción de lo que tarda el modelo
+     * (6–16 s). Más de 4 s ya sería coste fijo en todas las conversaciones, incluidas las de un
+     * solo mensaje, que son casi todas.
+     */
     const espera = nodo('Esperar').parameters as { amount: number; unit: string }
     expect(espera.unit).toBe('seconds')
-    expect(espera.amount).toBeLessThanOrEqual(1.5)
+    expect(espera.amount).toBeGreaterThanOrEqual(2)
+    expect(espera.amount).toBeLessThanOrEqual(4)
   })
 
   test('las herramientas del agente acotan su llamada a la app', () => {
