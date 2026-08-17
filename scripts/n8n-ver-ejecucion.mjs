@@ -61,7 +61,9 @@ if (envio) {
   if (envio.reasons?.length) console.log(`motivos de la revisión: ${envio.reasons.join(', ')}`)
 } else {
   // Con el router hay una rama por intención: se mira la que corrió.
-  const rama = ['Respuesta directa', 'Buscador', 'Redactor', 'Decisor', 'Ejecutar acción', 'No pude consultar']
+  // Las ramas del router, y el nodo único del diseño anterior por si se está mirando una
+  // ejecución vieja o el workflow restaurado desde el respaldo.
+  const rama = ['Respuesta directa', 'Buscador', 'Redactor', 'Decisor', 'Ejecutar acción', 'No pude consultar', 'Agente Agen']
     .find((nombre) => corridas[nombre]?.[0])
   const json = rama ? corridas[rama][0]?.data?.main?.[0]?.[0]?.json : null
   const salida = json?.output ?? json?.text ?? json?.texto
