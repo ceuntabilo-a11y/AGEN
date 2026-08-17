@@ -75,7 +75,12 @@ export default function PlatformBusinessesPage() {
   const [negocios, setNegocios] = useState<Negocio[]>([])
   const [planes, setPlanes] = useState<Plan[]>([])
   const [error, setError] = useState('')
-  const [aviso, setAviso] = useState('')
+  /*
+   * El aviso lleva su gravedad: si el negocio se creó pero el correo NO salió, pintarlo en
+   * verde como si todo hubiera ido bien deja al dueño esperando una invitación que nunca
+   * llegó. Verde = terminado; ámbar = hecho a medias y hay que actuar.
+   */
+  const [aviso, setAviso] = useState<{ texto: string; grave: boolean } | null>(null)
 
   const [creando, setCreando] = useState<ValoresNegocio | null>(null)
   const [confirmando, setConfirmando] = useState(false)
@@ -100,7 +105,7 @@ export default function PlatformBusinessesPage() {
   /** Una sola puerta para todo lo que escribe: bloquea, ejecuta, informa y recarga. */
   async function ejecutar(clave: string, peticion: () => Promise<Response>, alTerminar?: (datos: Record<string, unknown>) => void) {
     if (trabajando) return
-    setTrabajando(clave); setErrorModal(''); setAviso('')
+    setTrabajando(clave); setErrorModal(''); setAviso(null)
     try {
       const respuesta = await peticion()
       const datos = await respuesta.json().catch(() => ({})) as Record<string, unknown>
@@ -125,9 +130,11 @@ export default function PlatformBusinessesPage() {
   }), (datos) => {
     setCreando(null); setConfirmando(false)
     setEnlace(typeof datos.inviteLink === 'string' ? datos.inviteLink : null)
-    setAviso(datos.correoEnviado ? 'Negocio creado y correo de invitación enviado al dueño.'
-      : datos.cuentaExistente ? 'Negocio creado. El dueño ya tenía cuenta: entra con su contraseña de siempre.'
-        : 'Negocio creado. El correo no se pudo enviar: copia el enlace y mándaselo tú.')
+    setAviso(datos.correoEnviado
+      ? { texto: 'Negocio creado y correo de invitación enviado al dueño.', grave: false }
+      : datos.cuentaExistente
+        ? { texto: 'Negocio creado. El dueño ya tenía cuenta: entra con su contraseña de siempre.', grave: false }
+        : { texto: 'Negocio creado, pero el correo NO se pudo enviar. Copia el enlace y mándaselo tú, o vuelve a intentarlo con «Reenviar invitación».', grave: true })
   })
 
   const guardar = () => editando && ejecutar('editar', () => fetch(`/api/platform/businesses/${editando.negocio.id}`, {
@@ -139,22 +146,24 @@ export default function PlatformBusinessesPage() {
       durationDays: editando.valores.durationDays,
       expiresOn: editando.valores.durationDays === null ? editando.valores.expiresOn : undefined,
     }),
-  }), () => { setEditando(null); setAviso('Cambios guardados.') })
+  }), () => { setEditando(null); setAviso({ texto: 'Cambios guardados.', grave: false }) })
 
   const reenviar = (negocio: Negocio) => ejecutar(`invitar-${negocio.id}`, () =>
     fetch(`/api/platform/businesses/${negocio.id}/invite`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }),
   (datos) => {
     setEnlace(typeof datos.inviteLink === 'string' ? datos.inviteLink : null)
-    setAviso(datos.correoEnviado ? 'Invitación reenviada por correo.'
-      : datos.cuentaExistente ? 'Ese dueño ya activó su cuenta: puede entrar con su contraseña.'
-        : 'No se pudo enviar el correo: copia el enlace y mándaselo tú.')
+    setAviso(datos.correoEnviado
+      ? { texto: 'Invitación reenviada por correo.', grave: false }
+      : datos.cuentaExistente
+        ? { texto: 'Ese dueño ya activó su cuenta: puede entrar con su contraseña.', grave: false }
+        : { texto: 'El correo NO se pudo enviar. Copia el enlace y mándaselo tú.', grave: true })
   })
 
   const suspender = (negocio: Negocio) => ejecutar(`suspender-${negocio.id}`, () =>
     fetch(`/api/platform/businesses/${negocio.id}`, {
       method: 'PATCH', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ suspended: !negocio.suspended_at }),
-    }), () => setAviso(negocio.suspended_at ? 'Negocio reactivado.' : 'Negocio suspendido.'))
+    }), () => setAviso({ texto: negocio.suspended_at ? 'Negocio reactivado.' : 'Negocio suspendido.', grave: false }))
 
   const abrirEdicion = (negocio: Negocio) => setEditando({
     negocio,
@@ -177,7 +186,7 @@ export default function PlatformBusinessesPage() {
     />
 
     {error && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
-    {aviso && <p className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800" role="status">{aviso}</p>}
+    {aviso && <p className={`mb-4 rounded-xl p-3 text-sm ${aviso.grave ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`} role="status">{aviso.texto}</p>}
 
     <div className="overflow-x-auto rounded-2xl border bg-white">
       <table className="w-full min-w-[900px] text-left text-sm">
@@ -263,7 +272,7 @@ export default function PlatformBusinessesPage() {
       onCancelar={() => setBorrando(null)}
       onConfirmar={(nombre) => ejecutar('borrar', () => fetch(`/api/platform/businesses/${borrando.id}`, {
         method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirm: nombre }),
-      }), () => { setBorrando(null); setAviso('Negocio eliminado.') })}
+      }), () => { setBorrando(null); setAviso({ texto: 'Negocio eliminado.', grave: false }) })}
     />}
 
     {enlace && <ModalShell titulo="Enlace de invitación" onClose={() => setEnlace(null)}>

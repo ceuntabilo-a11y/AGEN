@@ -96,7 +96,7 @@ export async function POST(request: Request) {
       if (creado) await db.from('businesses').delete().eq('id', creado.id)
     }
 
-    const acceso = await emitirAcceso(db, correo)
+    const acceso = await emitirAcceso(db, correo, nombre)
     if ('error' in acceso) { await deshacer(); return NextResponse.json({ error: acceso.error }, { status: 409 }) }
     if (!acceso.yaExistia) usuarioNuevo = acceso.userId
 

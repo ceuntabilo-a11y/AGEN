@@ -24,6 +24,7 @@ type Settings = {
   dashscope_fallback_endpoint: string | null
   evolution_api_url: string | null
   resend_from: string | null
+  n8n_api_url: string | null
 }
 
 /** Campos de credencial: van vacíos, con casilla para quitarlos. */
@@ -39,6 +40,12 @@ const TEXTOS = [
   { clave: 'dashscope_fallback_endpoint', etiqueta: 'Endpoint dedicado de DashScope (solo si tu clave es de un workspace, ej. sk-ws-…)', ejemplo: '' },
   { clave: 'evolution_api_url', etiqueta: 'URL de Evolution API (solo si vas a usar WhatsApp por QR)', ejemplo: 'https://tu-evolution-api.com' },
   { clave: 'resend_from', etiqueta: 'Remitente de Resend (dominio ya verificado en Resend)', ejemplo: 'Agen <notificaciones@tu-dominio.com>' },
+  /*
+   * Faltaba, y por eso el monitor no tenía arreglo posible desde la interfaz: la clave estaba
+   * aceptada por el servidor y leída por el health check, pero este formulario nunca la pintó.
+   * El Monitor decía "sin configurar" y no existía ningún sitio donde configurarla.
+   */
+  { clave: 'n8n_api_url', etiqueta: 'URL de n8n (la usa el monitor para comprobar que está vivo)', ejemplo: 'https://n8n-agen.synetia.site' },
 ] as const
 
 export default function PlatformKeysPage() {
