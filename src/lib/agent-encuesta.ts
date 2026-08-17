@@ -73,9 +73,43 @@ export async function guardarNotaDeEncuesta(
   }
 }
 
-/** El agradecimiento, escrito por código y proporcional a la nota. */
-export function textoDeAgradecimiento(nota: number): string {
-  if (nota >= 9) return `¡Gracias por el ${nota}! 🙌\n\nNos alegra un montón. Te esperamos pronto.`
+/**
+ * A partir de qué nota se le pide la reseña en Google.
+ *
+ * Es la regla clásica de NPS: solo los promotores. Pedírsela a quien puso un 6 es pedirle que
+ * publique un 6, y esa reseña queda para siempre.
+ */
+export const NOTA_MINIMA_PARA_RESENA = 9
+
+/** ¿Este cliente es promotor y el negocio tiene dónde mandarlo? */
+export function correspondePedirResena(nota: number, enlace: string | null | undefined): boolean {
+  return nota >= NOTA_MINIMA_PARA_RESENA && esEnlaceDeResena(enlace)
+}
+
+/** Un enlace de reseña utilizable: http(s) y nada más. */
+export function esEnlaceDeResena(valor: unknown): valor is string {
+  const texto = String(valor ?? '').trim()
+  if (!texto) return false
+  try {
+    return ['http:', 'https:'].includes(new URL(texto).protocol)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * El agradecimiento, escrito por código y proporcional a la nota.
+ *
+ * Con 9 o 10 —y solo entonces— se le pide además la reseña en Google, con el enlace que el
+ * negocio guardó en su configuración. Sin enlace configurado, se agradece y ya está: nunca se
+ * inventa una dirección ni se promete algo que no existe.
+ */
+export function textoDeAgradecimiento(nota: number, enlaceResena?: string | null): string {
+  if (nota >= NOTA_MINIMA_PARA_RESENA) {
+    const gracias = `¡Gracias por el ${nota}! 🙌\n\nNos alegra un montón.`
+    if (!esEnlaceDeResena(enlaceResena)) return `${gracias}\n\nTe esperamos pronto.`
+    return `${gracias}\n\n¿Nos ayudas con una reseña en Google? Te toma menos de un minuto y nos ayuda muchísimo a que otras personas nos encuentren:\n${String(enlaceResena).trim()}\n\n¡Gracias de verdad! 💜`
+  }
   if (nota >= 7) return `¡Gracias por tu nota (${nota})! 😊\n\nSi hay algo que podamos mejorar, cuéntamelo por aquí.`
   return `Gracias por tu sinceridad (${nota}).\n\nLamento que no haya sido como esperabas: le paso tu comentario al equipo para que lo revisen.`
 }

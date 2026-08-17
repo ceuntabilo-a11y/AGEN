@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { POST as TURNO } from '@/app/api/agent/turn/route'
-import { comentarioDelMensaje, notaDelMensaje, textoDeAgradecimiento } from '@/lib/agent-encuesta'
+import { comentarioDelMensaje, correspondePedirResena, esEnlaceDeResena, notaDelMensaje, textoDeAgradecimiento } from '@/lib/agent-encuesta'
 import { pareceRespuestaAlAviso } from '@/lib/outbound-context'
 import { buildNotification } from '@/lib/notification-templates'
 import { levantarSupabaseFalso, peticionAgente, usarSupabaseFalso, type SupabaseFalso, type Tablas } from '../support/supabase-fake'
@@ -148,5 +148,63 @@ test.describe('La nota se guarda sola, sin modelo', () => {
   test('el agradecimiento lo escribe el código, no el modelo', () => {
     expect(textoDeAgradecimiento(10)).toContain('10')
     expect(textoDeAgradecimiento(2)).toContain('equipo')
+  })
+})
+
+/*
+ * La reseña en Google es la regla clásica de NPS: solo a los promotores. Pedírsela a quien puso
+ * un 6 es pedirle que publique un 6, y esa reseña queda para siempre.
+ */
+test.describe('La reseña en Google solo a quien puso 9 o 10', () => {
+  const ENLACE = 'https://g.page/r/CTuNegocioDeEjemplo/review'
+
+  const conEnlace = () => {
+    falso.tablas.businesses = [{ ...falso.tablas.businesses[0], settings: { google_review_url: ENLACE } }]
+  }
+
+  for (const nota of [9, 10]) {
+    test(`con un ${nota} se le manda el enlace`, async () => {
+      conEnlace()
+      const cuerpo = await turno(String(nota))
+      expect(cuerpo.texto).toContain(ENLACE)
+      expect(cuerpo.texto.toLowerCase()).toContain('reseña')
+    })
+  }
+
+  for (const nota of [0, 5, 7, 8]) {
+    test(`con un ${nota} NO se le manda`, async () => {
+      conEnlace()
+      const cuerpo = await turno(String(nota))
+      expect(cuerpo.texto).not.toContain(ENLACE)
+      expect(cuerpo.texto, 'igual hay que agradecerle').toBeTruthy()
+    })
+  }
+
+  test('sin enlace configurado, se agradece y no se promete nada', async () => {
+    const cuerpo = await turno('10')
+    expect(cuerpo.texto).toContain('10')
+    expect(cuerpo.texto.toLowerCase()).not.toContain('reseña')
+    expect(cuerpo.texto).not.toContain('http')
+  })
+
+  test('un enlace mal escrito no se manda nunca', () => {
+    for (const malo of ['google.com/reviews', 'javascript:alert(1)', '', null, undefined, '   ']) {
+      expect(esEnlaceDeResena(malo), String(malo)).toBe(false)
+      expect(textoDeAgradecimiento(10, malo as string | null)).not.toContain('reseña')
+    }
+    expect(esEnlaceDeResena(ENLACE)).toBe(true)
+  })
+
+  test('la nota se guarda igual, se pida o no la reseña', async () => {
+    conEnlace()
+    await turno('10')
+    expect((falso.tablas.survey_responses ?? [])[0].score).toBe(10)
+  })
+
+  test('correspondePedirResena resume la regla en un sitio', () => {
+    expect(correspondePedirResena(9, ENLACE)).toBe(true)
+    expect(correspondePedirResena(10, ENLACE)).toBe(true)
+    expect(correspondePedirResena(8, ENLACE)).toBe(false)
+    expect(correspondePedirResena(10, null)).toBe(false)
   })
 })

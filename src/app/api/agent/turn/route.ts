@@ -6,7 +6,7 @@ import { cargarContexto } from '@/lib/agent-context'
 import { respuestaRapida } from '@/lib/agent-fast-path'
 import { chatCompletion, resolveOpenAiKey } from '@/lib/openai'
 import { datosSueltosDelMensaje, esCumpleanosHoy } from '@/lib/agent-datos'
-import { comentarioDelMensaje, guardarNotaDeEncuesta, notaDelMensaje, textoDeAgradecimiento } from '@/lib/agent-encuesta'
+import { comentarioDelMensaje, correspondePedirResena, guardarNotaDeEncuesta, notaDelMensaje, textoDeAgradecimiento } from '@/lib/agent-encuesta'
 import { guardarClienteDelAgente } from '@/lib/agent-booking'
 import { describirMedia, fotosDelPortafolio } from '@/lib/agent-media'
 import { registrarAviso } from '@/lib/observabilidad'
@@ -208,9 +208,15 @@ export async function POST(request: Request) {
         nota,
         comentario: comentarioDelMensaje(mensaje),
       })
-      registrarAviso('encuesta_respondida', { businessId: body.businessId, nota, guardada: guardada.guardada })
+      // Con 9 o 10 se le pide la reseña en Google, con el enlace que guardó el negocio.
+      const enlaceResena = (datos.business?.settings as Record<string, unknown> | undefined)?.google_review_url
+      registrarAviso('encuesta_respondida', {
+        businessId: body.businessId, nota, guardada: guardada.guardada,
+        resena: correspondePedirResena(nota, enlaceResena as string | null),
+      })
       return NextResponse.json({
-        ruta: 'DIRECTA' as Ruta, intencion: 'ENCUESTA', texto: textoDeAgradecimiento(nota),
+        ruta: 'DIRECTA' as Ruta, intencion: 'ENCUESTA',
+        texto: textoDeAgradecimiento(nota, enlaceResena as string | null),
         systemMessage: '', userMessage: '', imageUrl: null,
         wasAudio: media.tipo === 'audio', businessId: body.businessId, phone, timezone,
       })

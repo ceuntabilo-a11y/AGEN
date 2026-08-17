@@ -154,6 +154,28 @@ export async function PATCH(request: Request) {
     if (body.status === 'NO_SHOW' && body.notify) {
       await db.rpc('enqueue_appointment_event', { p_appointment_id: body.appointmentId, p_event_type: 'FOLLOW_UP' })
     }
+
+    /*
+     * La encuesta sale en cuanto la cita se cierra como atendida.
+     *
+     * Acá y no en un barrido horario porque este es el momento exacto en que el negocio da la
+     * visita por terminada, y una encuesta que llega mientras la persona todavía se acuerda vale
+     * mucho más que una que llega al día siguiente. El barrido de `/api/automation/followups/run`
+     * se queda como red por si una cita se cierra por otro camino.
+     *
+     * Nunca puede tumbar el cambio de estado: si falla, la cita queda COMPLETED igual.
+     */
+    if (body.status === 'COMPLETED') {
+      const { data: negocio } = await db.from('businesses').select('settings').eq('id', businessId).maybeSingle()
+      const ajustes = (negocio?.settings ?? {}) as Record<string, unknown>
+      const horas = Number(ajustes.survey_hours_after ?? 0)
+      if (ajustes.survey_enabled !== false) {
+        const cuando = new Date(Date.now() + (Number.isFinite(horas) && horas > 0 ? horas * 3600000 : 0)).toISOString()
+        await db.rpc('enqueue_appointment_event', {
+          p_appointment_id: body.appointmentId, p_event_type: 'REVIEW_REQUEST', p_scheduled_at: cuando,
+        })
+      }
+    }
     return NextResponse.json({ appointment: data })
   } catch (error) { return apiError(error) }
 }
