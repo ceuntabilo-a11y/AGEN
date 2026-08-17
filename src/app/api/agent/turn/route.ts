@@ -6,6 +6,7 @@ import { cargarContexto } from '@/lib/agent-context'
 import { respuestaRapida } from '@/lib/agent-fast-path'
 import { chatCompletion, resolveOpenAiKey } from '@/lib/openai'
 import { datosSueltosDelMensaje, esCumpleanosHoy } from '@/lib/agent-datos'
+import { comentarioDelMensaje, guardarNotaDeEncuesta, notaDelMensaje, textoDeAgradecimiento } from '@/lib/agent-encuesta'
 import { guardarClienteDelAgente } from '@/lib/agent-booking'
 import { describirMedia, fotosDelPortafolio } from '@/lib/agent-media'
 import { registrarAviso } from '@/lib/observabilidad'
@@ -188,6 +189,33 @@ export async function POST(request: Request) {
   }
 
   const cumple = esCumpleanosHoy(estado.nacimientoCliente, timezone)
+
+  /*
+   * Respuesta a una encuesta: es un número, así que la guarda el código.
+   *
+   * Sin esto, el «9» del cliente llegaba al modelo, que como mucho daba las gracias, y la nota
+   * se perdía: `survey_responses` tenía una columna `source = 'AI_AGENT'` preparada desde el
+   * primer día y nadie escribía nunca en ella. Va antes de clasificar porque no hay nada que
+   * clasificar — la pregunta ya la hizo el negocio y la respuesta es un número.
+   */
+  if (estado.avisoPendiente?.expects === 'RATING' && cliente?.id) {
+    const nota = notaDelMensaje(mensaje)
+    if (nota !== null) {
+      const guardada = await guardarNotaDeEncuesta(db, {
+        businessId: body.businessId,
+        clientId: cliente.id,
+        appointmentId: estado.avisoPendiente.appointmentId ?? null,
+        nota,
+        comentario: comentarioDelMensaje(mensaje),
+      })
+      registrarAviso('encuesta_respondida', { businessId: body.businessId, nota, guardada: guardada.guardada })
+      return NextResponse.json({
+        ruta: 'DIRECTA' as Ruta, intencion: 'ENCUESTA', texto: textoDeAgradecimiento(nota),
+        systemMessage: '', userMessage: '', imageUrl: null,
+        wasAudio: media.tipo === 'audio', businessId: body.businessId, phone, timezone,
+      })
+    }
+  }
 
   // Camino rápido: un saludo, un agradecimiento o una despedida no necesitan modelo.
   const rapida = respuestaRapida(mensaje, {
