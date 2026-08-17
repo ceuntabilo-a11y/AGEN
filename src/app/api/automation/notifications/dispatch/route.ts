@@ -40,7 +40,7 @@ function textToHtml(text: string) {
 }
 
 /** Avisos que dejan de tener sentido una vez que la hora de la que hablan ya pasó. */
-const RECORDATORIOS = ['CONFIRM_REQUEST', 'DAY_OF_REMINDER', 'REMINDER_24H', 'REMINDER_2H']
+const RECORDATORIOS = ['REMINDER', 'CONFIRM_REQUEST', 'DAY_OF_REMINDER', 'REMINDER_24H', 'REMINDER_2H']
 
 /**
  * Tipo con el que se guarda el aviso para el agente.
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
 
     // Una cita cancelada no manda recordatorios, y quien ya confirmó no recibe el de la mañana.
     if (appointment) {
-      const scheduled = ['CONFIRM_REQUEST', 'DAY_OF_REMINDER', 'REMINDER_24H', 'REMINDER_2H'].includes(row.event_type)
+      const scheduled = ['REMINDER', 'CONFIRM_REQUEST', 'DAY_OF_REMINDER', 'REMINDER_24H', 'REMINDER_2H'].includes(row.event_type)
       if (scheduled && !['PENDING', 'CONFIRMED'].includes(appointment.status)) { await discard('cita_no_vigente'); continue }
       if (scheduled && appointment.client_confirmed_at) { await discard('ya_confirmada'); continue }
     }

@@ -89,8 +89,15 @@ async function comprobarWorkflow() {
   anotar(w.active === true, 'El workflow está activo')
   anotar(!nombres.includes('Memoria reciente'), 'Sin el buffer en memoria de n8n',
     nombres.includes('Memoria reciente') ? 'sigue el puente: falta subir el definitivo' : 'la memoria vive en la base')
-  anotar(nombres.includes('mover_reserva'), 'La herramienta para mover una hora está conectada')
-  anotar(nombres.includes('¿Respuesta rápida?'), 'El camino rápido está en el workflow')
+  // Router de intención: el turno entra por /api/agent/turn y las acciones las ejecuta
+  // /api/agent/act. Ninguna acción crítica puede seguir siendo una herramienta del modelo.
+  anotar(nombres.includes('Turno'), 'El router de intención está en el workflow')
+  anotar(nombres.includes('Ejecutar acción'), 'Las acciones las ejecuta un paso fijo de código')
+  const comoHerramienta = ['crear_reserva', 'liberar_reserva', 'mover_reserva', 'confirmar_reserva', 'registrar_cliente']
+    .filter((nombre) => nombres.includes(nombre))
+  anotar(comoHerramienta.length === 0, 'El modelo ya no puede reservar, cancelar ni mover por su cuenta',
+    comoHerramienta.length ? `siguen como herramienta: ${comoHerramienta.join(', ')}` : 'ninguna acción cuelga del modelo')
+  anotar(nombres.includes('¿Respuesta directa?'), 'El camino rápido está en el workflow')
 
   const entrada = (w.nodes ?? []).find((n) => n.name === 'Entrada')
   anotar(entrada?.type === 'n8n-nodes-base.set', 'La puerta de entrada no usa el sandbox lento',

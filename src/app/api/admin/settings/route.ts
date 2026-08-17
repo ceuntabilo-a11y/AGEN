@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireBusinessContext } from '@/lib/supabase-server'
 import { apiError } from '@/lib/http-errors'
 import { validTimeZone } from '@/lib/timezone'
+import { errorDeRecordatorios } from '@/lib/reminders'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +48,11 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: 'Deja al menos un día abierto: con todos cerrados nadie puede reservar' }, { status: 400 })
       }
     }
+
+    // Los recordatorios los programa una función SQL a partir de esta lista: si entra mal,
+    // el negocio se queda sin avisos y nadie se entera hasta que un cliente no llega.
+    const errorRecordatorios = errorDeRecordatorios((body.settings as Record<string, unknown> | undefined)?.reminders)
+    if (errorRecordatorios) return NextResponse.json({ error: errorRecordatorios }, { status: 400 })
 
     const allowed = ['name','timezone','currency','phone','email','address','maps_url','logo_url','settings','agent_settings']
     const changes = Object.fromEntries(Object.entries(body).filter(([key]) => allowed.includes(key)))

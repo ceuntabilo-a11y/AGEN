@@ -40,7 +40,8 @@ const workflow = cargarWorkflow()
 // "Memoria reciente" salió del workflow: la conversación ya no vive en un buffer del proceso de
 // n8n, viene en el contexto (`$json.recent`) leída de `messages`.
 const TRAS_LA_ESPERA = [
-  'Agrupar', 'Cargar contexto', 'Agente Agen', '¿Respuesta rápida?', 'Respuesta directa',
+  'Agrupar', 'Turno', '¿Hay contexto?', '¿Respuesta directa?', 'Respuesta directa',
+  'Buscador', 'Decisor', 'Redactor', 'Ejecutar acción',
   'Enviar a WhatsApp', 'Persistir interacción', 'Responder',
 ]
 
@@ -95,18 +96,24 @@ test.describe('Toda llamada de red tiene techo de tiempo', () => {
   })
 
   test('el modelo también tiene techo', () => {
-    const opciones = (nodo('Modelo').parameters as { options?: { timeout?: number } }).options ?? {}
-    expect(opciones.timeout).toBeTruthy()
+    // Un modelo por rama; todos con tope, porque cualquiera de ellos está en el camino crítico.
+    const modelos = workflow.nodes.filter((n) => n.type === '@n8n/n8n-nodes-langchain.lmChatOpenAi')
+    expect(modelos.length).toBeGreaterThan(0)
+    for (const modelo of modelos) {
+      const opciones = (modelo.parameters as { options?: { timeout?: number } }).options ?? {}
+      expect(opciones.timeout, `"${modelo.name}" sin techo de tiempo`).toBeTruthy()
+    }
   })
 
   test('el contexto del turno se pide en UNA llamada, no en dos', () => {
     // Eran dos peticiones a la app en secuencia (memoria y catálogo) sin que ninguna dependiera
     // de la otra: 1,5–2,5 s de cada turno regalados. Si vuelven a aparecer, esto lo dice.
     const nombres = workflow.nodes.map((n) => n.name)
-    expect(nombres).toContain('Cargar contexto')
+    expect(nombres).toContain('Turno')
     expect(nombres).not.toContain('Cargar memoria')
     expect(nombres).not.toContain('Cargar catálogo')
-    expect(String((nodo('Cargar contexto').parameters as { url: string }).url)).toContain('/api/agent/context')
+    expect(nombres).not.toContain('Cargar contexto')
+    expect(String((nodo('Turno').parameters as { url: string }).url)).toContain('/api/agent/turn')
   })
 
   test('la espera de agrupación no puede volver a crecer', () => {
@@ -119,8 +126,10 @@ test.describe('Toda llamada de red tiene techo de tiempo', () => {
   })
 
   test('las herramientas del agente acotan su llamada a la app', () => {
+    // Con el router queda UNA sola herramienta (`buscar_horarios`): las acciones ya no son
+    // herramientas del modelo, las ejecuta `/api/agent/act`.
     const herramientas = workflow.nodes.filter((n) => n.type === '@n8n/n8n-nodes-langchain.toolCode')
-    expect(herramientas.length).toBeGreaterThan(5)
+    expect(herramientas.length).toBeGreaterThan(0)
     for (const n of herramientas) {
       const codigo = String((n.parameters as { jsCode: string }).jsCode)
       expect(codigo, `la herramienta "${n.name}" no acota su petición`).toContain('timeout:')

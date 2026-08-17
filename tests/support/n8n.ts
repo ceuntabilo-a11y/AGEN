@@ -1,5 +1,10 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { armarContexto, instruccionesDe, type Ruta } from '@/lib/agent-router'
+import { formatTimeInZone } from '@/lib/timezone'
+
+/** Las ramas que llevan instrucciones para el modelo (DIRECTA no pasa por ninguno). */
+const RUTAS_CON_INSTRUCCIONES: Ruta[] = ['INFO', 'BUSCAR', 'DECIDIR']
 
 /**
  * Arnés para probar la construcción del contexto del agente sin levantar n8n.
@@ -122,16 +127,66 @@ export function cuerpoDelNodo<T = Record<string, unknown>>(nombre: string, datos
   }
 }
 
-/** Instrucciones de sistema del agente, tal como están en el workflow versionado. */
+/**
+ * Instrucciones de sistema del agente.
+ *
+ * Con el router de intención ya no hay UN prompt gigante en el lienzo de n8n: hay uno corto por
+ * rama, y viven en `@/lib/agent-router` (código versionado y con pruebas). El nodo de n8n solo
+ * los recibe. Esta función devuelve las de todas las ramas juntas, que es lo que necesitan las
+ * pruebas que comprueban «el agente tiene prohibido X».
+ */
 export function promptDelSistema(): string {
-  const opciones = nodo('Agente Agen').parameters.options as { systemMessage?: string } | undefined
-  if (!opciones?.systemMessage) throw new Error('El nodo del agente no tiene systemMessage')
-  return opciones.systemMessage
+  return RUTAS_CON_INSTRUCCIONES.map((ruta) => instruccionesDe(ruta)).join('\n\n')
 }
 
-/** Construye el mensaje de usuario tal como lo recibirá el modelo. */
+/** Instrucciones de UNA rama concreta. */
+export function promptDeRama(ruta: Ruta): string {
+  return instruccionesDe(ruta)
+}
+
+/**
+ * Construye el mensaje de usuario tal como lo recibirá el modelo.
+ *
+ * También se mudó del lienzo al código (`armarContexto`), con los MISMOS nombres de campo, así
+ * que estas pruebas siguen comprobando exactamente lo mismo.
+ */
 export function contextoDelAgente(datos: EntradaContexto): string {
-  return evaluarExpresion(String(nodo('Agente Agen').parameters.text), datos)
+  const json = datos.json as Record<string, any>
+  const entrada = (datos.nodos.Entrada ?? {}) as Record<string, any>
+  const agrupado = (datos.nodos.Agrupar ?? {}) as Record<string, any>
+  const cliente = json.client ?? null
+  const memoria = Array.isArray(cliente?.client_memory) ? cliente.client_memory[0] : cliente?.client_memory
+  const zona = String(json.timezone ?? json.business?.timezone ?? 'America/Santiago')
+
+  return armarContexto({
+    mensaje: String(agrupado.message || entrada.body?.message || ''),
+    businessId: String(entrada.body?.businessId ?? json.business?.id ?? ''),
+    business: json.business ?? null,
+    branches: json.branches ?? [],
+    services: json.services ?? [],
+    cliente,
+    memoria: memoria ? {
+      resumen: memoria.conversation_summary ?? null,
+      hechos: memoria.known_facts ?? null,
+      preferencias: memoria.preferences ?? null,
+      profesionalPreferido: memoria.preferred_professional_id ?? null,
+      servicioPreferido: memoria.preferred_service_id ?? null,
+    } : null,
+    recent: json.recent ?? [],
+    time: json.time ?? null,
+    equipo: { teamMember: json.teamMember ?? null, today: json.today ?? [], waiting: json.waiting, followups: json.followups },
+    formatearHora: (valor) => formatTimeInZone(valor, zona),
+  }, {
+    actorType: json.actorType === 'TEAM' ? 'TEAM' : 'CLIENT',
+    clienteRegistrado: Boolean(cliente?.id),
+    nombreCliente: cliente?.full_name ?? null,
+    correoCliente: cliente?.email ?? null,
+    nacimientoCliente: cliente?.birthday ?? null,
+    reservas: json.appointments ?? [],
+    apartados: json.apartados ?? [],
+    avisoPendiente: json.pendingNotice ?? null,
+    timezone: zona,
+  })
 }
 
 /**

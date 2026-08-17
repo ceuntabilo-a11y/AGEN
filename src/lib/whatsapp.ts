@@ -47,6 +47,27 @@ export async function disconnectEvolutionInstance(instance: string) {
   await evolutionFetch(`/instance/delete/${encodeURIComponent(instance)}`, { method: 'DELETE' })
 }
 
+/**
+ * Nota de voz. Solo Evolution, a propósito.
+ *
+ * La API oficial de Meta y 360dialog exigen subir el audio antes y mandar un id de medio: son
+ * dos llamadas más en el camino crítico y una cuota distinta. Mientras eso no esté probado con
+ * una cuenta real, devuelven `false` y quien llama manda el texto — que es lo que el cliente
+ * necesita. Nunca deja al agente mudo.
+ */
+export async function sendWhatsAppAudio(business: Business, params: { phone: string; audioBase64: string }): Promise<{ success: boolean; error?: string }> {
+  if (business.whatsapp_provider !== 'EVOLUTION') return { success: false, error: 'audio_no_soportado_por_proveedor' }
+  if (!business.whatsapp_instance) return { success: false, error: 'sin_instancia_evolution' }
+  try {
+    const result = await evolutionFetch(`/message/sendWhatsAppAudio/${encodeURIComponent(business.whatsapp_instance)}`, {
+      method: 'POST', body: { number: params.phone, audio: params.audioBase64, encoding: true },
+    })
+    return { success: result.ok, error: result.ok ? undefined : `evolution_${result.status}` }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'error_envio_audio' }
+  }
+}
+
 export async function sendWhatsApp(business: Business, params: { phone: string; text: string; imageUrl?: string | null }): Promise<{ success: boolean; error?: string }> {
   const provider = business.whatsapp_provider
   try {

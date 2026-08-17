@@ -236,21 +236,23 @@ test.describe('A1/A2 — el pipeline no puede volver a tener dos versiones del m
     }
   })
 
-  test('el agente y la persistencia arman el mensaje con la MISMA expresión', () => {
+  test('el turno y la persistencia arman el mensaje con la MISMA expresión', () => {
+    // El mensaje ya no se arma dentro del nodo del agente: entra una sola vez por "Turno", que
+    // es quien decide la rama. La persistencia tiene que usar exactamente el mismo texto.
     const compartida = "String(($('Agrupar').first().json.message || $('Entrada').first().json.body.message) || '').slice(0, 2000)"
-    expect(String(nodo('Agente Agen').parameters.text)).toContain(compartida)
+    expect(cuerpoDe('Turno')).toContain(compartida)
     expect(cuerpoDe('Persistir interacción')).toContain(`message: ${compartida}`)
   })
 
-  test('la app guarda el mensaje con el mismo tope con el que entró al prompt', () => {
+  test('la app guarda el mensaje con el mismo tope con el que entró al turno', () => {
     const ruta = path.resolve(__dirname, '..', '..', 'src', 'app', 'api', 'agent', 'interactions', 'route.ts')
     const fuente = readFileSync(ruta, 'utf8')
     const enLaApp = /body\.message\.trim\(\)\.slice\(0,\s*(\d+)\)/.exec(fuente)
     expect(enLaApp, 'no encontré el recorte del mensaje en /api/agent/interactions').not.toBeNull()
 
-    const enElPrompt = /\|\| ''\)\.slice\(0,\s*(\d+)\)/.exec(String(nodo('Agente Agen').parameters.text))
-    expect(enElPrompt, 'no encontré el recorte del mensaje en la plantilla del agente').not.toBeNull()
+    const enElTurno = /\|\| ''\)\.slice\(0,\s*(\d+)\)/.exec(cuerpoDe('Turno'))
+    expect(enElTurno, 'no encontré el recorte del mensaje en el nodo Turno').not.toBeNull()
 
-    expect(Number(enLaApp?.[1]), 'la app recortaría el mensaje más que el prompt').toBe(Number(enElPrompt?.[1]))
+    expect(Number(enLaApp?.[1]), 'la app recortaría el mensaje más que el turno').toBe(Number(enElTurno?.[1]))
   })
 })

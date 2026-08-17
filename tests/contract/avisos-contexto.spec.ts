@@ -5,6 +5,8 @@ import { POST as POST_despachar } from '@/app/api/automation/notifications/dispa
 import { POST as POST_contexto } from '@/app/api/agent/context/route'
 import { buildNotification } from '@/lib/notification-templates'
 import { levantarSupabaseFalso, peticionAgente, usarSupabaseFalso, type SupabaseFalso, type Tablas } from '../support/supabase-fake'
+import { armarContexto } from '@/lib/agent-router'
+import { promptDelSistema } from '../support/n8n'
 
 /**
  * Cuando AGEN escribe primero, la respuesta tiene que encontrar su pregunta.
@@ -281,32 +283,42 @@ test.describe('El aviso solo aparece cuando el mensaje puede estar contestándol
 
 test.describe('Las reglas del agente para responder a un aviso', () => {
   const workflow = () => require('../../n8n-workflows/01-agen-agent.json') as { nodes: Array<{ name: string; parameters: any }> }
-  const nodoAgente = () => workflow().nodes.find((nodo) => nodo.name === 'Agente Agen')!
-
-  test('el contexto del prompt inyecta AVISO_PENDIENTE', () => {
-    expect(nodoAgente().parameters.text).toContain('AVISO_PENDIENTE')
-    expect(nodoAgente().parameters.text).toContain('pendingNotice')
+  /*
+   * Con el router de intención el prompt dejó de vivir en el lienzo de n8n: lo arma la app por
+   * rama (`@/lib/agent-router`) y el nodo solo lo recibe. Lo que se comprueba es lo mismo.
+   */
+  test('el contexto del turno inyecta AVISO_PENDIENTE', () => {
+    const contexto = armarContexto({
+      mensaje: 'sí', businessId: NEGOCIO, business: null, branches: [], services: [],
+      cliente: null, memoria: null, recent: [], time: null, formatearHora: () => '10:00',
+    }, {
+      actorType: 'CLIENT', clienteRegistrado: true, nombreCliente: 'Ana', correoCliente: null,
+      nacimientoCliente: null, reservas: [], apartados: [],
+      avisoPendiente: { tipo: 'CONFIRM_REQUEST', question: '¿vienes?' }, timezone: 'America/Santiago',
+    })
+    expect(contexto).toContain('AVISO_PENDIENTE')
+    expect(contexto).toContain('¿vienes?')
   })
 
-  test('el workflow le manda el mensaje del cliente al contexto', () => {
+  test('el workflow le manda el mensaje del cliente al turno', () => {
     // Sin el mensaje, la app no puede decidir si el aviso viene al caso y no lo entrega.
-    const nodo = workflow().nodes.find((item) => item.name === 'Cargar contexto')!
+    const nodo = workflow().nodes.find((item) => item.name === 'Turno')!
     expect(nodo.parameters.body).toContain('message')
   })
 
   test('prohíbe recitarle el aviso al cliente', () => {
-    expect(nodoAgente().parameters.options.systemMessage as string).toContain('NUNCA lo leas, lo copies ni se lo repitas')
+    expect(promptDelSistema()).toContain('NUNCA lo leas, lo copies ni se lo repitas')
   })
 
   test('prohíbe preguntar "¿a qué te refieres?" cuando hay un aviso pendiente', () => {
-    const prompt = nodoAgente().parameters.options.systemMessage as string
+    const prompt = promptDelSistema()
     expect(prompt).toContain('¿a qué te refieres?')
     expect(prompt).toContain('ifYes')
     expect(prompt).toContain('ifNo')
   })
 
   test('exige atender las dos partes de una respuesta mixta', () => {
-    const prompt = nodoAgente().parameters.options.systemMessage as string
+    const prompt = promptDelSistema()
     expect(prompt).toContain('RESPUESTAS MIXTAS')
     expect(prompt).toContain('No, mejor cámbiamela para mañana')
     expect(prompt).toContain('LAS DOS PARTES')

@@ -399,10 +399,18 @@ test.describe('Las reglas de conversación siguen en el prompt', () => {
     expect(prompt).toContain('nunca lo uses para saludar ni para registrar a nadie')
   })
 
-  test('nada de confirmaciones fantasma: sin booked=true no hay reserva, y 409 obliga a reconsultar', () => {
-    expect(prompt).toContain('Nunca afirmes que reservaste si crear_reserva no devuelve booked=true')
-    expect(prompt).toContain('ante HTTP 409 vuelve a buscar horarios')
-    expect(prompt).toContain('el holdId elegido explícitamente')
+  /*
+   * Las confirmaciones fantasma ya no dependen del prompt.
+   *
+   * Antes el modelo tenía la herramienta de reservar y la regla "no digas que reservaste sin
+   * booked=true" era una promesa. Ahora ninguna rama conversacional puede reservar, y el texto
+   * de una reserva hecha lo escribe `/api/agent/act` con la fila de la base. Lo que queda en el
+   * prompt es la prohibición de AFIRMARLO, que sigue siendo necesaria.
+   */
+  test('nada de confirmaciones fantasma: la rama que habla no puede reservar', () => {
+    expect(prompt).toContain('NO puedes reservar')
+    expect(prompt).toContain('Prohibido decir que reservaste')
+    expect(prompt).toContain('Prohibido afirmar que reservaste, cancelaste, moviste o confirmaste algo')
   })
 
   test('no se mezclan especialidades ni se inventan servicios, precios ni horarios', () => {
@@ -411,10 +419,10 @@ test.describe('Las reglas de conversación siguen en el prompt', () => {
   })
 
   test('confirmar y liberar siempre llevan el appointmentId de esa reserva', () => {
-    expect(prompt).toContain('llama mis_reservas')
-    expect(prompt).toContain('SIEMPRE llevan el appointmentId')
-    expect(prompt).toContain('Nunca liberes una hora que el cliente no haya pedido liberar')
-    expect(prompt).toContain('alreadyDone')
+    // Ahora es una regla de código, no del prompt: el decisor copia el id de RESERVAS y
+    // `/api/agent/act` rechaza cualquiera que no sea de ese cliente y ese negocio.
+    expect(prompt).toContain('holdId y appointmentId se copian EXACTOS del contexto')
+    expect(prompt).toContain('Si hay varias reservas y el cliente no dijo cuál, confirmado:false')
   })
 
   test('el modo equipo es solo lectura también en el prompt, no solo en las API', () => {
