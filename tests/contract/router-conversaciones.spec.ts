@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { POST as TURNO } from '@/app/api/agent/turn/route'
 import { POST as ACT } from '@/app/api/agent/act/route'
+import { dateKeyInZone } from '@/lib/timezone'
 import { levantarSupabaseFalso, peticionAgente, usarSupabaseFalso, type SupabaseFalso, type Tablas } from '../support/supabase-fake'
 
 /**
@@ -366,8 +367,12 @@ test.describe('Datos del cliente', () => {
   })
 
   test('si hoy es su cumpleaños, el saludo va primero (requisito 15)', async () => {
-    const hoy = new Date()
-    const cumple = `1990-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`
+    /*
+     * El día se toma en la zona del NEGOCIO, no en la de la máquina que corre la prueba.
+     * Con la fecha local fallaba en el CI: a las 00:16 UTC del 18 en Santiago son las 20:16 del
+     * 17, así que la prueba construía un cumpleaños que no era el de hoy para el negocio.
+     */
+    const cumple = `1990-${dateKeyInZone(new Date(), 'America/Santiago').slice(5)}`
     falso.tablas.clients = [{ ...falso.tablas.clients[0], birthday: cumple }]
     const { cuerpo } = await turno({ businessId: NEGOCIO, phone: ANA, message: 'hola' })
     expect(cuerpo.texto.startsWith('¡Feliz cumpleaños')).toBe(true)

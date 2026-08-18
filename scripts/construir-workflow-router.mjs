@@ -240,6 +240,24 @@ const falloContexto = texto('fallo-contexto', 'No pude consultar',
   'Perdona, ahora mismo no puedo consultar la agenda. ¿Puedes escribirme en unos minutos?',
   [340, -200])
 
+/*
+ * El negocio apagó el agente: se contesta al webhook y no se le manda NADA al cliente.
+ *
+ * El interruptor «Agente habilitado» existía desde el primer día y no lo leía nadie: un negocio
+ * que lo apagaba porque se iba de vacaciones seguía tomando reservas por WhatsApp. El mensaje
+ * del cliente igual queda registrado en el panel para que lo atienda una persona.
+ */
+const estaApagado = si('esta-apagado', '¿Agente apagado?', '={{ $json.ruta }}', IGUAL_A, [340, -320], 'APAGADO')
+const noContestar = {
+  parameters: { respondWith: 'json', responseBody: '={{ JSON.stringify({ agentOff: true }) }}', options: {} },
+  id: 'agente-apagado',
+  name: 'Agente apagado',
+  type: 'n8n-nodes-base.respondToWebhook',
+  typeVersion: 1.5,
+  position: [540, -320],
+  notes: 'El negocio apagó el agente en /admin/agente. El mensaje queda en el panel, pero no se responde.',
+}
+
 const esDirecta = si('es-directa', '¿Respuesta directa?', '={{ $json.ruta }}', IGUAL_A, [340, 0], 'DIRECTA')
 const directa = texto('respuesta-directa', 'Respuesta directa', '={{ $json.texto }}', [540, -80])
 
@@ -285,7 +303,7 @@ const workflow = {
   nodes: [
     webhook, autorizar, rechazar, entrada, puerta, ignorar,
     marcarLeido, escribiendo, registrar, esperar, agrupar, respondeEste, yaRespondio,
-    traeMultimedia, bajarMultimedia, turno, hayContexto, falloContexto, esDirecta, directa, esBuscar, esDecidir,
+    traeMultimedia, bajarMultimedia, turno, hayContexto, falloContexto, estaApagado, noContestar, esDirecta, directa, esBuscar, esDecidir,
     buscador, decisor, redactor, modeloBuscar, modeloDecidir, modeloInfo,
     buscarHorarios, ejecutar, enviar, persistir, responder,
   ],
@@ -303,7 +321,8 @@ const workflow = {
     '¿Trae multimedia?': { main: [[principal('Bajar multimedia')], [principal('Turno')]] },
     'Bajar multimedia': { main: [[principal('Turno')]] },
     Turno: { main: [[principal('¿Hay contexto?')]] },
-    '¿Hay contexto?': { main: [[principal('¿Respuesta directa?')], [principal('No pude consultar')]] },
+    '¿Hay contexto?': { main: [[principal('¿Agente apagado?')], [principal('No pude consultar')]] },
+    '¿Agente apagado?': { main: [[principal('Agente apagado')], [principal('¿Respuesta directa?')]] },
     'No pude consultar': { main: [[principal('Enviar a WhatsApp')]] },
     '¿Respuesta directa?': { main: [[principal('Respuesta directa')], [principal('¿Busca horarios?')]] },
     'Respuesta directa': { main: [[principal('Enviar a WhatsApp')]] },

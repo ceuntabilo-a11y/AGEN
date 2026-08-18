@@ -33,6 +33,8 @@ export type Intencion =
 
 /** Qué rama del workflow atiende el turno. Es lo único que n8n necesita mirar. */
 export type Ruta =
+  /** El negocio apagó el agente: no se le contesta nada al cliente. */
+  | 'APAGADO'
   /** La app ya tiene el texto entero. No interviene ningún modelo. */
   | 'DIRECTA'
   /** Redactor sin NINGUNA herramienta: solo puede hablar de lo que va en el contexto. */
@@ -390,6 +392,9 @@ const MOTIVOS = [
 ].join('\n')
 
 const INSTRUCCIONES: Record<Ruta, string> = {
+  // Ninguna de estas dos llega a un modelo: el agente apagado no contesta, y la respuesta
+  // directa la escribe la app.
+  APAGADO: '',
   DIRECTA: '',
 
   INFO: [
@@ -553,6 +558,26 @@ export function armarContexto(
   lineas.push(`TIEMPO: ${JSON.stringify(datos.time ?? null)}`)
   lineas.push(`ZONA: ${zona}`)
   return lineas.join('\n')
+}
+
+/**
+ * El tono que eligió el negocio, convertido en una instrucción que de verdad cambia el texto.
+ *
+ * El selector «Tono» existía en `/admin/agente` desde el primer día y **no lo leía nadie**: se
+ * guardaba en `agent_settings.tone` y ahí se quedaba. Un interruptor que no hace nada es peor
+ * que no tenerlo, porque el dueño cree que ya ajustó algo.
+ */
+export function lineaDeTono(tono: unknown): string | null {
+  switch (String(tono ?? '').trim()) {
+    case 'professional':
+      return 'TONO PROFESIONAL: trata de usted no, sigue siendo de tú, pero sobrio y correcto. Sin emojis, sin exclamaciones, sin diminutivos. Frases completas y precisas.'
+    case 'brief':
+      return 'TONO BREVE: máximo 3 líneas y lo más corto posible. Sin preámbulos ni cortesías largas: el dato y la pregunta. Como mucho un emoji, y solo si aporta.'
+    case 'friendly':
+      return 'TONO CERCANO: cálido y cotidiano, como una recepcionista simpática. Puedes usar un emoji y expresiones cordiales, sin pasarte de confianza.'
+    default:
+      return null
+  }
 }
 
 /** Línea de cumpleaños (requisito 15). Sin bloqueo por edad: solo saluda. */

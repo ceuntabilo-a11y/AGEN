@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { escalarHilo } from '@/lib/agent-thread'
 import { registrar } from '@/lib/observabilidad'
+import { isRealClientPhone, normalizePhone } from '@/lib/phone'
+import { sendWhatsApp } from '@/lib/whatsapp'
 
 /**
  * Avisar a una persona del equipo, de verdad.
@@ -24,8 +26,45 @@ const TITULO: Record<MotivoEscalacion, string> = {
 /** Un PROFESSIONAL atiende su agenda, no la recepción. */
 const ROLES_QUE_ATIENDEN = ['OWNER', 'ADMIN', 'RECEPTIONIST']
 
+const MOTIVO_EN_PALABRAS: Record<MotivoEscalacion, string> = {
+  PAGO: 'una consulta de pago',
+  QUEJA: 'un reclamo',
+  SEGURIDAD: 'un asunto de seguridad',
+  PETICION_CLIENTE: 'que pidió hablar con una persona',
+  FUERA_DE_ALCANCE: 'algo que el agente no puede resolver',
+}
+
+/**
+ * El aviso que le llega por WhatsApp a la persona del negocio.
+ *
+ * Lleva lo único que hace falta para atender sin volver a preguntar: quién es, por qué se
+ * transfiere y qué dijo. Se escribe acá, en código, para que siempre diga lo mismo y para poder
+ * probarlo sin mandar mensajes.
+ */
+export function textoDeTransferencia(datos: {
+  clientName?: string | null
+  clientPhone: string
+  motivo: MotivoEscalacion
+  detalle: string
+  businessName?: string | null
+}): string {
+  const quien = datos.clientName?.trim() || 'Un cliente'
+  return [
+    `🔔 *Se necesita que atiendas tú*${datos.businessName ? ` · ${datos.businessName}` : ''}`,
+    '',
+    `Cliente: ${quien} (+${normalizePhone(datos.clientPhone)})`,
+    `Motivo: ${MOTIVO_EN_PALABRAS[datos.motivo]}`,
+    '',
+    `Lo que dijo: "${datos.detalle.trim().slice(0, 400)}"`,
+    '',
+    'Escríbele tú directamente: el agente ya le avisó que lo vas a contactar.',
+  ].join('\n')
+}
+
 export type ResultadoEscalacion = {
   escalated: boolean
+  /** Si además se le mandó el WhatsApp a la persona configurada. */
+  avisadoPorWhatsApp?: boolean
   alreadyDone?: boolean
   notified?: number
   conversationId?: string | null
@@ -33,6 +72,41 @@ export type ResultadoEscalacion = {
   businessPhone?: string | null
   error?: string
   estado?: number
+}
+
+/** Manda el aviso al número que configuró el negocio. Devuelve si de verdad se entregó. */
+async function avisarPorWhatsApp(
+  db: SupabaseClient,
+  datos: { businessId: string; phone: string; motivo: MotivoEscalacion; detalle: string; clientName?: string | null },
+): Promise<boolean> {
+  try {
+    const { data: negocio } = await db.from('businesses')
+      .select('name,agent_settings,whatsapp_provider,whatsapp_instance,whatsapp_phone_id,whatsapp_token,whatsapp_360_api_key')
+      .eq('id', datos.businessId).maybeSingle()
+    if (!negocio) return false
+
+    const ajustes = (negocio.agent_settings ?? {}) as Record<string, unknown>
+    if (ajustes.human_handoff_enabled === false) return false
+
+    const destino = normalizePhone(ajustes.handoff_phone)
+    if (!isRealClientPhone(destino)) {
+      registrar('aviso', 'agent_handoff_sin_numero', { businessId: datos.businessId, motivo: datos.motivo })
+      return false
+    }
+
+    const envio = await sendWhatsApp(negocio as never, {
+      phone: destino,
+      text: textoDeTransferencia({
+        clientName: datos.clientName, clientPhone: datos.phone,
+        motivo: datos.motivo, detalle: datos.detalle, businessName: negocio.name,
+      }),
+    })
+    if (!envio.success) registrar('error', 'agent_handoff_no_entregado', { businessId: datos.businessId, detalle: envio.error })
+    return envio.success
+  } catch (error) {
+    registrar('error', 'agent_handoff_excepcion', { businessId: datos.businessId, detalle: String(error) })
+    return false
+  }
 }
 
 export async function escalarConAviso(
@@ -62,13 +136,31 @@ export async function escalarConAviso(
     return { escalated: false, error: 'No se pudo abrir el aviso', estado: 500 }
   }
 
+  /*
+   * El WhatsApp a la persona del negocio: lo que hacía falta para que «transferir a una persona»
+   * dejara de ser una casilla decorativa.
+   *
+   * Hasta ahora escalar solo dejaba una campanita en el panel: si nadie tenía el panel abierto,
+   * el cliente esperaba a alguien que no sabía que lo estaban esperando. El número lo configura
+   * el negocio en `/admin/agente` (`agent_settings.handoff_phone`) y es UNO por negocio.
+   *
+   * Nunca puede tumbar la escalación: si no hay número, o el envío falla, el aviso del panel se
+   * crea igual y se responde `avisadoPorWhatsApp: false`.
+   */
+  const avisadoPorWhatsApp = await avisarPorWhatsApp(db, datos)
+
   const { data: equipo } = await db.from('business_members')
     .select('user_id,role').eq('business_id', datos.businessId).eq('active', true).in('role', ROLES_QUE_ATIENDEN)
 
   const destinatarios = (equipo ?? []).map((item) => item.user_id).filter(Boolean)
   if (!destinatarios.length) {
     registrar('aviso', 'agent_escalate_sin_equipo', { businessId: datos.businessId, motivo: datos.motivo })
-    return { escalated: false, reason: 'sin_equipo', businessPhone: datos.businessPhone ?? null, conversationId }
+    // Con el WhatsApp entregado, alguien SÍ se enteró aunque no haya nadie con cuenta en el panel.
+    return {
+      escalated: avisadoPorWhatsApp, avisadoPorWhatsApp,
+      reason: avisadoPorWhatsApp ? undefined : 'sin_equipo',
+      businessPhone: datos.businessPhone ?? null, conversationId,
+    }
   }
 
   const eventKey = `escalacion:${conversationId}:${datos.motivo}`
@@ -101,7 +193,8 @@ export async function escalarConAviso(
 
   const repetida = yaEstaba && !filas.length
   registrar('info', 'agent_escalate', {
-    businessId: datos.businessId, motivo: datos.motivo, destinatarios: destinatarios.length, nuevos: filas.length, repetida,
+    businessId: datos.businessId, motivo: datos.motivo, destinatarios: destinatarios.length,
+    nuevos: filas.length, repetida, avisadoPorWhatsApp,
   })
-  return { escalated: true, alreadyDone: repetida, notified: destinatarios.length, conversationId }
+  return { escalated: true, alreadyDone: repetida, notified: destinatarios.length, conversationId, avisadoPorWhatsApp }
 }

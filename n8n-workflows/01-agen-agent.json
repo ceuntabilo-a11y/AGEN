@@ -497,6 +497,56 @@
           },
           "conditions": [
             {
+              "id": "esta-apagado-cond",
+              "leftValue": "={{ $json.ruta }}",
+              "rightValue": "APAGADO",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "esta-apagado",
+      "name": "¿Agente apagado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        340,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ agentOff: true }) }}",
+        "options": {}
+      },
+      "id": "agente-apagado",
+      "name": "Agente apagado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        540,
+        -320
+      ],
+      "notes": "El negocio apagó el agente en /admin/agente. El mensaje queda en el panel, pero no se responde."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
               "id": "es-directa-cond",
               "leftValue": "={{ $json.ruta }}",
               "rightValue": "DIRECTA",
@@ -1059,7 +1109,7 @@
       "main": [
         [
           {
-            "node": "¿Respuesta directa?",
+            "node": "¿Agente apagado?",
             "type": "main",
             "index": 0
           }
@@ -1067,6 +1117,24 @@
         [
           {
             "node": "No pude consultar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Agente apagado?": {
+      "main": [
+        [
+          {
+            "node": "Agente apagado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Respuesta directa?",
             "type": "main",
             "index": 0
           }

@@ -13,7 +13,7 @@ import { registrarAviso } from '@/lib/observabilidad'
 import { formatInZone, formatTimeInZone, type ReferenciasTemporales } from '@/lib/timezone'
 import { interpretarCuando, pideOtroHorario } from '@/lib/agent-tiempo'
 import {
-  aplicarGuardas, armarContexto, clasificarPorReglas, instruccionesDe, lineaDeCumpleanos,
+  aplicarGuardas, armarContexto, clasificarPorReglas, instruccionesDe, lineaDeCumpleanos, lineaDeTono,
   preguntaPorElDato, rutaDe, siguienteDatoQueFalta,
   type ApartadoVivo, type EstadoDelTurno, type Intencion, type Ruta,
 } from '@/lib/agent-router'
@@ -155,6 +155,27 @@ export async function POST(request: Request) {
   const datos = contexto as Record<string, any>
   const timezone: string = datos.timezone ?? 'America/Santiago'
   const cliente = datos.client ?? null
+  const ajustesAgente = (datos.business?.agent_settings ?? {}) as Record<string, any>
+
+  /*
+   * «Agente habilitado» apaga el agente DE VERDAD.
+   *
+   * El interruptor existía en `/admin/agente` desde el primer día y no lo leía nadie: el agente
+   * contestaba igual estuviera encendido o apagado. Un negocio que lo apagaba porque se iba de
+   * vacaciones seguía tomando reservas.
+   *
+   * Se corta acá, antes de cargar nada más y antes de cualquier modelo: el workflow ve
+   * `ruta: 'APAGADO'` y termina sin mandarle nada al cliente. El equipo sigue viendo el mensaje
+   * en el panel, así que no se pierde: simplemente no contesta un robot.
+   */
+  if (ajustesAgente.enabled === false && datos.actorType !== 'TEAM') {
+    registrarAviso('agente_apagado', { businessId: body.businessId })
+    return NextResponse.json({
+      ruta: 'APAGADO' as Ruta, intencion: 'APAGADO', texto: null,
+      systemMessage: '', userMessage: '', imageUrl: null,
+      wasAudio: media.tipo === 'audio', businessId: body.businessId, phone, timezone,
+    })
+  }
 
   /*
    * Datos que se reconocen sin modelo (requisito 13). Un correo y una fecha tienen forma: se
@@ -302,6 +323,9 @@ export async function POST(request: Request) {
     : null
 
   const extras: string[] = []
+  // El tono que eligió el negocio: hasta ahora se guardaba y no cambiaba nada.
+  const tono = lineaDeTono(ajustesAgente.tone)
+  if (tono) extras.push(tono)
   const linea = lineaDeCumpleanos(estado.nacimientoCliente, timezone)
   if (linea) extras.push(linea)
   if (imageUrl) extras.push('Se le va a adjuntar una foto real de un trabajo del portafolio: preséntala en una línea, sin describir lo que no ves.')
