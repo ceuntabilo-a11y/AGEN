@@ -20,13 +20,27 @@ test.describe('Admin — configuración, agente e integraciones', () => {
     await expect(page.locator('[name="timezone"]')).toHaveValue('America/Santiago', { timeout: 30000 })
   })
 
-  test('agente: las cinco pestañas cambian de contenido', async ({ page }) => {
+  /*
+   * Cuatro, no cinco: la pestaña «Prompt» se eliminó. Dejaba escribir instrucciones que
+   * contradecían a las del agente, y además no las leía ningún código.
+   */
+  test('agente: las cuatro pestañas cambian de contenido', async ({ page }) => {
     await irA(page, '/admin/agente', 'Agente IA')
-    for (const pestana of ['General', 'Personalidad', 'Voz', 'Comportamiento', 'Prompt']) {
+    for (const pestana of ['General', 'Personalidad', 'Voz', 'Comportamiento']) {
       await page.getByRole('button', { name: pestana, exact: true }).click()
       await expect(page.getByRole('button', { name: pestana, exact: true })).toBeVisible()
     }
+    await expect(page.getByRole('button', { name: 'Prompt', exact: true })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Guardar configuración' })).toBeVisible()
+  })
+
+  test('agente: el número para transferir se configura sin salir de la página', async ({ page }) => {
+    await irA(page, '/admin/agente', 'Agente IA')
+    await page.getByRole('button', { name: 'General', exact: true }).click()
+    await page.getByRole('button', { name: /Configurar número|Cambiar número/ }).click()
+    await expect(page.getByRole('dialog', { name: 'Número para transferir a una persona' })).toBeVisible()
+    await page.getByRole('button', { name: 'Cancelar' }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
   })
 
   test('integraciones: se puede elegir proveedor de WhatsApp sin conectar nada', async ({ page }) => {
