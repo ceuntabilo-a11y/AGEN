@@ -4,6 +4,7 @@ import { apiError } from '@/lib/http-errors'
 import { validTimeZone } from '@/lib/timezone'
 import { errorDeRecordatorios } from '@/lib/reminders'
 import { esEnlaceDeResena } from '@/lib/agent-encuesta'
+import { isRealClientPhone } from '@/lib/phone'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +60,15 @@ export async function PATCH(request: Request) {
      * El enlace de reseña se le manda tal cual a los clientes que ponen 9 o 10: si estuviera
      * mal, cada promotor recibiría una dirección rota. Se valida al guardar, no al enviar.
      */
+    /*
+     * El número al que se transfiere una conversación. Si estuviera mal escrito, el aviso no
+     * llegaría a nadie y el cliente quedaría esperando a una persona que nunca se enteró.
+     */
+    const telefonoTransferencia = (body.agent_settings as Record<string, unknown> | undefined)?.handoff_phone
+    if (telefonoTransferencia !== undefined && String(telefonoTransferencia ?? '').trim() && !isRealClientPhone(telefonoTransferencia)) {
+      return NextResponse.json({ error: 'El número para transferir no es válido: escríbelo con el código del país, por ejemplo +56912345678' }, { status: 400 })
+    }
+
     const enlaceResena = (body.settings as Record<string, unknown> | undefined)?.google_review_url
     if (enlaceResena !== undefined && String(enlaceResena ?? '').trim() && !esEnlaceDeResena(enlaceResena)) {
       return NextResponse.json({ error: 'El enlace de reseñas tiene que empezar por https:// (cópialo desde tu ficha de Google)' }, { status: 400 })
