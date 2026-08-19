@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server'
 import { requireBusinessContext } from '@/lib/supabase-server'
 import { apiError } from '@/lib/http-errors'
+import { faltaColumna } from '@/lib/campaigns'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
     const { db, businessId } = await requireBusinessContext(['OWNER','ADMIN'])
-    const { data, error } = await db.from('campaigns').select('id,name,channel,audience,content,subject,email_html,image_url,status,scheduled_at,sent_at,created_at,campaign_recipients(id,status,reason,sent_at,client:clients(id,full_name,phone,email))').eq('business_id',businessId).order('created_at',{ascending:false})
+    // `campaign_recipients.channel` es de la migración 20260819000001 (envío por WhatsApp y
+    // correo a la vez): si todavía no se aplicó, se sigue mostrando la lista igual, sin ese dato.
+    let campanasResult = await db.from('campaigns').select('id,name,channel,audience,content,subject,email_html,image_url,status,scheduled_at,sent_at,created_at,campaign_recipients(id,channel,status,reason,sent_at,client:clients(id,full_name,phone,email))').eq('business_id',businessId).order('created_at',{ascending:false})
+    if (faltaColumna(campanasResult.error)) campanasResult = await db.from('campaigns').select('id,name,channel,audience,content,subject,email_html,image_url,status,scheduled_at,sent_at,created_at,campaign_recipients(id,status,reason,sent_at,client:clients(id,full_name,phone,email))').eq('business_id',businessId).order('created_at',{ascending:false}) as typeof campanasResult
+    const { data, error } = campanasResult
     if (error) throw error
     return NextResponse.json({ campaigns: data })
   } catch (error) { return apiError(error) }
