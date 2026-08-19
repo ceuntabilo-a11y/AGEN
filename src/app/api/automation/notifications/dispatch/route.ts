@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { buildNotification } from '@/lib/notification-templates'
 import { sendWhatsApp } from '@/lib/whatsapp'
 import { sendMarketingEmail } from '@/lib/resend'
+import { cabeceraDeCorreo } from '@/lib/email-branding'
 import { claimNotifications, contarAvisosAmbiguos, descartarAviso, marcarAvisoEnviado, reintentarAviso, type AvisoReclamado } from '@/lib/notification-dispatch'
 import { registrarAvisoSaliente } from '@/lib/outbound-context'
 
@@ -27,16 +28,16 @@ type OutboxRow = {
   payload: Record<string, unknown> | null
 }
 
-const BUSINESS_FIELDS = 'id,name,address,maps_url,timezone,email,whatsapp_provider,whatsapp_instance,whatsapp_phone_id,whatsapp_token,whatsapp_360_api_key'
+const BUSINESS_FIELDS = 'id,name,address,maps_url,timezone,email,logo_url,whatsapp_provider,whatsapp_instance,whatsapp_phone_id,whatsapp_token,whatsapp_360_api_key'
 
 /** El texto de WhatsApp (con *negrita*) reutilizado como correo simple y legible. */
-function textToHtml(text: string) {
+function textToHtml(text: string, business: { name: string; logo_url?: string | null }) {
   const escaped = text
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>')
     .replace(/_([^_\n]+)_/g, '<em>$1</em>')
     .replace(/\n/g, '<br/>')
-  return `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.6;color:#1c1b22;max-width:520px">${escaped}</div>`
+  return `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.6;color:#1c1b22;max-width:520px">${cabeceraDeCorreo(business)}${escaped}</div>`
 }
 
 /** Avisos que dejan de tener sentido una vez que la hora de la que hablan ya pasó. */
@@ -141,7 +142,7 @@ export async function POST(request: Request) {
         : { success: false, error: 'cliente_sin_telefono' }
     } else if (row.channel === 'EMAIL') {
       result = client.email
-        ? await sendMarketingEmail({ to: client.email, subject: message.subject, html: textToHtml(message.text), businessName: business.name, replyTo: business.email })
+        ? await sendMarketingEmail({ to: client.email, subject: message.subject, html: textToHtml(message.text, business), businessName: business.name, replyTo: business.email })
         : { success: false, error: 'cliente_sin_correo' }
     } else {
       result = { success: false, error: `canal_no_soportado_${row.channel}` }

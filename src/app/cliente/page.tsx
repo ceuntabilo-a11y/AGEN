@@ -13,6 +13,8 @@ export default function ClientHome() {
   const [next,setNext] = useState<Appointment|null>(null)
   const [timezone,setTimezone] = useState('America/Santiago')
   const [settings,setSettings] = useState<Record<string,any>>({})
+  const [logoUrl,setLogoUrl] = useState<string|null>(null)
+  const [businessName,setBusinessName] = useState('')
   const [error,setError] = useState(false)
 
   useEffect(() => {
@@ -24,6 +26,8 @@ export default function ClientHome() {
       setNext(upcoming[0] ?? null)
       setTimezone(data.timezone ?? 'America/Santiago')
       setSettings(data.settings ?? {})
+      setLogoUrl(data.logoUrl ?? null)
+      setBusinessName(data.businessName ?? '')
     }).catch(() => setError(true))
   },[])
 
@@ -31,6 +35,11 @@ export default function ClientHome() {
   const welcome = typeof settings.portal?.welcome === 'string' ? settings.portal.welcome.trim() : ''
 
   return <>
+    {logoUrl && <div className="mb-4 flex items-center gap-3">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={logoUrl} alt={businessName || 'Logo del negocio'} className="h-12 w-12 rounded-2xl border object-contain bg-white"/>
+      {businessName && <b className="text-lg">{businessName}</b>}
+    </div>}
     <PageHeader title="Mi espacio" description={welcome || 'Reservas y servicios en un solo lugar.'}/>
     {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Conecta Supabase para cargar tus datos.</p>}
     {next ? <section className="rounded-3xl p-6 text-white" style={{background:`linear-gradient(135deg, ${brand}, ${brand}cc)`}}>

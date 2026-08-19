@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireBusinessContext } from '@/lib/supabase-server'
 import { apiError } from '@/lib/http-errors'
-import { validTimeZone } from '@/lib/timezone'
 import { errorDeRecordatorios } from '@/lib/reminders'
 import { esEnlaceDeResena } from '@/lib/agent-encuesta'
 import { isRealClientPhone } from '@/lib/phone'
@@ -26,8 +25,6 @@ export async function PATCH(request: Request) {
   try {
     const { db, businessId } = await requireBusinessContext(['OWNER','ADMIN'])
     const body = await request.json() as Record<string, unknown>
-    if (body.timezone !== undefined && !validTimeZone(body.timezone)) return NextResponse.json({ error: 'Zona horaria inválida' }, { status: 400 })
-    if (body.currency !== undefined && (typeof body.currency !== 'string' || !/^[A-Z]{3}$/.test(body.currency))) return NextResponse.json({ error: 'Moneda inválida' }, { status: 400 })
     if (body.maps_url) {
       try {
         const url = new URL(String(body.maps_url))
@@ -74,7 +71,10 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'El enlace de reseñas tiene que empezar por https:// (cópialo desde tu ficha de Google)' }, { status: 400 })
     }
 
-    const allowed = ['name','timezone','currency','phone','email','address','maps_url','logo_url','settings','agent_settings']
+    // `timezone` y `currency` NO están acá a propósito: solo el dueño de la plataforma los
+    // cambia (`PATCH /api/platform/businesses/[id]`). Un negocio que ya está operando con una
+    // zona horaria no puede cambiársela solo, porque desincroniza la agenda ya reservada.
+    const allowed = ['name','phone','email','address','maps_url','logo_url','settings','agent_settings']
     const changes = Object.fromEntries(Object.entries(body).filter(([key]) => allowed.includes(key)))
     let result = await db.from('businesses').update({ ...changes, updated_at: new Date().toISOString() }).eq('id',businessId).select().single()
     if (result.error && Object.prototype.hasOwnProperty.call(changes,'maps_url')) {
