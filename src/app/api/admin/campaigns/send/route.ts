@@ -4,7 +4,10 @@ import { apiError } from '@/lib/http-errors'
 import { resolveCampaignAudience } from '@/lib/campaign-audience'
 import { sendWhatsApp } from '@/lib/whatsapp'
 import { sendMarketingEmail, resendConfigured } from '@/lib/resend'
-import { claimCampaignForSending, destinatariosYaEnviados, markCampaignSent, restoreCampaignStatus, type MotivoNoEnviable } from '@/lib/campaigns'
+import {
+  claimCampaignForSending, destinatariosYaEnviados, destinatariosYaEnviadosPorCanal, destinatarioKey,
+  faltaColumna, markCampaignSent, restoreCampaignStatus, type MotivoNoEnviable,
+} from '@/lib/campaigns'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { ESPERA_DE_CAMPANA, registrarAvisoSaliente } from '@/lib/outbound-context'
 
@@ -94,6 +97,43 @@ export async function POST(request: Request) {
         }
         await markCampaignSent(db, campaignId)
         return NextResponse.json({ sent: true, recipients: pendientes.length, skipped: eligible.length - pendientes.length })
+      }
+
+      if (campaign.channel === 'BOTH') {
+        // La columna `channel` de `campaign_recipients` es la que distingue el WhatsApp del
+        // correo del mismo cliente dentro de esta campaña; sin la migración aplicada no hay
+        // dónde guardar esa diferencia, así que se avisa en vez de mezclar los dos envíos.
+        // Un UPDATE que no matchea ninguna fila real (mismo truco que `sending_since` en
+        // `claimCampaignForSending`) valida la columna sin tocar nada.
+        const prueba = await db.from('campaign_recipients').update({ channel: null }).eq('campaign_id', '00000000-0000-0000-0000-000000000000')
+        if (faltaColumna(prueba.error)) {
+          return devolver(NextResponse.json({ error: 'Falta aplicar la migración 20260819000001 antes de enviar por los dos canales a la vez.' }, { status: 503 }))
+        }
+        const { data: business } = await db.from('businesses').select('name,email,whatsapp_provider,whatsapp_instance,whatsapp_phone_id,whatsapp_token,whatsapp_360_api_key').eq('id', businessId).single()
+        if (!business) return devolver(NextResponse.json({ error: 'Negocio inexistente' }, { status: 404 }))
+        const businessName = business.name ?? 'Agen'
+        const correoDisponible = await resendConfigured()
+        const { eligible } = await resolveCampaignAudience(db, businessId, campaign)
+        const yaEnviados = await destinatariosYaEnviadosPorCanal(db, campaignId)
+        const pendientes = eligible.flatMap((client) => client.channels
+          .filter((canal) => canal !== 'EMAIL' || correoDisponible)
+          .filter((canal) => canal !== 'WHATSAPP' || Boolean(business.whatsapp_provider))
+          .filter((canal) => !yaEnviados.has(destinatarioKey(client.id, canal)))
+          .map((canal) => ({ client, canal })))
+        await db.from('campaign_recipients').upsert(
+          pendientes.map(({ client, canal }) => ({ campaign_id: campaignId, client_id: client.id, channel: canal, status: 'PENDING', reason: null, sent_at: null })),
+          { onConflict: 'campaign_id,client_id,channel', ignoreDuplicates: true },
+        )
+        let enviados = 0
+        for (const { client, canal } of pendientes) {
+          const result = canal === 'WHATSAPP'
+            ? await sendWhatsApp({ id: businessId, whatsapp_provider: business.whatsapp_provider, whatsapp_instance: business.whatsapp_instance, whatsapp_phone_id: business.whatsapp_phone_id, whatsapp_token: business.whatsapp_token, whatsapp_360_api_key: business.whatsapp_360_api_key }, { phone: client.phone!, text: campaign.content, imageUrl: campaign.image_url })
+            : await sendMarketingEmail({ to: client.email!, subject: (campaign.subject?.trim() || campaign.name), html: campaign.email_html ? campaign.email_html.replace(/{{unsubscribeUrl}}/g, `${process.env.NEXT_PUBLIC_APP_URL}/unsubscribe?token=${client.marketing_unsubscribe_token ?? ''}`) : emailHtml(businessName, campaign.content, `${process.env.NEXT_PUBLIC_APP_URL}/unsubscribe?token=${client.marketing_unsubscribe_token ?? ''}`), businessName, replyTo: business.email })
+          await db.from('campaign_recipients').update({ status: result.success ? 'SENT' : 'FAILED', reason: result.error ?? null, sent_at: result.success ? new Date().toISOString() : null }).eq('campaign_id', campaignId).eq('client_id', client.id).eq('channel', canal)
+          if (result.success) { enviados += 1; await registrarEnvio(client.id, canal) }
+        }
+        await markCampaignSent(db, campaignId)
+        return NextResponse.json({ sent: true, recipients: enviados, skipped: pendientes.length - enviados })
       }
 
       const webhook = process.env.N8N_WEBHOOK_URL, secret = process.env.N8N_WEBHOOK_SECRET

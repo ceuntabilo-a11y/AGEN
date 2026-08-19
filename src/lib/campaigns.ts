@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Audience } from '@/lib/campaign-audience'
 
 /** Estados desde los que una campaña todavía se puede enviar. */
 export const ESTADOS_ENVIABLES = ['DRAFT', 'SCHEDULED']
@@ -10,7 +11,7 @@ export type Campana = {
   id: string
   status: string
   channel: string
-  audience: { segment?: 'ALL' | 'ACTIVE' | 'INACTIVE' | 'BIRTHDAY' } | null
+  audience: Audience | null
   name: string
   content: string
   subject?: string | null
@@ -70,7 +71,7 @@ export async function claimCampaignForSending(
 }
 
 /** PostgREST avisa así cuando la columna no existe todavía (migración sin aplicar). */
-function faltaColumna(error: { code?: string; message?: string } | null) {
+export function faltaColumna(error: { code?: string; message?: string } | null) {
   return Boolean(error && (error.code === 'PGRST204' || error.code === '42703'))
 }
 
@@ -105,6 +106,23 @@ export async function destinatariosYaEnviados(db: SupabaseClient, campaignId: st
   const { data } = await db.from('campaign_recipients')
     .select('client_id,status').eq('campaign_id', campaignId).eq('status', 'SENT').limit(5000)
   return new Set(((data ?? []) as Array<{ client_id: string }>).map((fila) => fila.client_id))
+}
+
+export function destinatarioKey(clientId: string, channel: string) {
+  return `${clientId}:${channel}`
+}
+
+/**
+ * Igual que `destinatariosYaEnviados`, pero distinguiendo el CANAL: una campaña "BOTH" puede
+ * tener el WhatsApp de un cliente ya enviado y su correo todavía pendiente. Requiere la columna
+ * `channel` de la migración `20260819000001`; solo se usa en el envío por los dos canales a la
+ * vez, que ya comprobó antes que esa columna existe.
+ */
+export async function destinatariosYaEnviadosPorCanal(db: SupabaseClient, campaignId: string) {
+  const { data } = await db.from('campaign_recipients')
+    .select('client_id,channel,status').eq('campaign_id', campaignId).eq('status', 'SENT').limit(5000)
+  return new Set(((data ?? []) as Array<{ client_id: string; channel: string | null }>)
+    .map((fila) => destinatarioKey(fila.client_id, fila.channel ?? '')))
 }
 
 export async function markCampaignSent(db: SupabaseClient, campaignId: string) {
