@@ -69,7 +69,7 @@ export function horaDelMensaje(mensaje: string): string | null {
   if (!suelta) return null
   // Un número suelto sin ninguna pista de que sea una hora no es una hora.
   const contexto = texto.slice(Math.max(0, suelta.index - 14), suelta.index + suelta[0].length + 22)
-  const pistaDeHora = /(a\s+las?|las?\s|hrs?|horas?|am|pm|de\s+la\s+(mañana|manana|tarde|noche)|del?\s+mediodia)/.test(contexto)
+  const pistaDeHora = /(a\s+las?|las?\s|hrs?|horas?|am|pm|de\s+la\s+(mañana|manana|tarde|noche)|del?\s+mediodia|tipo\s)/.test(contexto)
   if (!pistaDeHora) return null
 
   const hora = ajustarPorSufijo(Number(suelta[1]), `${suelta[2] ?? ''} ${texto.slice(suelta.index + suelta[0].length, suelta.index + suelta[0].length + 22)}`)
