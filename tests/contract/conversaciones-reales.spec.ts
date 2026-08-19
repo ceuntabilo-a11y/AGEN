@@ -214,15 +214,22 @@ test.describe('A2 — el cliente insiste y no puede recibir la misma pregunta', 
 /* ═══════════ A3. Cambiar de opinión ═══════════ */
 
 test.describe('A3 — el cliente cambia de opinión antes de confirmar', () => {
-  test('pedir un día distinto después de que le ofrecieron horarios vuelve a buscar', async () => {
+  /*
+   * Una hora distinta de la del apartado (09:00), no un día de la semana fijo: nombrar un día
+   * ("el viernes") dependía de que `MANANA` (26 h desde que arranca la prueba) cayera en un día
+   * de la semana distinto del pedido, y a ciertas horas del día `MANANA` termina siendo pasado
+   * mañana en la zona del negocio, no mañana — la prueba fallaba según a qué hora se corriera.
+   * Pedir una HORA distinta no depende de ningún cálculo de fecha.
+   */
+  test('pedir una hora distinta después de que le ofrecieron horarios vuelve a buscar', async () => {
     falso.tablas.appointment_holds = [apartado('hold-9', 9)]
-    const cuerpo = await turno('mejor el viernes')
+    const cuerpo = await turno('mejor a las 3 de la tarde')
     expect(cuerpo.ruta).toBe('BUSCAR')
   })
 
   test('y no se reserva nada por el camino', async () => {
     falso.tablas.appointment_holds = [apartado('hold-9', 9)]
-    await turno('mejor el viernes')
+    await turno('mejor a las 3 de la tarde')
     expect(falso.rpc.some((item) => item.nombre === 'confirm_held_appointment')).toBe(false)
   })
 })
@@ -329,6 +336,25 @@ test.describe('A6 — el cliente vuelve más tarde', () => {
     const cuerpo = await turno('Quiero agendar pa mañana en la tarde tipo 2')
     expect(cuerpo.ruta).toBe('BUSCAR')
     expect(cuerpo.systemMessage).toContain('sin decir "busco disponibilidad"')
+  })
+
+  /*
+   * Fallo real (probado en producción, 2026-08-19): el cliente había pedido una hora el 17 de
+   * agosto y nunca reservó. El hilo de WhatsApp sigue OPEN —nada lo cierra solo—, así que dos
+   * días después, con un mensaje que no tiene nada que ver, el agente preguntó «¿confirmas Corte
+   * y Peinado para mañana a las 14:00?»: una reserva que nadie pidió en esa conversación. La
+   * corrección de arriba (seguir una búsqueda abierta) solo puede mirar lo dicho HACE POCO, o
+   * termina arrastrando pedidos de hace días como si fueran de ahora mismo.
+   */
+  test('un pedido de hace días no se confunde con uno de ahora', async () => {
+    falso.tablas.conversations = [{ id: 'conv-vieja', business_id: NEGOCIO, client_id: 'cli-ana', channel: 'WHATSAPP', status: 'OPEN', external_id: ANA, updated_at: new Date().toISOString() }]
+    falso.tablas.messages = [
+      { id: 'msg-viejo', conversation_id: 'conv-vieja', sender: 'CLIENT', content: 'Quiero agendar pa mañana en la tarde tipo 2', created_at: new Date(Date.now() - 48 * 3600000).toISOString() },
+      { id: 'msg-viejo-2', conversation_id: 'conv-vieja', sender: 'AI', content: '¿Qué servicio quieres reservar?', created_at: new Date(Date.now() - 48 * 3600000 + 60000).toISOString() },
+    ]
+    const cuerpo = await turno('Hola, se me perdió tu número, andan por acá todavía?')
+    expect(cuerpo.ruta, 'un pedido de hace 48 h no puede seguir una búsqueda de ahora').toBe('INFO')
+    expect(cuerpo.userMessage).not.toContain('"hora":"14:00"')
   })
 })
 
