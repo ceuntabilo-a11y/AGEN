@@ -9,10 +9,10 @@ export async function GET(){
     const {db,businessId,clientId}=await requireClientContext()
     const [appointments,business]=await Promise.all([
       db.from('appointments').select('id,status,service_period,quoted_price,deposit_paid,professional:professionals(id,display_name,color),service:services(id,name),branch:branches(id,name,address)').eq('business_id',businessId).eq('client_id',clientId).order('service_period',{ascending:false}),
-      db.from('businesses').select('timezone,settings').eq('id',businessId).single(),
+      db.from('businesses').select('name,timezone,logo_url,settings').eq('id',businessId).single(),
     ])
     if(appointments.error||business.error)throw appointments.error||business.error
-    return NextResponse.json({appointments:appointments.data,timezone:business.data.timezone,settings:business.data.settings})
+    return NextResponse.json({appointments:appointments.data,timezone:business.data.timezone,businessName:business.data.name,logoUrl:business.data.logo_url,settings:business.data.settings})
   }catch(error){return apiError(error)}
 }
 
