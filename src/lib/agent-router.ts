@@ -196,6 +196,20 @@ export function clasificarPorReglas(mensaje: string, estado: EstadoDelTurno): Cl
   if (PALABRAS.AGENDAR.test(texto)) return { intencion: 'AGENDAR', confianza: 'BAJA' }
   if (PALABRAS.INFO.test(texto)) return { intencion: 'INFO', confianza: 'BAJA' }
 
+  /*
+   * Ya sabemos qué día, franja u hora pidió (este mensaje o el anterior) y todavía no hay
+   * horarios apartados: seguimos a mitad de una búsqueda abierta.
+   *
+   * Fallo real (conversación del 2026-08-17, 21:10): tras «quiero agendar pa mañana... tipo 2»
+   * el agente preguntó el servicio; el cliente contestó «Perruqueria para caballero» sin repetir
+   * el día, ninguna palabra de AGENDAR ni de INFO coincidió, y el turno cayó al INFO por
+   * defecto — perdió el «mañana» ya dicho y preguntó todo de nuevo. Sin esto, cualquier
+   * respuesta de seguimiento que no repita una palabra clave reinicia la conversación.
+   */
+  if (estado.cuando?.dia || estado.cuando?.hora || estado.cuando?.franja) {
+    return { intencion: 'AGENDAR', confianza: 'ALTA' }
+  }
+
   return { intencion: 'INFO', confianza: 'BAJA' }
 }
 
@@ -412,6 +426,7 @@ const INSTRUCCIONES: Record<Ruta, string> = {
     '# ESTA RAMA',
     'Tu única herramienta es buscar_horarios. NO puedes reservar: en este turno solo se ofrece, y reservar es un paso posterior que ejecuta el sistema cuando el cliente elige.',
     'Prohibido decir que reservaste, dejaste tomada o confirmaste una hora. Preguntar por horarios NO es reservar.',
+    'Si no sabes el servicio todavía, pregúntalo directo, sin decir "busco disponibilidad" ni dar una hora provisoria: eso es prometer una búsqueda que no hiciste. Llama a buscar_horarios solo cuando ya tengas servicio, día y hora.',
     'PEDIDO trae ya resuelto lo que el cliente pidió (fecha, franja, hora y la ventana desde/hasta). Si tiene `desde` y `hasta`, llama buscar_horarios con ESOS valores TAL CUAL: no los recalcules ni preguntes a qué se refería.',
     'Si PEDIDO trae una hora y la herramienta no devuelve esa hora, dilo en la primera línea ("a las 15:00 no me queda") y ofrece lo que sí haya, o pregúntale si quiere otro día. NUNCA vuelvas a preguntarle a qué hora quiere: ya te lo dijo.',
     'Llama buscar_horarios con el serviceId real del catálogo y la ventana de PEDIDO (o el rango de TIEMPO si PEDIDO viene vacío), y ofrece SOLO los profesionales y horas que devuelva. Cada horario que ofreces queda reservado unos minutos.',

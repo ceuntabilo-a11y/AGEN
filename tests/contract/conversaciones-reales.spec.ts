@@ -124,6 +124,7 @@ test.describe('A1 — la hora, dicha como la dice una persona', () => {
     ['9am', '09:00'],
     ['a las 10:30', '10:30'],
     ['a las 4 y media', '16:30'],
+    ['tipo 2', '14:00'],
   ] as Array<[string, string]>) {
     test(`"${mensaje}" son las ${esperada}`, () => {
       expect(horaDelMensaje(mensaje)).toBe(esperada)
@@ -306,6 +307,28 @@ test.describe('A6 — el cliente vuelve más tarde', () => {
     falso.tablas.appointment_holds = [{ ...apartado('hold-viejo', 9), expires_at: new Date(Date.now() - 60000).toISOString() }]
     const cuerpo = await turno('dale, esa')
     expect(cuerpo.diagnostico?.apartados ?? 0).toBe(0)
+  })
+
+  /*
+   * Conversación real (2026-08-17, 21:10): «Quiero agendar pa mañana en la tarde tipo 2» →
+   * el agente preguntó el servicio → «Perruqueria para caballero si es que hay». Ese último
+   * mensaje no tiene ninguna palabra de AGENDAR ni de INFO, y sin este arreglo el turno caía a
+   * INFO por defecto: perdía el «mañana» ya dicho y preguntaba todo de nuevo.
+   */
+  test('una respuesta de seguimiento sin palabra clave no reinicia una búsqueda abierta', async () => {
+    conHistorial([
+      { quien: 'cliente', texto: 'Quiero agendar pa mañana en la tarde tipo 2' },
+      { quien: 'agen', texto: '¿Qué servicio quieres reservar?' },
+    ])
+    const cuerpo = await turno('Peluqueria para caballero si es que hay')
+    expect(cuerpo.ruta, 'sigue siendo una búsqueda, no INFO').toBe('BUSCAR')
+    expect(cuerpo.intencion).toBe('AGENDAR')
+  })
+
+  test('la rama de búsqueda no promete un horario que no buscó', async () => {
+    const cuerpo = await turno('Quiero agendar pa mañana en la tarde tipo 2')
+    expect(cuerpo.ruta).toBe('BUSCAR')
+    expect(cuerpo.systemMessage).toContain('sin decir "busco disponibilidad"')
   })
 })
 
