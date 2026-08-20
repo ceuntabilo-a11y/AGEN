@@ -371,6 +371,328 @@ export const ARTICULOS_AYUDA: ArticuloAyuda[] = [
     alias: ['no recuerdo mi clave', 'restablecer contraseña'],
     respuesta: 'En la pantalla de inicio de sesión, "¿Olvidaste tu contraseña?". Te llega un correo para elegir una nueva.',
   },
+
+  // ── Agenda (detalle) ────────────────────────────────────────────────────
+  {
+    id: 'agenda-vistas',
+    categoria: 'Agenda',
+    pregunta: '¿Cómo cambio entre ver el día, la semana o el mes?',
+    alias: ['vista de la agenda', 'ver la semana completa', 'ver el mes'],
+    respuesta: 'Arriba de la agenda hay un selector Día/Semana/Mes. En vista Día, si hay más de un profesional aparece además "Por profesional" para ver una columna separada por cada uno en vez de todas las citas mezcladas.',
+  },
+  {
+    id: 'agenda-apartados',
+    categoria: 'Agenda',
+    pregunta: '¿Qué son esos recuadros rayados que dicen "Apartado" en la agenda?',
+    alias: ['recuadro punteado en la agenda', 'qué es un apartado', 'hold en la agenda'],
+    respuesta: 'Son cupos que el agente de IA reservó temporalmente mientras un cliente decide (por WhatsApp o voz). Desaparecen solos cuando expiran o cuando el cliente confirma. No son clicables y no hay botón para crearlos ni cancelarlos a mano desde la agenda.',
+  },
+  {
+    id: 'agenda-por-cerrar',
+    categoria: 'Agenda',
+    pregunta: '¿Qué significa el panel "Por cerrar" en la agenda?',
+    alias: ['citas por cerrar', 'aviso rojo en una cita vieja'],
+    respuesta: 'Son citas cuya hora ya pasó pero siguen en un estado activo (nunca se marcaron Completada ni No asistió). Aparecen en rojo con el aviso "⚠ Por cerrar" y tienen accesos rápidos para marcarlas Completada, No asistió, o abrir la ficha completa.',
+  },
+  {
+    id: 'agenda-bloquear-horario',
+    categoria: 'Agenda',
+    pregunta: '¿Cómo bloqueo manualmente un horario para que nadie reserve ahí?',
+    alias: ['bloquear un hueco de la agenda', 'reservar tiempo para mí'],
+    respuesta: 'Hoy no existe un botón para bloquear un horario manualmente en la agenda del negocio. Lo más parecido son los apartados que crea el agente de IA, que son temporales. Para dejar un profesional sin cupos en un rango, ajusta su horario en Equipo → "Horario".',
+  },
+  {
+    id: 'agenda-mini-calendario',
+    categoria: 'Agenda',
+    pregunta: '¿Qué significan los puntos de colores en el mini calendario de la agenda?',
+    alias: ['punto verde en el calendario', 'punto rojo en el calendario'],
+    respuesta: 'Verde: ese día tiene citas y no hay ninguna pendiente de cerrar. Rojo: hay al menos una cita pasada que sigue sin marcarse Completada o No asistió. Los días tachados son días que el negocio tiene cerrados en Configuración → Horario de atención.',
+  },
+
+  // ── Equipo (detalle) ────────────────────────────────────────────────────
+  {
+    id: 'equipo-enlace-agenda',
+    categoria: 'Equipo',
+    pregunta: '¿Por qué el botón "Agenda" de la tarjeta de un profesional no me muestra solo sus citas?',
+    alias: ['el botón agenda del profesional no filtra', 'ver solo la agenda de un profesional'],
+    respuesta: 'Es una limitación conocida: ese botón lleva a la agenda general, no filtra automáticamente por ese profesional todavía. Para ver solo sus citas, usa el selector de profesional que está arriba de la agenda.',
+  },
+  {
+    id: 'equipo-reconocido-agen',
+    categoria: 'Equipo',
+    pregunta: '¿Qué es la sección "Equipo reconocido por Agen" al final de Equipo?',
+    alias: ['equipo reconocido por agen', 'números que reconoce el agente'],
+    respuesta: 'Es distinta de los profesionales: son los teléfonos del dueño, administradores y recepción para que el agente de IA los reconozca cuando escriben (modo equipo, de solo lectura). Los profesionales configuran su propio teléfono en su perfil, no acá. Si el negocio no tiene ningún admin o recepcionista además del dueño, esta sección no aparece.',
+  },
+  {
+    id: 'equipo-horario-al-crear',
+    categoria: 'Equipo',
+    pregunta: '¿Con qué horario nace un profesional recién creado?',
+    alias: ['horario por defecto de un profesional nuevo', 'un profesional nuevo no tiene cupos'],
+    respuesta: 'Lunes a viernes de 09:00 a 18:00, automáticamente. Si no lo cambias en "Horario", ese es el horario real que usa el sistema para ofrecerlo. Sin ningún horario cargado, un profesional no genera cupos para nadie.',
+  },
+
+  // ── Servicios (detalle) ─────────────────────────────────────────────────
+  {
+    id: 'servicios-buffer-solo-despues-al-crear',
+    categoria: 'Servicios',
+    pregunta: '¿Por qué al crear un servicio no puedo poner tiempo de preparación antes, solo después?',
+    alias: ['tiempo antes del servicio al crear', 'buffer antes no aparece'],
+    respuesta: 'El formulario de "Nuevo servicio" solo trae el tiempo posterior (limpieza/descanso después). El tiempo de preparación previo se agrega editando el servicio ya creado, en "Editar" → "Preparación antes (min)".',
+  },
+  {
+    id: 'servicios-nombre-repetido',
+    categoria: 'Servicios',
+    pregunta: '¿Por qué no me deja guardar un servicio con ese nombre?',
+    alias: ['no se puede crear el servicio', 'nombre de servicio duplicado'],
+    respuesta: 'No puede haber dos servicios con el mismo nombre dentro de la misma especialidad. Cámbiale el nombre, o revisa si ya existe uno igual (quizás desactivado) en esa especialidad.',
+  },
+
+  // ── Clientes (detalle) ──────────────────────────────────────────────────
+  {
+    id: 'clientes-buscar-alcance',
+    categoria: 'Clientes',
+    pregunta: '¿Por qué el buscador de Clientes no encuentra a alguien por su correo?',
+    alias: ['buscar cliente por correo no funciona', 'el buscador de clientes qué campos revisa'],
+    respuesta: 'El buscador de la lista de Clientes solo busca por nombre o teléfono, no por correo ni por notas. Además la lista trae como máximo 100 clientes sin paginación — si el negocio tiene más y no usas el buscador, algunos no van a aparecer.',
+  },
+  {
+    id: 'clientes-eliminar-confirmacion',
+    categoria: 'Clientes',
+    pregunta: '¿Por qué me pide escribir una palabra para eliminar un cliente?',
+    alias: ['escribir eliminar para borrar', 'confirmación al borrar un cliente'],
+    respuesta: 'Para que nadie borre un cliente por un clic distraído: hay que escribir literalmente "ELIMINAR" en el cuadro de confirmación. Además, solo se puede borrar si el cliente no tiene ninguna reserva ni pago registrado.',
+  },
+  {
+    id: 'clientes-consentimiento-diferencia',
+    categoria: 'Clientes',
+    pregunta: '¿Cuál es la diferencia entre "Acepta promociones" y los permisos de marketing de la ficha?',
+    alias: ['casilla de marketing vs permisos por canal', 'consentimiento por canal'],
+    respuesta: 'La casilla "Acepta promociones" del formulario sincroniza automáticamente WhatsApp y correo a la vez. Los checkboxes de "Permisos de marketing" en la ficha del cliente tocan cada canal por separado —incluido SMS, que no tiene casilla general— y son los que de verdad deciden si le llega una campaña.',
+  },
+
+  // ── Conversaciones (detalle) ────────────────────────────────────────────
+  {
+    id: 'conversaciones-reabrir-cerrada',
+    categoria: 'Conversaciones',
+    pregunta: '¿Cómo reabro una conversación que quedó marcada como Cerrada?',
+    alias: ['reabrir una conversación cerrada', 'volver a activar una conversación'],
+    respuesta: 'Con el botón "Atender yo": aparece en cualquier conversación que no esté en modo "Atiende el equipo", incluidas las cerradas, y la pasa a tu control. Desde ahí, "Devolver al agente" se la entrega de nuevo a la IA.',
+  },
+  {
+    id: 'conversaciones-solo-lectura',
+    categoria: 'Conversaciones',
+    pregunta: '¿Puedo responder un WhatsApp directamente desde el panel?',
+    alias: ['escribir un mensaje desde conversaciones', 'responder al cliente desde el panel'],
+    respuesta: 'No: la pantalla de Conversaciones es de solo lectura para los mensajes. Para responder, se hace por WhatsApp de verdad (a mano, o dejando que el agente conteste). Lo que sí puedes hacer desde acá es tomar el control con "Atender yo" para que el agente deje de escribir mientras tú hablas por WhatsApp.',
+  },
+
+  // ── Seguimiento (detalle) ───────────────────────────────────────────────
+  {
+    id: 'seguimiento-tipos-de-tarea',
+    categoria: 'Seguimiento',
+    pregunta: '¿De dónde salen las tareas de "Qué hacer hoy"?',
+    alias: ['tareas automáticas de seguimiento', 'por qué aparece una tarea que no creé'],
+    respuesta: 'Se generan solas por tres motivos: una ausencia (no asistió), un presupuesto enviado hace más de 7 días sin respuesta, o un cliente que no viene hace más de 180 días y no tiene ninguna cita futura. También puedes agregar una tarea manual con el botón "Tarea".',
+  },
+  {
+    id: 'seguimiento-espera-una-accion',
+    categoria: 'Seguimiento',
+    pregunta: '¿Cómo saco a alguien de la lista de espera una vez que ya reservó?',
+    alias: ['quitar a alguien de la lista de espera', 'lista de espera reservado'],
+    respuesta: 'Desde Seguimiento solo se puede marcar "Contactado". Una vez que esa persona reserva de verdad (por agenda, agente o portal), no hace falta hacer nada más ahí — reservar no la saca automáticamente de la lista visualmente, así que conviene usar "Contactado" como corresponde para no confundirla con alguien a quien aún no le avisaste.',
+  },
+
+  // ── Finanzas (detalle) ──────────────────────────────────────────────────
+  {
+    id: 'finanzas-por-cobrar-no-cambia',
+    categoria: 'Finanzas',
+    pregunta: '¿Por qué la cifra "Por cobrar" no cambia cuando busco un cliente?',
+    alias: ['por cobrar no se filtra con la búsqueda', 'cifra por cobrar fija'],
+    respuesta: 'Es a propósito: "Por cobrar" siempre suma TODO lo pendiente del negocio, esté buscando algo o no. Es una cifra del negocio completo, no de la lista filtrada que se está mirando en ese momento.',
+  },
+  {
+    id: 'finanzas-marcar-enviado-no-manda-nada',
+    categoria: 'Finanzas',
+    pregunta: '¿El botón "Marcar enviado" de un presupuesto lo manda al cliente?',
+    alias: ['marcar enviado envía el presupuesto', 'diferencia entre marcar enviado y enviar'],
+    respuesta: 'No: "Marcar enviado" en la lista solo cambia la etiqueta de estado, no manda nada. Para enviarlo de verdad por WhatsApp, correo o ambos, hay que abrir la ficha del presupuesto (clic en la fila) y usar los botones de envío de ahí.',
+  },
+  {
+    id: 'finanzas-presupuesto-un-servicio',
+    categoria: 'Finanzas',
+    pregunta: '¿Puedo poner varios servicios en un mismo presupuesto?',
+    alias: ['presupuesto con más de un servicio', 'agregar varios ítems a un presupuesto'],
+    respuesta: 'El formulario de "Nuevo presupuesto" arma solo un ítem por presupuesto. Para varios servicios a la vez, hoy hay que crear un presupuesto por cada uno.',
+  },
+  {
+    id: 'finanzas-eliminar-presupuesto-bloqueado',
+    categoria: 'Finanzas',
+    pregunta: '¿Por qué no puedo eliminar un presupuesto?',
+    alias: ['no deja borrar un presupuesto', 'presupuesto con pago no se elimina'],
+    respuesta: 'Si ese presupuesto ya tiene un cobro asociado, el sistema no lo deja borrar para no perder el registro del pago.',
+  },
+
+  // ── Marketing (detalle) ─────────────────────────────────────────────────
+  {
+    id: 'marketing-consentimiento-manda-siempre',
+    categoria: 'Marketing',
+    pregunta: '¿Por qué una campaña le llega a menos gente de la que esperaba aunque cumplan todos los filtros?',
+    alias: ['pocos destinatarios aunque cumplen el filtro', 'consentimiento manda sobre los filtros'],
+    respuesta: 'El consentimiento de marketing vigente por canal manda sobre cualquier otro filtro (segmento, búsqueda, visitas). Un cliente sin ese permiso jamás cuenta ni recibe la campaña, aunque cumpla todo lo demás.',
+  },
+  {
+    id: 'marketing-retomar-envio',
+    categoria: 'Marketing',
+    pregunta: '¿Qué hace el botón "Retomar envío" de una campaña?',
+    alias: ['retomar envío de campaña', 'campaña que quedó a medias'],
+    respuesta: 'Aparece cuando una campaña quedó a medio enviar. Le sigue escribiendo solo a quienes todavía no la recibieron — nunca le manda el mensaje dos veces a quien ya se le entregó.',
+  },
+  {
+    id: 'marketing-canales-sin-envio-real',
+    categoria: 'Marketing',
+    pregunta: '¿Puedo mandar una campaña por Instagram o Messenger?',
+    alias: ['campaña por instagram', 'campaña por messenger', 'notificación push en campañas'],
+    respuesta: 'Esos canales aparecen como opción en el formulario, pero hoy no tienen un envío propio implementado — dependen de una integración externa (n8n) que puede no estar configurada. Para un envío confiable, usa WhatsApp, Email, o ambos a la vez.',
+  },
+  {
+    id: 'marketing-diseñar-correo-ia',
+    categoria: 'Marketing',
+    pregunta: '¿Cómo hago que el correo de una campaña se vea diseñado, no solo texto plano?',
+    alias: ['diseñar correo con ia', 'plantilla bonita para el correo de marketing'],
+    respuesta: 'En "Nueva campaña", con el canal en Email o Ambos, aparece el botón "Diseñar correo con IA": arma un HTML con tu mensaje ya escrito. Hay que escribir primero el mensaje en el campo de texto. "Volver al correo simple" descarta ese diseño y vuelve al texto plano.',
+  },
+
+  // ── Galería (detalle) ───────────────────────────────────────────────────
+  {
+    id: 'galeria-consentimiento-bloqueado-en-servidor',
+    categoria: 'Galería',
+    pregunta: '¿Puedo publicar una foto sin marcar la autorización del cliente?',
+    alias: ['publicar sin consentimiento', 'saltarse la autorización del cliente en galería'],
+    respuesta: 'No: aunque el checkbox de autorización no sea obligatorio para subir la foto, el sistema bloquea publicarla (ahora o después) si no está marcada la autorización del cliente. Es una regla aplicada en el servidor, no solo un aviso visual.',
+  },
+
+  // ── Encuestas (detalle) ─────────────────────────────────────────────────
+  {
+    id: 'encuestas-formula-nps',
+    categoria: 'Encuestas',
+    pregunta: '¿Cómo se calcula el NPS que aparece en Encuestas?',
+    alias: ['qué es el nps', 'fórmula del nps'],
+    respuesta: 'NPS = porcentaje de promotores (notas 9 y 10) menos porcentaje de detractores (notas 0 a 6), sobre las respuestas del último año. Las notas 7 y 8 son neutras y no entran en la resta.',
+  },
+  {
+    id: 'encuestas-cuando-sale-automatica',
+    categoria: 'Encuestas',
+    pregunta: '¿Cuándo le llega la encuesta al cliente después de la cita?',
+    alias: ['tiempo de espera de la encuesta', 'cuándo se manda la encuesta automática'],
+    respuesta: 'Se controla en Configuración → "Encuesta y reseñas en Google": puedes elegir que salga al instante, 1 hora después, 3 horas después, o al día siguiente, en cuanto marcas la cita como Completada. También puedes apagarla del todo ahí.',
+  },
+  {
+    id: 'encuestas-resena-condicion',
+    categoria: 'Encuestas',
+    pregunta: '¿Cuándo le pide el agente una reseña en Google al cliente?',
+    alias: ['pedido de reseña automático', 'cuándo se pide la reseña'],
+    respuesta: 'Solo cuando la nota de la encuesta es 9 o 10, y solo si configuraste el enlace de reseña en Integraciones. Con nota 7-8 el agente agradece y pregunta qué mejorar; con nota 6 o menos, agradece la sinceridad y avisa que se lo pasa al equipo — nunca pide reseña con una nota baja.',
+  },
+
+  // ── Agente IA (detalle) ─────────────────────────────────────────────────
+  {
+    id: 'agente-apagar-efecto-inmediato',
+    categoria: 'Agente IA',
+    pregunta: '¿Apagar el agente hace efecto al toque?',
+    alias: ['el agente sigue respondiendo después de apagarlo', 'la insignia del agente no cambia'],
+    respuesta: 'Sí, apagarlo deja de responder por WhatsApp de inmediato al guardar. Ojo: la insignia "● Activo/○ Apagado" arriba de la pantalla solo se actualiza después de guardar con éxito, no apenas destildas la casilla.',
+  },
+  {
+    id: 'agente-formato-telefono-transferencia',
+    categoria: 'Agente IA',
+    pregunta: '¿Por qué no me deja guardar el número para transferir a una persona?',
+    alias: ['número de transferencia inválido', 'formato del teléfono del agente'],
+    respuesta: 'El número debe tener entre 8 y 15 dígitos con el código de país, por ejemplo +56912345678. El modal solo exige 8 dígitos como mínimo, pero el servidor valida el formato completo al guardar.',
+  },
+  {
+    id: 'agente-probar-voz-usa-guardado',
+    categoria: 'Agente IA',
+    pregunta: '¿Por qué "Probar voz" no usa los cambios que acabo de hacer en la pestaña Voz?',
+    alias: ['probar voz no refleja mis cambios', 'probar voz con configuración vieja'],
+    respuesta: 'El botón "Probar voz" usa la configuración YA GUARDADA en la base de datos, no lo que tengas tecleado sin guardar. Guarda la configuración primero con "Guardar configuración" y recién ahí prueba.',
+  },
+
+  // ── Integraciones (detalle) ─────────────────────────────────────────────
+  {
+    id: 'integraciones-conectar-whatsapp-evolution',
+    categoria: 'Integraciones',
+    pregunta: '¿Cómo conecto el WhatsApp del negocio paso a paso?',
+    alias: ['conectar whatsapp con qr', 'vincular whatsapp evolution'],
+    respuesta: 'Integraciones → WhatsApp → elige "QR rápido (Evolution)" → botón "Conectar WhatsApp". Aparece un código QR: ábrelo con el WhatsApp del negocio en Dispositivos vinculados. La pantalla revisa sola cada pocos segundos y muestra "WhatsApp conectado ✓" apenas se vincula, sin que tengas que hacer nada más.',
+  },
+  {
+    id: 'integraciones-desconectar-whatsapp',
+    categoria: 'Integraciones',
+    pregunta: '¿Qué pasa si aprieto "Desconectar" en WhatsApp?',
+    alias: ['desconectar whatsapp del negocio'],
+    respuesta: 'Cierra la sesión de WhatsApp y borra esa conexión del todo — para volver a usarlo hay que escanear un QR nuevo desde cero.',
+  },
+  {
+    id: 'integraciones-dialog360-sin-verificar',
+    categoria: 'Integraciones',
+    pregunta: '¿Puedo confiar en el proveedor 360dialog para WhatsApp?',
+    alias: ['360dialog funciona', 'proveedor dialog360'],
+    respuesta: 'Ese proveedor todavía no está verificado con un envío real en Agen. Si lo eliges, pruébalo primero con algo sin urgencia antes de depender de él para clientes reales.',
+  },
+  {
+    id: 'integraciones-resend-de-plataforma',
+    categoria: 'Integraciones',
+    pregunta: '¿Por qué no hay un campo para poner mi propia clave de Resend?',
+    alias: ['clave propia de resend', 'correo de marketing sin configurar'],
+    respuesta: 'La clave de Resend es compartida por toda la plataforma Agen, no por negocio — la carga el equipo de Agen en Plataforma → Claves. En Integraciones solo ves si está "Activo" o "Sin configurar"; no hay nada que cargar ahí para esto.',
+  },
+
+  // ── Configuración (detalle) ─────────────────────────────────────────────
+  {
+    id: 'configuracion-recordatorios-limite',
+    categoria: 'Configuración',
+    pregunta: '¿Cuántos recordatorios puedo configurar y con cuánta anticipación?',
+    alias: ['máximo de recordatorios', 'límite de anticipación de un recordatorio'],
+    respuesta: 'Hasta 4 recordatorios por negocio, cada uno entre 15 minutos y 14 días antes de la hora, sin repetir la misma anticipación dos veces. Sin ninguno configurado, el sistema usa por defecto 24 horas y 2 horas antes.',
+  },
+  {
+    id: 'configuracion-todos-los-dias-cerrados',
+    categoria: 'Configuración',
+    pregunta: '¿Por qué no me deja guardar el horario del negocio con todos los días cerrados?',
+    alias: ['no deja cerrar todos los días', 'horario del negocio todo apagado'],
+    respuesta: 'Es a propósito: si todos los días quedan cerrados, nadie podría reservar nunca por ningún canal. El sistema exige dejar al menos un día abierto.',
+  },
+  {
+    id: 'configuracion-exportar-datos',
+    categoria: 'Configuración',
+    pregunta: '¿Cómo descargo mis clientes, reservas, cobros o gastos a Excel?',
+    alias: ['exportar clientes a excel', 'descargar datos del negocio', 'exportar reservas'],
+    respuesta: 'Configuración → "Plan y datos" → botones "Exportar a Excel" (uno por Clientes, Reservas, Cobros y Gastos). Descarga un CSV que Excel abre directo, con hasta 5000 filas por exportación.',
+  },
+
+  // ── Resumen (panel principal) ───────────────────────────────────────────
+  {
+    id: 'resumen-ingresos-de-hoy',
+    categoria: 'Resumen',
+    pregunta: '¿"Ingresos de hoy" del Resumen es lo que se cobró hoy o lo que corresponde a citas de hoy?',
+    alias: ['ingresos de hoy qué cuenta', 'por qué los ingresos de hoy no coinciden con las citas de hoy'],
+    respuesta: 'Es lo que se COBRÓ hoy (pagos marcados como pagados hoy), no lo que corresponde a citas de hoy. Un pago cobrado hoy de una cita de ayer cuenta acá; una cita de hoy que todavía no se cobra, no cuenta hasta que se marque pagada.',
+  },
+  {
+    id: 'resumen-clientes-nuevos-definicion',
+    categoria: 'Resumen',
+    pregunta: '¿Qué cuenta como "Cliente nuevo" en el Resumen?',
+    alias: ['clientes nuevos del resumen'],
+    respuesta: 'Fichas de cliente creadas hoy en el sistema — no necesariamente alguien que vino por primera vez hoy, si su ficha ya existía de antes.',
+  },
+  {
+    id: 'resumen-profesionales-activos-definicion',
+    categoria: 'Resumen',
+    pregunta: '¿"Profesionales activos" del Resumen cuenta a quién trabaja hoy?',
+    alias: ['profesionales activos qué significa'],
+    respuesta: 'Cuenta a todos los profesionales con el flag "Activo" en general (no desactivados), sin importar si tienen horario cargado para el día de hoy específicamente.',
+  },
 ]
 
 /** A qué categoría de ARTICULOS_AYUDA pertenece cada pantalla del panel del dueño. */
@@ -397,6 +719,7 @@ const RUTA_A_CATEGORIA: Array<[string, string]> = [
  * de ayuda (el Resumen, por ejemplo).
  */
 export function categoriaDePagina(pathname: string): string | null {
+  if (pathname === '/admin' || pathname === '/admin/') return 'Resumen'
   const encontrada = RUTA_A_CATEGORIA.find(([ruta]) => pathname === ruta || pathname.startsWith(`${ruta}/`))
   return encontrada ? encontrada[1] : null
 }

@@ -20,8 +20,8 @@ test.describe('categoriaDePagina', () => {
     expect(categoriaDePagina('/admin/marketing/nueva')).toBe('Marketing')
   })
 
-  test('el Resumen y una ruta desconocida no tienen categoría', () => {
-    expect(categoriaDePagina('/admin')).toBeNull()
+  test('el Resumen tiene su propia categoría, y una ruta desconocida no tiene ninguna', () => {
+    expect(categoriaDePagina('/admin')).toBe('Resumen')
     expect(categoriaDePagina('/admin/algo-que-no-existe')).toBeNull()
     expect(categoriaDePagina('')).toBeNull()
   })
