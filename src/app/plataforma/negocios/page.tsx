@@ -131,7 +131,7 @@ export default function PlatformBusinessesPage() {
     setCreando(null); setConfirmando(false)
     setEnlace(typeof datos.inviteLink === 'string' ? datos.inviteLink : null)
     setAviso(datos.correoEnviado
-      ? { texto: 'Negocio creado y correo de invitación enviado al dueño.', grave: false }
+      ? { texto: 'Negocio creado y correo de invitación enviado al dueño. Si en unos minutos dice que no le llegó, dile que revise spam o promociones — a veces el primer correo de un remitente nuevo cae ahí.', grave: false }
       : datos.cuentaExistente
         ? { texto: 'Negocio creado. El dueño ya tenía cuenta: entra con su contraseña de siempre.', grave: false }
         : { texto: 'Negocio creado, pero el correo NO se pudo enviar. Copia el enlace y mándaselo tú, o vuelve a intentarlo con «Reenviar invitación».', grave: true })
@@ -153,7 +153,7 @@ export default function PlatformBusinessesPage() {
   (datos) => {
     setEnlace(typeof datos.inviteLink === 'string' ? datos.inviteLink : null)
     setAviso(datos.correoEnviado
-      ? { texto: 'Invitación reenviada por correo.', grave: false }
+      ? { texto: 'Invitación reenviada por correo. Si dice que no le llegó, dile que revise spam o promociones.', grave: false }
       : datos.cuentaExistente
         ? { texto: 'Ese dueño ya activó su cuenta: puede entrar con su contraseña.', grave: false }
         : { texto: 'El correo NO se pudo enviar. Copia el enlace y mándaselo tú.', grave: true })

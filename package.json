@@ -24,6 +24,7 @@
     "app": "node scripts/servicio.mjs",
     "n8n": "node scripts/n8n.mjs",
     "db": "node scripts/db.mjs",
+    "resend": "node scripts/resend-diagnostico.mjs",
     "git": "node scripts/git-agen.mjs",
     "verificar-agente": "node scripts/verificar-agente.mjs"
   },
