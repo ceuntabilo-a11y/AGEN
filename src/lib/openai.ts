@@ -33,3 +33,24 @@ export async function chatCompletion(apiKey: string, messages: { role: 'system' 
   if (!content) throw new Error('OPENAI_EMPTY')
   return content
 }
+
+/** Genera una imagen desde un texto. Devuelve un `data:` URI listo para usar en el navegador. */
+export async function generateImage(apiKey: string, prompt: string, options?: { size?: '1024x1024' | '1536x1024' | '1024x1536' }) {
+  const response = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ model: 'gpt-image-1', prompt, size: options?.size ?? '1024x1024', n: 1 }),
+    signal: AbortSignal.timeout(60000),
+  })
+  if (!response.ok) throw new Error(`OPENAI_IMG_${response.status}`)
+  const data = await response.json() as { data?: Array<{ b64_json?: string; url?: string }> }
+  const item = data.data?.[0]
+  if (!item) throw new Error('OPENAI_IMG_EMPTY')
+  if (item.b64_json) return `data:image/png;base64,${item.b64_json}`
+  if (item.url) {
+    const descargada = await fetch(item.url)
+    const buffer = Buffer.from(await descargada.arrayBuffer())
+    return `data:image/png;base64,${buffer.toString('base64')}`
+  }
+  throw new Error('OPENAI_IMG_EMPTY')
+}

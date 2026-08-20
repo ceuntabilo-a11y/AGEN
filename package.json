@@ -28,6 +28,7 @@
     "verificar-agente": "node scripts/verificar-agente.mjs"
   },
   "dependencies": {
+    "@imgly/background-removal": "^1.7.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.111.0",
     "date-fns": "^4.1.0",
