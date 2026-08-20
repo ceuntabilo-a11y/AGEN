@@ -25,6 +25,7 @@ export const CLAVES_PLATAFORMA = [
   'resend_api_key',
   'resend_from',
   'n8n_api_url',
+  'referral_enabled',
   'referral_headline',
   'referral_percent',
   'referral_terms',

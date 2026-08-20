@@ -6,11 +6,11 @@ import { FormEvent, useCallback, useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 
 type Referral = { id: string; referred_name: string | null; referred_email: string | null; status: string; reward_percent: number | null; rewarded_at: string | null; created_at: string; referred: { name: string } | null }
-type Data = { pendingMigration?: boolean; code: string | null; promo: { headline: string; percent: number; terms: string }; businessLink: string | null; clientLink: string | null; referrals: Referral[] }
+type Data = { pendingMigration?: boolean; code: string | null; promo: { enabled: boolean; headline: string; percent: number; terms: string }; businessLink: string | null; clientLink: string | null; referrals: Referral[] }
 
 const STATUS: Record<string, { label: string; className: string }> = {
-  PENDING: { label: 'Invitado, todavía no se registra', className: 'bg-slate-100 text-slate-600' },
-  REGISTERED: { label: 'Ya se registró · premio por confirmar', className: 'bg-amber-50 text-amber-800' },
+  PENDING: { label: 'Invitado, sin contactar todavía', className: 'bg-slate-100 text-slate-600' },
+  REGISTERED: { label: 'Ya se unió a Agen · premio por confirmar', className: 'bg-amber-50 text-amber-800' },
   REWARDED: { label: 'Descuento aplicado', className: 'bg-emerald-50 text-emerald-700' },
   CANCELLED: { label: 'Cancelada', className: 'bg-red-50 text-red-700' },
 }
@@ -76,7 +76,7 @@ export default function InvitePage() {
   if (data?.pendingMigration) return <><PageHeader title="Invitar" description="Trae negocios y clientes nuevos."/><p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Falta aplicar la migración de invitaciones en la base de datos.</p></>
 
   return <>
-    <PageHeader title="Invitar" description="Trae otros negocios a Agen y suma clientes a tu agenda."/>
+    <PageHeader title="Invitar" description="Invita a otro dueño de negocio para que el equipo de Agen lo contacte y le muestre el producto."/>
     {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{error}</p>}
     {!data && !error && <p className="text-sm text-[#736f83]">Cargando…</p>}
 
@@ -85,17 +85,17 @@ export default function InvitePage() {
         <div className="flex items-start gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-50 text-[#5b3df5]"><Gift size={20}/></span>
           <div>
-            <h2 className="text-lg font-black leading-tight">{data.promo.headline}</h2>
-            <p className="mt-1 text-sm text-[#736f83]">{data.promo.terms}</p>
+            <h2 className="text-lg font-black leading-tight">{data.promo.enabled ? data.promo.headline : 'Invita a un colega a conocer Agen'}</h2>
+            <p className="mt-1 text-sm text-[#736f83]">{data.promo.enabled ? data.promo.terms : 'No crea ninguna cuenta: solo pide que lo contactemos para mostrarle el producto.'}</p>
           </div>
         </div>
 
-        {data.businessLink && <div className="mt-5"><CopyBox label="Tu enlace para invitar negocios" value={data.businessLink} message={data.promo.headline + '.'}/></div>}
+        {data.businessLink && <div className="mt-5"><CopyBox label="Tu enlace para invitar negocios" value={data.businessLink} message={data.promo.enabled ? data.promo.headline + '.' : 'Te invito a conocer Agen:'}/></div>}
         {data.code && <p className="mt-2 text-xs text-[#736f83]">Tu código: <b>{data.code}</b></p>}
 
         <form onSubmit={addReferral} className="mt-6 rounded-xl border border-dashed p-3">
           <p className="text-sm font-semibold">Anotar a quién invitaste</p>
-          <p className="mt-1 text-xs text-[#736f83]">Opcional, para no perderles el rastro antes de que se registren.</p>
+          <p className="mt-1 text-xs text-[#736f83]">Opcional, para no perderle el rastro antes de que pida que lo contacten.</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <input name="name" required placeholder="Nombre del negocio" className="w-full rounded-xl border p-3 text-sm"/>
             <input name="email" type="email" placeholder="Su correo (opcional)" className="w-full rounded-xl border p-3 text-sm"/>

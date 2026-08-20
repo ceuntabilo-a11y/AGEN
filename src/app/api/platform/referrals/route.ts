@@ -11,7 +11,7 @@ export async function GET() {
   try {
     const { db } = await requirePlatformAdmin()
     const { data, error } = await db.from('business_referrals')
-      .select('id,referred_name,referred_email,status,reward_percent,reward_note,rewarded_at,created_at,referrer:businesses!business_referrals_referrer_business_id_fkey(id,name),referred:businesses!business_referrals_referred_business_id_fkey(id,name)')
+      .select('id,referred_name,referred_email,referred_phone,referred_business_type,status,reward_percent,reward_note,rewarded_at,created_at,referrer:businesses!business_referrals_referrer_business_id_fkey(id,name),referred:businesses!business_referrals_referred_business_id_fkey(id,name)')
       .order('created_at', { ascending: false }).limit(300)
     if (missing(error)) return NextResponse.json({ pendingMigration: true, referrals: [], promo: await readPromo(db) })
     if (error) throw error

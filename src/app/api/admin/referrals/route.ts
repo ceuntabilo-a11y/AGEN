@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireBusinessContext } from '@/lib/supabase-server'
 import { apiError } from '@/lib/http-errors'
-import { businessInviteLink, clientInviteLink, readPromo } from '@/lib/referrals'
+import { clientInviteLink, leadInviteLink, readPromo } from '@/lib/referrals'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +22,7 @@ export async function GET() {
     return NextResponse.json({
       code,
       promo,
-      businessLink: code ? businessInviteLink(code) : null,
+      businessLink: code ? leadInviteLink(code) : null,
       clientLink: business.data.slug ? clientInviteLink(business.data.slug) : null,
       referrals: referrals.data ?? [],
     })
