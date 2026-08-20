@@ -199,14 +199,25 @@ export async function POST(request: Request) {
   const apartados = await apartadosVivos(db, { businessId: body.businessId, clientId: cliente?.id ?? null, phone, timezone })
 
   /*
-   * Qué día y a qué hora pidió, entendido por código y con lo que ya se habló.
+   * Qué día y a qué hora pidió, entendido por código y con lo que ya se habló RECIÉN.
    *
    * Una persona dice el día en un mensaje y la hora en el siguiente («Para mañana» … «3pm»), y
    * el modelo perdía el hilo entre turnos. Aquí se leen los dos: este mensaje y lo que dijo el
    * cliente en la conversación reciente.
+   *
+   * "Reciente" tiene que tener un límite de tiempo. Fallo real: un cliente escribió el 17 de
+   * agosto "para mañana... tipo 2" y nunca llegó a reservar; el hilo de `conversations` sigue
+   * OPEN porque nada lo cierra automáticamente. Dos días después escribió algo sin relación
+   * ninguna, y como ese mensaje viejo seguía entre los últimos 4 del cliente, el código lo leyó
+   * como si el pedido fuera de ahora mismo y el agente preguntó "¿confirmas Corte y Peinado para
+   * mañana a las 14:00?" sin que nadie lo hubiera pedido en esa conversación. Seis horas alcanza
+   * para "para mañana" ahora y "3pm" un rato después, pero no arrastra un pedido de otro día.
    */
-  const dichoAntes = ((datos.recent ?? []) as Array<{ quien?: string; texto?: string }>)
-    .filter((linea) => linea.quien === 'cliente').map((linea) => String(linea.texto ?? '')).slice(-4).reverse()
+  const RECIENCIA_CUANDO_MS = 6 * 3600000
+  const ahora = Date.now()
+  const dichoAntes = ((datos.recent ?? []) as Array<{ quien?: string; texto?: string; creadoEn?: string }>)
+    .filter((linea) => linea.quien === 'cliente' && linea.creadoEn && ahora - new Date(linea.creadoEn).getTime() <= RECIENCIA_CUANDO_MS)
+    .map((linea) => String(linea.texto ?? '')).slice(-4).reverse()
   const cuando = interpretarCuando(mensaje, (datos.time ?? null) as ReferenciasTemporales | null, dichoAntes)
 
   const estado: EstadoDelTurno = {

@@ -106,6 +106,7 @@ async function cargarConversacion(
   return (data ?? []).reverse().map((fila) => ({
     quien: fila.sender === 'CLIENT' ? 'cliente' : fila.sender === 'AI' ? 'agen' : 'sistema',
     texto: String(fila.content ?? '').slice(0, 600),
+    creadoEn: fila.created_at as string,
   }))
 }
 
