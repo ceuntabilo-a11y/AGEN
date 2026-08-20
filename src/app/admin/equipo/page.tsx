@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { TeamAgentContacts } from '@/components/TeamAgentContacts'
 import { SpecialtyEditor } from '@/components/SpecialtyEditor'
 import { ListPlaceholder } from '@/components/ListPlaceholder'
+import { mensajeDeFallo } from '@/lib/api-fetch-error'
 
 type Professional = {
   id: string
@@ -28,7 +29,7 @@ export default function TeamPage() {
   const [items, setItems] = useState<Professional[]>([])
   const [specialties, setSpecialties] = useState<Array<{ id: string; name: string }>>([])
   const [brandColor, setBrandColor] = useState('#5b3df5')
-  const [error, setError] = useState(false)
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [show, setShow] = useState(false)
   const [schedule, setSchedule] = useState<{ id: string; name: string } | null>(null)
@@ -36,14 +37,15 @@ export default function TeamPage() {
   const [photoFor, setPhotoFor] = useState<Professional | null>(null)
 
   const load = () => fetch('/api/admin/catalog').then(async (response) => {
-    if (!response.ok) throw new Error()
+    if (!response.ok) { setError(mensajeDeFallo(response.status, 'administrar el equipo')); return null }
     return response.json()
   }).then((data) => {
+    if (!data) return
     setItems(data.professionals ?? [])
     setSpecialties(data.specialties ?? [])
     setBrandColor(typeof data.business?.settings?.brand_color === 'string' ? data.business.settings.brand_color : '#5b3df5')
-    setError(false)
-  }).catch(() => setError(true)).finally(() => setLoading(false))
+    setError('')
+  }).catch(() => setError(mensajeDeFallo(null, 'administrar el equipo'))).finally(() => setLoading(false))
 
   useEffect(() => { load() }, [])
 
@@ -60,7 +62,7 @@ export default function TeamPage() {
       onSaved={() => void load()}
     />}
     <PageHeader title="Equipo" description="Profesionales, especialidades, colores, horarios y comisiones." action={<button onClick={() => setShow(true)} className="inline-flex items-center gap-2 rounded-xl bg-[#5b3df5] px-4 py-2.5 text-sm font-bold text-white"><Plus size={17}/>Agregar profesional</button>}/>
-    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Conecta Supabase para administrar el equipo.</p>}
+    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{error}</p>}
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {items.map((professional) => {
         const specialty = specialties.find((item) => item.id === professional.professional_specialties?.[0]?.specialty_id)?.name ?? 'Sin especialidad'
@@ -88,7 +90,7 @@ export default function TeamPage() {
           </div>
         </article>
       })}
-      {items.length === 0 && <ListPlaceholder loading={loading} error={error} className="text-sm text-[#736f83]">Aún no hay profesionales.</ListPlaceholder>}
+      {items.length === 0 && <ListPlaceholder loading={loading} error={Boolean(error)} className="text-sm text-[#736f83]">Aún no hay profesionales.</ListPlaceholder>}
     </div>
     <SpecialtyEditor onChanged={load}/>
     <TeamAgentContacts/>

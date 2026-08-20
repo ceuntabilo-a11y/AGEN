@@ -2,6 +2,7 @@
 
 import { PageHeader } from '@/components/PageHeader'
 import { money } from '@/lib/money'
+import { mensajeDeFallo } from '@/lib/api-fetch-error'
 import { useEffect, useState } from 'react'
 
 type Stats = {
@@ -16,13 +17,16 @@ const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', '
 
 export default function ProfessionalStatsPage() {
   const [stats, setStats] = useState<Stats | null>(null)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     fetch('/api/professional/stats', { cache: 'no-store' })
-      .then(async (response) => { if (!response.ok) throw new Error(); return response.json() })
-      .then(setStats)
-      .catch(() => setError(true))
+      .then(async (response) => {
+        if (!response.ok) { setError(mensajeDeFallo(response.status, 'ver tus estadísticas')); return null }
+        return response.json()
+      })
+      .then((value) => { if (value) { setStats(value); setError('') } })
+      .catch(() => setError(mensajeDeFallo(null, 'ver tus estadísticas')))
   }, [])
 
   const maxHour = Math.max(1, ...(stats?.hours ?? []).map((row) => row.count))
@@ -30,7 +34,7 @@ export default function ProfessionalStatsPage() {
 
   return <>
     <PageHeader title="Mis estadísticas" description="Tus últimos 90 días: qué haces más, cuándo te buscan y cómo terminan tus reservas."/>
-    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Conecta Supabase para ver tus estadísticas.</p>}
+    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{error}</p>}
     {!stats && !error && <p className="text-sm text-[#736f83]">Cargando…</p>}
 
     {stats && <>

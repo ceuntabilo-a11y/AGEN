@@ -8,6 +8,7 @@ import { NewExpenseModal } from '@/components/NewExpenseModal'
 import { ConfirmDeleteModal } from '@/components/ConfirmDeleteModal'
 import { FinanceDetailModal, type FichaFinanciera } from '@/components/FinanceDetailModal'
 import { money } from '@/lib/money'
+import { mensajeDeFallo } from '@/lib/api-fetch-error'
 import { formatInZone } from '@/lib/timezone'
 import { CircleDollarSign, HandCoins, PackageOpen, Plus, Search, Trash2, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
@@ -24,7 +25,7 @@ const TABS: Array<[string, string]> = [['cobros', 'Cobros'], ['gastos', 'Gastos'
 
 export default function FinancePage() {
   const [data, setData] = useState<Data>(EMPTY)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState('')
   const [tab, setTab] = useState('cobros')
   const [modal, setModal] = useState<'quote' | 'payment' | 'expense' | null>(null)
   const [message, setMessage] = useState('')
@@ -34,9 +35,9 @@ export default function FinancePage() {
   const [buscado, setBuscado] = useState('')
 
   const load = useCallback((q = buscado) => fetch(`/api/admin/finance${q ? `?q=${encodeURIComponent(q)}` : ''}`, { cache: 'no-store' }).then(async (response) => {
-    if (!response.ok) throw new Error()
+    if (!response.ok) { setError(mensajeDeFallo(response.status, 'ver las cifras de Finanzas')); return null }
     return response.json()
-  }).then((value) => { setData({ ...EMPTY, ...value }); setError(false) }).catch(() => setError(true)), [buscado])
+  }).then((value) => { if (value) { setData({ ...EMPTY, ...value }); setError('') } }).catch(() => setError(mensajeDeFallo(null, 'ver las cifras de Finanzas'))), [buscado])
 
   useEffect(() => { void load() }, [load])
 
@@ -98,7 +99,7 @@ export default function FinancePage() {
       <button onClick={() => setModal('quote')} className="rounded-xl border px-4 py-2.5 text-sm font-bold">Nuevo presupuesto</button>
     </div>}/>
 
-    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Conecta Supabase para ver cifras reales. No se muestran valores ficticios.</p>}
+    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{error}</p>}
     {message && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{message}</p>}
 
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

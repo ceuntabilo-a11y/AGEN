@@ -1,6 +1,7 @@
 'use client'
 import { ModalShell } from '@/components/ModalShell'
 import { PageHeader } from '@/components/PageHeader'
+import { mensajeDeFallo } from '@/lib/api-fetch-error'
 import { Bot } from 'lucide-react'
 import { FormEvent, useEffect, useState } from 'react'
 
@@ -37,13 +38,18 @@ export default function AgentPage() {
   const [previewText, setPreviewText] = useState('Hola, soy el asistente virtual. ¿En qué puedo ayudarte hoy?')
 
   useEffect(() => {
-    fetch('/api/admin/settings').then(r => r.ok ? r.json() : Promise.reject())
+    fetch('/api/admin/settings').then(r => {
+      if (!r.ok) { setError(mensajeDeFallo(r.status, 'configurar el agente')); return null }
+      return r.json()
+    })
       .then(d => {
+        if (!d) return
         setBusiness(d.business)
         setHandoffEnabled(d.business?.agent_settings?.human_handoff_enabled === true)
         setHandoffPhone(String(d.business?.agent_settings?.handoff_phone ?? ''))
+        setError('')
       })
-      .catch(() => setError('Conecta Supabase para configurar el agente.'))
+      .catch(() => setError(mensajeDeFallo(null, 'configurar el agente')))
   }, [])
 
   async function submit(event: FormEvent<HTMLFormElement>) {

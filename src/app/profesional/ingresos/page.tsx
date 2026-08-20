@@ -2,6 +2,7 @@
 
 import { PageHeader } from '@/components/PageHeader'
 import { money } from '@/lib/money'
+import { mensajeDeFallo } from '@/lib/api-fetch-error'
 import { formatInZone } from '@/lib/timezone'
 import { useEffect, useState } from 'react'
 
@@ -10,18 +11,18 @@ const rangeStart = (range:string) => new Date(range.replace(/[\[\]()"]/g,'').spl
 
 export default function ProfessionalIncome() {
   const [data,setData] = useState<Data>({ professional:null, appointments:[], commission:0, timezone:'America/Santiago', currency:'CLP' })
-  const [error,setError] = useState(false)
+  const [error,setError] = useState('')
 
   useEffect(() => {
     fetch('/api/professional/income').then(async (response) => {
-      if (!response.ok) throw new Error()
+      if (!response.ok) { setError(mensajeDeFallo(response.status, 'calcular tus ingresos')); return null }
       return response.json()
-    }).then(setData).catch(() => setError(true))
+    }).then((value) => { if (value) { setData(value); setError('') } }).catch(() => setError(mensajeDeFallo(null, 'calcular tus ingresos')))
   },[])
 
   return <>
     <PageHeader title="Mis ingresos" description="Servicios completados y comisiones transparentes."/>
-    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Conecta Supabase para calcular tus ingresos.</p>}
+    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{error}</p>}
     <div className="rounded-2xl bg-[#19162b] p-6 text-white">
       <p className="text-white/60">Comisión acumulada este mes</p><b className="mt-2 block text-4xl">{money(data.commission,data.currency)}</b>
       <p className="mt-2 text-sm text-white/50">{data.professional?.commission_percent ?? 0}% · {data.appointments.length} servicios completados</p>

@@ -2,6 +2,7 @@
 
 import { PageHeader } from '@/components/PageHeader'
 import { StatCard } from '@/components/StatCard'
+import { mensajeDeFallo } from '@/lib/api-fetch-error'
 import { money } from '@/lib/money'
 import { formatTimeInZone } from '@/lib/timezone'
 import { CalendarCheck2, CircleDollarSign, Clock3, UserRoundCheck } from 'lucide-react'
@@ -21,22 +22,22 @@ const rangeStart = (range: string) => new Date(range.replace(/[\[\]()"]/g, '').s
 export default function AdminOverview() {
   const [data, setData] = useState<DashboardData>({ appointments: [], revenue: 0, newClients: 0, activeProfessionals: 0, timezone: 'America/Santiago', currency: 'CLP' })
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     fetch('/api/admin/dashboard')
       .then(async (response) => {
-        if (!response.ok) throw new Error()
+        if (!response.ok) { setError(mensajeDeFallo(response.status, 'ver el resumen del negocio')); return null }
         return response.json()
       })
-      .then(setData)
-      .catch(() => setError(true))
+      .then((value) => { if (value) { setData(value); setError('') } })
+      .catch(() => setError(mensajeDeFallo(null, 'ver el resumen del negocio')))
       .finally(() => setLoading(false))
   }, [])
 
   return <>
     <PageHeader title="Resumen del negocio" description="Actividad, reservas y resultados de hoy." action={<a href="/admin/agenda" className="rounded-xl bg-[#5b3df5] px-4 py-2.5 text-sm font-bold text-white">Abrir agenda</a>}/>
-    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Conecta Supabase para ver datos reales. No se muestran cifras inventadas.</p>}
+    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{error}</p>}
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard label="Reservas de hoy" value={loading ? '…' : String(data.appointments.length)} detail={`${data.appointments.filter((appointment) => appointment.status === 'CONFIRMED').length} confirmadas`} icon={CalendarCheck2}/>
       <StatCard label="Ingresos de hoy" value={loading ? '…' : money(data.revenue, data.currency)} detail="Pagos confirmados" icon={CircleDollarSign} tone="#17b890"/>

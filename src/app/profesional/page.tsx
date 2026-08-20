@@ -3,6 +3,7 @@
 import { PageHeader } from '@/components/PageHeader'
 import { StatCard } from '@/components/StatCard'
 import { money } from '@/lib/money'
+import { mensajeDeFallo } from '@/lib/api-fetch-error'
 import { formatTimeInZone } from '@/lib/timezone'
 import { CalendarCheck2, CircleDollarSign, Clock3 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -12,18 +13,18 @@ const start = (range:string) => new Date(range.replace(/[\[\]()"]/g,'').split(',
 
 export default function ProfessionalPage() {
   const [data,setData] = useState<Data>({ professional:null, appointments:[], commission:0, timezone:'America/Santiago', currency:'CLP' })
-  const [error,setError] = useState(false)
+  const [error,setError] = useState('')
 
   useEffect(() => {
     fetch('/api/professional/dashboard').then(async (response) => {
-      if (!response.ok) throw new Error()
+      if (!response.ok) { setError(mensajeDeFallo(response.status, 'cargar tu día')); return null }
       return response.json()
-    }).then(setData).catch(() => setError(true))
+    }).then((value) => { if (value) { setData(value); setError('') } }).catch(() => setError(mensajeDeFallo(null, 'cargar tu día')))
   },[])
 
   return <>
     <PageHeader title={data.professional ? `Hola, ${data.professional.display_name.split(' ')[0]}` : 'Mi día'} description="Tu jornada y resultados de hoy."/>
-    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Conecta Supabase y asigna la cuenta al profesional.</p>}
+    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{error}</p>}
     <div className="grid gap-4 sm:grid-cols-3">
       <StatCard label="Reservas" value={String(data.appointments.length)} detail="Agenda de hoy" icon={CalendarCheck2}/>
       <StatCard label="Completadas" value={String(data.appointments.filter((appointment) => appointment.status === 'COMPLETED').length)} detail="Atenciones finalizadas" icon={Clock3} tone="#ff9f43"/>

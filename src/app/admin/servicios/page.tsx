@@ -6,6 +6,7 @@ import { money } from '@/lib/money'
 import { Clock3, Pencil, Plus } from 'lucide-react'
 import { EditServiceModal } from '@/components/EditServiceModal'
 import { ListPlaceholder } from '@/components/ListPlaceholder'
+import { mensajeDeFallo } from '@/lib/api-fetch-error'
 import { useEffect, useState } from 'react'
 
 type Service = {
@@ -26,18 +27,19 @@ type Service = {
 export default function ServicesPage() {
   const [services,setServices] = useState<Service[]>([])
   const [currency,setCurrency] = useState('CLP')
-  const [error,setError] = useState(false)
+  const [error,setError] = useState('')
   const [loading,setLoading] = useState(true)
   const [show,setShow] = useState(false)
   const [editing,setEditing] = useState<Service|null>(null)
   const load = () => fetch('/api/admin/catalog').then(async (response) => {
-    if (!response.ok) throw new Error()
+    if (!response.ok) { setError(mensajeDeFallo(response.status, 'administrar servicios')); return null }
     return response.json()
   }).then((data) => {
+    if (!data) return
     setServices(data.services ?? [])
     setCurrency(data.business?.currency ?? 'CLP')
-    setError(false)
-  }).catch(() => setError(true)).finally(() => setLoading(false))
+    setError('')
+  }).catch(() => setError(mensajeDeFallo(null, 'administrar servicios'))).finally(() => setLoading(false))
 
   useEffect(() => { load() }, [])
 
@@ -45,7 +47,7 @@ export default function ServicesPage() {
     {show && <NewServiceModal onClose={() => setShow(false)} onCreated={load}/>}
     {editing && <EditServiceModal service={editing} onClose={() => setEditing(null)} onSaved={() => { void load().then(() => setEditing(null)) }}/>}
     <PageHeader title="Servicios" description="Duración, precios, costos y profesionales autorizados." action={<button onClick={() => setShow(true)} className="inline-flex items-center gap-2 rounded-xl bg-[#5b3df5] px-4 py-2.5 text-sm font-bold text-white"><Plus size={17}/>Nuevo servicio</button>}/>
-    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Conecta Supabase para administrar servicios.</p>}
+    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{error}</p>}
     <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-sm">
@@ -60,7 +62,7 @@ export default function ServicesPage() {
             <td className="pr-4 text-right"><button type="button" onClick={() => setEditing(service)} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold"><Pencil size={14}/>Editar</button></td>
           </tr>)}</tbody>
         </table>
-        {services.length === 0 && <ListPlaceholder loading={loading} error={error}>Aún no hay servicios.</ListPlaceholder>}
+        {services.length === 0 && <ListPlaceholder loading={loading} error={Boolean(error)}>Aún no hay servicios.</ListPlaceholder>}
       </div>
     </div>
   </>
