@@ -11,7 +11,7 @@
 /** Duraciones ofrecidas al crear o editar. `null` = sin vencimiento (cliente pagado). */
 export const DURACIONES = [1, 3, 7, 15, 30, 60] as const
 
-export type EstadoNegocio = 'ACTIVO' | 'DEMO' | 'VENCIDO' | 'SUSPENDIDO' | 'INACTIVO'
+export type EstadoNegocio = 'ACTIVO' | 'DEMO' | 'PENDIENTE' | 'VENCIDO' | 'SUSPENDIDO' | 'INACTIVO'
 
 /**
  * El identificador del negocio dentro de una URL.
@@ -61,25 +61,35 @@ export function diasRestantes(expiresOn: string | null | undefined, hoy: string)
 
 /**
  * En qué estado está el negocio HOY, mirando en el mismo orden en que importa:
- * suspendido gana sobre todo, después apagado, después vencido, y solo entonces demo o activo.
+ * suspendido gana sobre todo, después apagado, después vencido, después pendiente de que el
+ * dueño acepte su invitación, y solo entonces demo o producción.
  *
  * Se calcula, no se guarda: una columna de estado se queda vieja sola en cuanto pasa la
  * medianoche, y entonces el panel muestra como vigente algo que venció ayer.
+ *
+ * `invitacion` es la última invitación mandada a su dueño. `undefined`/`null` = no hay ninguna
+ * (negocios creados antes de que existiera este seguimiento, o sin dueño invitado todavía) y no
+ * bloquea nada. Si existe y su `status` no es `ACCEPTED` (`PENDING` o `EXPIRED`), el dueño
+ * todavía no entró nunca: no cuenta como Activo ni como Demo, aunque el contrato esté vigente —
+ * es lo que evita que el MRR sume un negocio cuyo dueño ni siquiera puso su contraseña.
  */
 export function estadoDeNegocio(
   negocio: { active?: boolean | null; suspended_at?: string | null; is_demo?: boolean | null; expires_on?: string | null },
   hoy: string,
+  invitacion?: { status?: string | null } | null,
 ): EstadoNegocio {
   if (negocio.suspended_at) return 'SUSPENDIDO'
   if (negocio.active === false) return 'INACTIVO'
   const restantes = diasRestantes(negocio.expires_on, hoy)
   if (restantes !== null && restantes < 0) return 'VENCIDO'
+  if (invitacion && invitacion.status !== 'ACCEPTED') return 'PENDIENTE'
   return negocio.is_demo ? 'DEMO' : 'ACTIVO'
 }
 
 export const ETIQUETA_ESTADO: Record<EstadoNegocio, string> = {
-  ACTIVO: 'Activo',
-  DEMO: 'Demo',
+  ACTIVO: 'Activo en producción',
+  DEMO: 'Activo en demo',
+  PENDIENTE: 'Pendiente de activación',
   VENCIDO: 'Vencido',
   SUSPENDIDO: 'Suspendido',
   INACTIVO: 'Inactivo',

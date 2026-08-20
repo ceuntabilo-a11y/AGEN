@@ -45,7 +45,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (body.active !== undefined) cambios.active = body.active
     if (body.suspended !== undefined) cambios.suspended_at = body.suspended ? new Date().toISOString() : null
     if (body.planId !== undefined) cambios.plan_id = body.planId
-    if (body.isDemo !== undefined) cambios.is_demo = body.isDemo === true
+    if (body.isDemo !== undefined) {
+      cambios.is_demo = body.isDemo === true
+      /*
+       * Pasar de demo a producción por la edición normal también cuenta como "convertida" para
+       * la tasa de conversión del panel. Antes solo lo registraba el flag `converted` aparte,
+       * que ninguna pantalla llama, así que esa métrica se quedaba en 0 para siempre aunque el
+       * administrador sí convirtiera demos todo el tiempo por acá.
+       */
+      if (body.isDemo === false && body.converted === undefined) {
+        const actual = await db.from('businesses').select('is_demo,converted_at').eq('id', id).single()
+        if (actual.data?.is_demo && !actual.data.converted_at) cambios.converted_at = new Date().toISOString()
+      }
+    }
     if (body.startsOn !== undefined) {
       if (!esFecha(body.startsOn)) return NextResponse.json({ error: 'La fecha de inicio no es válida' }, { status: 400 })
       cambios.starts_on = body.startsOn

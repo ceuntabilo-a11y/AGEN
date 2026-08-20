@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react'
 type Servicio = 'OPERATIVO' | 'CAIDO' | 'SIN_CONFIGURAR'
 
 type Resumen = {
-  negocios: { total: number; activos: number; demos: number; vencidos: number; suspendidos: number; inactivos: number; nuevosSemana: number; nuevosMes: number }
+  negocios: { total: number; activos: number; demos: number; pendientes: number; vencidos: number; suspendidos: number; inactivos: number; nuevosSemana: number; nuevosMes: number }
   demos: {
     entregadas: number; activas: number; vencidas: number; convertidas: number; conversion: number
     nuevasSemana: number; nuevasMes: number
@@ -77,10 +77,12 @@ export default function PlatformOverviewPage() {
       <section className="grid gap-4 lg:grid-cols-3">
         <article className="rounded-2xl border bg-white p-5 lg:col-span-2">
           <div className="flex items-center gap-2"><Building2 size={18} className="text-[#5b3df5]" /><b>Negocios</b></div>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <p className="mt-1 text-xs text-[#9a96a5]">&quot;Activos&quot; son los que ya pagan (producción). &quot;Pendientes&quot; ya tienen negocio creado pero su dueño todavía no aceptó la invitación ni entró nunca — no cuentan como activos ni suman al MRR hasta que entren.</p>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
             <Dato etiqueta="Total" valor={data.negocios.total} />
             <Dato etiqueta="Activos" valor={data.negocios.activos} />
             <Dato etiqueta="En demo" valor={data.negocios.demos} />
+            <Dato etiqueta="Pendientes" valor={data.negocios.pendientes} />
             <Dato etiqueta="Vencidos" valor={data.negocios.vencidos} />
             <Dato etiqueta="Suspendidos" valor={data.negocios.suspendidos} />
             <Dato etiqueta="Inactivos" valor={data.negocios.inactivos} />

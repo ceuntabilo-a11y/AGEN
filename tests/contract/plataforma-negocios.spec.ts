@@ -89,6 +89,26 @@ test.describe('El estado del negocio se calcula, no se guarda', () => {
   test('el aviso de vencimiento mira una semana por delante', () => {
     expect(AVISO_VENCIMIENTO_DIAS).toBe(7)
   })
+
+  test('sin invitación registrada, nada cambia (negocios de antes de este seguimiento)', () => {
+    expect(estadoDeNegocio({ active: true, suspended_at: null, is_demo: false, expires_on: null }, HOY, null)).toBe('ACTIVO')
+    expect(estadoDeNegocio({ active: true, suspended_at: null, is_demo: false, expires_on: null }, HOY, undefined)).toBe('ACTIVO')
+  })
+
+  test('con invitación pendiente o vencida, el dueño nunca entró: no cuenta como activo ni como demo', () => {
+    expect(estadoDeNegocio({ active: true, suspended_at: null, is_demo: false, expires_on: null }, HOY, { status: 'PENDING' })).toBe('PENDIENTE')
+    expect(estadoDeNegocio({ active: true, suspended_at: null, is_demo: true, expires_on: null }, HOY, { status: 'EXPIRED' })).toBe('PENDIENTE')
+  })
+
+  test('con invitación aceptada, vuelve a ser demo o producción normal', () => {
+    expect(estadoDeNegocio({ active: true, suspended_at: null, is_demo: false, expires_on: null }, HOY, { status: 'ACCEPTED' })).toBe('ACTIVO')
+    expect(estadoDeNegocio({ active: true, suspended_at: null, is_demo: true, expires_on: null }, HOY, { status: 'ACCEPTED' })).toBe('DEMO')
+  })
+
+  test('suspendido y vencido ganan sobre pendiente de invitación', () => {
+    expect(estadoDeNegocio({ active: true, suspended_at: '2026-08-01', is_demo: false, expires_on: null }, HOY, { status: 'PENDING' })).toBe('SUSPENDIDO')
+    expect(estadoDeNegocio({ active: true, suspended_at: null, is_demo: false, expires_on: '2026-08-01' }, HOY, { status: 'PENDING' })).toBe('VENCIDO')
+  })
 })
 
 /*

@@ -28,6 +28,7 @@ type Negocio = {
 const COLOR_ESTADO: Record<EstadoNegocio, string> = {
   ACTIVO: 'bg-emerald-50 text-emerald-700',
   DEMO: 'bg-[#efeaff] text-[#5b3df5]',
+  PENDIENTE: 'bg-amber-50 text-amber-800',
   VENCIDO: 'bg-red-50 text-red-700',
   SUSPENDIDO: 'bg-amber-50 text-amber-800',
   INACTIVO: 'bg-[#f1eff7] text-[#736f83]',
@@ -242,7 +243,7 @@ export default function PlatformBusinessesPage() {
     {creando && confirmando && <ModalShell titulo="Confirmar creación" onClose={() => setConfirmando(false)}>
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6">
         <h2 className="text-xl font-black">¿Creamos este negocio?</h2>
-        <p className="mt-1 text-sm text-[#736f83]">Se enviará una invitación a <b>{creando.ownerEmail}</b> para que cree su contraseña.</p>
+        <p className="mt-1 text-sm text-[#736f83]">Se enviará una invitación a <b>{creando.ownerEmail}</b> para que cree su contraseña. Hasta que la acepte, el negocio queda en &quot;Pendiente de activación&quot; — no cuenta como activo ni suma a tus ingresos.</p>
         <div className="mt-5"><ResumenCreacion valores={creando} planes={planes} /></div>
         {errorModal && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700" role="alert">{errorModal}</p>}
         <div className="mt-6 flex gap-2">
