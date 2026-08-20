@@ -372,3 +372,37 @@ export const ARTICULOS_AYUDA: ArticuloAyuda[] = [
     respuesta: 'En la pantalla de inicio de sesión, "¿Olvidaste tu contraseña?". Te llega un correo para elegir una nueva.',
   },
 ]
+
+/** A qué categoría de ARTICULOS_AYUDA pertenece cada pantalla del panel del dueño. */
+const RUTA_A_CATEGORIA: Array<[string, string]> = [
+  ['/admin/agenda', 'Agenda'],
+  ['/admin/equipo', 'Equipo'],
+  ['/admin/servicios', 'Servicios'],
+  ['/admin/clientes', 'Clientes'],
+  ['/admin/conversaciones', 'Conversaciones'],
+  ['/admin/seguimiento', 'Seguimiento'],
+  ['/admin/finanzas', 'Finanzas'],
+  ['/admin/marketing', 'Marketing'],
+  ['/admin/galeria', 'Galería'],
+  ['/admin/encuestas', 'Encuestas'],
+  ['/admin/agente', 'Agente IA'],
+  ['/admin/integraciones', 'Integraciones'],
+  ['/admin/configuracion', 'Configuración'],
+  ['/admin/invitar', 'Invitar'],
+]
+
+/**
+ * Para que el asistente flotante sepa en qué pantalla está el dueño sin que el navegador le
+ * mande nada más que la URL: `null` cuando la pantalla no tiene una categoría propia en la base
+ * de ayuda (el Resumen, por ejemplo).
+ */
+export function categoriaDePagina(pathname: string): string | null {
+  const encontrada = RUTA_A_CATEGORIA.find(([ruta]) => pathname === ruta || pathname.startsWith(`${ruta}/`))
+  return encontrada ? encontrada[1] : null
+}
+
+/** Nombre en español de la pantalla actual, para que el asistente lo mencione si hace falta. */
+export function nombreDePagina(pathname: string): string {
+  if (pathname === '/admin' || pathname === '/admin/') return 'Resumen (panel principal)'
+  return categoriaDePagina(pathname) ?? 'el panel de Agen'
+}

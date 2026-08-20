@@ -14,6 +14,6 @@ test.describe('Admin — navegación', () => {
     await irA(page, '/admin', 'Resumen del negocio')
     await expect(page.getByRole('button', { name: 'Notificaciones' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Menú de usuario' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Abrir copiloto' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Abrir el asistente de Agen' })).toBeVisible()
   })
 })

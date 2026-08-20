@@ -4,13 +4,16 @@ import {requireBusinessContext} from '@/lib/supabase-server'
 import {dateKeyInZone,zonedDayRange} from '@/lib/timezone'
 import {rateLimited} from '@/lib/rate-limit'
 import {chatCompletion,resolveOpenAiKey} from '@/lib/openai'
+import {ARTICULOS_AYUDA,categoriaDePagina,nombreDePagina} from '@/lib/help-content'
+import {buscarAyuda} from '@/lib/help-search'
 
 export async function POST(request:Request){
   try{
     const {db,businessId}=await requireBusinessContext(['OWNER','ADMIN','RECEPTIONIST'])
     if(rateLimited(`copilot:${businessId}`,30,60_000))return NextResponse.json({error:'Demasiadas preguntas seguidas, espera un minuto'},{status:429})
-    const body=await request.json().catch(()=>({})) as {question?:string}
+    const body=await request.json().catch(()=>({})) as {question?:string;page?:string}
     const question=body.question?.trim().slice(0,300)
+    const pagina=String(body.page??'').slice(0,200)
     if(!question)return NextResponse.json({error:'Escribe una pregunta'},{status:400})
     const {data:business,error:businessError}=await db.from('businesses').select('timezone,currency,openai_api_key').eq('id',businessId).single()
     if(businessError)throw businessError
@@ -39,12 +42,26 @@ export async function POST(request:Request){
       /servicio|especialidad|precio/.test(text)?{reply:`Hay ${services.count??0} servicios activos en el catálogo.`,href:'/admin/servicios',label:'Abrir servicios'}:
       {reply:`Hoy: ${rows.length} reservas, ${followups.count??0} seguimientos y ${waitlist.count??0} personas esperando cupo. Puedo ayudarte con agenda, clientes, equipo, servicios, seguimiento o finanzas.`,href:'/admin',label:'Abrir resumen'}
     const facts=`Reservas hoy: ${rows.length} (${confirmed} confirmadas, ${pending} pendientes). Tareas de seguimiento pendientes: ${followups.count??0}. Clientes esperando cupo: ${waitlist.count??0}. Pagos de hoy: ${money}. Clientes registrados: ${clients.count??0}. Profesionales activos: ${professionals.count??0}. Servicios activos: ${services.count??0}.`
+
+    /*
+     * El mismo buscador sin costo de IA del Centro de ayuda (Tanda 9) filtra qué artículos son
+     * relevantes ANTES de llamar al modelo: por la pregunta, y por la pantalla donde está parado
+     * el dueño (aunque pregunte algo que no calza con ningún alias). Así el modelo explica cómo
+     * funciona Agen citando SOLO hechos reales ya escritos, en vez de inventar un botón que no
+     * existe.
+     */
+    const categoriaActual=categoriaDePagina(pagina)
+    const porPregunta=buscarAyuda(question,ARTICULOS_AYUDA,4)
+    const porPantalla=categoriaActual?ARTICULOS_AYUDA.filter(articulo=>articulo.categoria===categoriaActual):[]
+    const articulos=Array.from(new Map([...porPregunta,...porPantalla].map(articulo=>[articulo.id,articulo])).values()).slice(0,8)
+    const ayuda=articulos.map(articulo=>`- ${articulo.pregunta} → ${articulo.respuesta}`).join('\n')
+
     const {key}=await resolveOpenAiKey(business.openai_api_key)
     if(key){
       try{
         const reply=await chatCompletion(key,[
-          {role:'system',content:'Eres el copiloto interno de Agen, solo lectura. USA ÚNICAMENTE los datos entregados, nunca inventes cifras ni datos que no estén ahí. Si preguntan algo que no está en los datos, dilo claramente. Responde en español, natural y en máximo 2 líneas cortas.'},
-          {role:'user',content:`Datos reales del negocio hoy: ${facts}\nPregunta: ${question}`},
+          {role:'system',content:'Eres el asistente interno de Agen: solo lectura, nunca ejecutás ninguna acción vos mismo (no reservás, no cambiás nada, no borrás nada) — si el dueño quiere hacer algo, decile el botón y la pantalla exactos, nunca digas que ya lo hiciste. Podés explicar cómo funciona cualquier parte de la app y contar datos reales del negocio. USA ÚNICAMENTE los datos y artículos entregados, nunca inventes cifras, botones ni pantallas que no estén ahí — si no sabés algo, decilo claramente. Responde en español, natural, en máximo 4 líneas cortas.'},
+          {role:'user',content:`Pantalla actual del dueño: ${nombreDePagina(pagina)}\nDatos reales del negocio hoy: ${facts}\nArtículos de ayuda relevantes:\n${ayuda||'(ninguno coincide con esta pregunta)'}\nPregunta: ${question}`},
         ])
         return NextResponse.json({reply,href:route.href,label:route.label})
       }catch{}
