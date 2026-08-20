@@ -1,6 +1,5 @@
 'use client'
 import { FormEvent, useCallback, useEffect, useState } from 'react'
-import { X } from 'lucide-react'
 import { ModalShell } from '@/components/ModalShell'
 
 type Opcion = { id: string; name?: string; display_name?: string }
@@ -76,7 +75,6 @@ export function NewServiceModal({ onClose, onCreated }: { onClose: () => void; o
             <h2 className="text-xl font-black">Nuevo servicio</h2>
             <p className="text-sm text-[#736f83]">Define precio, costo y profesionales habilitados.</p>
           </div>
-          <button type="button" aria-label="Cerrar" onClick={onClose}><X /></button>
         </div>
 
         {falloCatalogo && (

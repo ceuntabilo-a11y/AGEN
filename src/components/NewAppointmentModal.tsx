@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { AlertTriangle, X } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { dateKeyInZone, formatInZone, formatTimeInZone, zonedDayRange } from '@/lib/timezone'
 import { ModalShell } from '@/components/ModalShell'
 
@@ -63,7 +63,6 @@ export function NewAppointmentModal({ onClose, onCreated, timezone = 'America/Sa
     <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
       <div className="flex items-center justify-between">
         <div><h2 className="text-xl font-black">Nueva reserva</h2><p className="text-sm text-[#736f83]">La hora se revalida al confirmar.</p></div>
-        <button aria-label="Cerrar" onClick={onClose} className="rounded-lg p-2 hover:bg-black/5"><X/></button>
       </div>
 
       {error && <p role="alert" className="mt-4 flex items-start gap-2 rounded-2xl border-2 border-red-300 bg-red-50 p-4 text-sm font-bold text-red-800"><AlertTriangle size={20} className="shrink-0"/><span>{error}</span></p>}
