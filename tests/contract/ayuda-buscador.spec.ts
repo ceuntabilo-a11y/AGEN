@@ -58,4 +58,10 @@ test.describe('buscarAyuda', () => {
     const resultado = buscarAyuda('quiero cambiar la imagen de un estilista', ARTICULOS_AYUDA)
     expect(resultado.map((articulo) => articulo.id)).toContain('equipo-foto-profesional')
   })
+
+  test('la ampliación de la base cubre la auditoría de /admin (Finanzas, Marketing, Resumen)', () => {
+    expect(buscarAyuda('el marcar enviado de un presupuesto manda algo', ARTICULOS_AYUDA).map((a) => a.id)).toContain('finanzas-marcar-enviado-no-manda-nada')
+    expect(buscarAyuda('por qué llega a menos gente la campaña', ARTICULOS_AYUDA).map((a) => a.id)).toContain('marketing-consentimiento-manda-siempre')
+    expect(buscarAyuda('qué cuentan los ingresos de hoy', ARTICULOS_AYUDA).map((a) => a.id)).toContain('resumen-ingresos-de-hoy')
+  })
 })
