@@ -1,6 +1,5 @@
 'use client'
 import { FormEvent, useState } from 'react'
-import { X } from 'lucide-react'
 import { ModalShell } from '@/components/ModalShell'
 import { zonedDateTimeToUtc } from '@/lib/timezone'
 
@@ -62,7 +61,6 @@ export function NewBlockModal({
       <form onSubmit={submit} className="w-full max-w-md rounded-3xl bg-white p-6">
         <div className="flex justify-between">
           <h2 className="text-xl font-black">Bloquear horario</h2>
-          <button type="button" aria-label="Cerrar" onClick={onClose}><X /></button>
         </div>
         <p className="mt-1 text-sm text-[#736f83]">Horas de {timeZone.split('/').pop()?.replace('_', ' ')}, las del negocio.</p>
         <label className="mt-5 block text-sm font-semibold">

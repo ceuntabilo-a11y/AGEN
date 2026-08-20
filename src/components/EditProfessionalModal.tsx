@@ -1,7 +1,6 @@
 'use client'
 
 import { FormEvent, useEffect, useState } from 'react'
-import { X } from 'lucide-react'
 import { ModalShell } from '@/components/ModalShell'
 
 type Professional = {
@@ -74,7 +73,6 @@ export function EditProfessionalModal({ professional, onClose, onSaved }: { prof
     <form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6">
       <div className="flex justify-between">
         <div><h2 className="text-xl font-black">Editar profesional</h2><p className="text-sm text-[#736f83]">{professional.display_name}</p></div>
-        <button type="button" aria-label="Cerrar" onClick={onClose}><X/></button>
       </div>
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <label className="text-sm font-semibold">Nombre<input name="displayName" defaultValue={professional.display_name} required className="mt-2 w-full rounded-xl border p-3"/></label>

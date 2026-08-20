@@ -1,7 +1,6 @@
 'use client'
 
 import { FormEvent, useEffect, useState } from 'react'
-import { X } from 'lucide-react'
 import { ModalShell } from '@/components/ModalShell'
 
 const METHODS: Array<[string, string]> = [['EFECTIVO', 'Efectivo'], ['TARJETA', 'Tarjeta'], ['TRANSFERENCIA', 'Transferencia'], ['OTRO', 'Otro']]
@@ -36,7 +35,6 @@ export function NewPaymentModal({ onClose, onCreated }: { onClose: () => void; o
     <form onSubmit={submit} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6">
       <div className="flex justify-between">
         <div><h2 className="text-xl font-black">Registrar cobro</h2><p className="text-sm text-[#736f83]">Queda contado en las ventas del mes.</p></div>
-        <button type="button" aria-label="Cerrar" onClick={onClose}><X/></button>
       </div>
       <label className="mt-5 block text-sm font-semibold">Cliente
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por nombre o teléfono" className="mt-2 w-full rounded-xl border p-3"/>
