@@ -7,6 +7,8 @@ type Referral = {
   id: string
   referred_name: string | null
   referred_email: string | null
+  referred_phone: string | null
+  referred_business_type: string | null
   status: string
   reward_percent: number | null
   reward_note: string | null
@@ -25,7 +27,7 @@ const STATUS: Record<string, { label: string; className: string }> = {
 
 export default function PlatformReferralsPage() {
   const [referrals, setReferrals] = useState<Referral[]>([])
-  const [promo, setPromo] = useState({ headline: '', percent: 20, terms: '' })
+  const [promo, setPromo] = useState({ enabled: true, headline: '', percent: 20, terms: '' })
   const [pendingMigration, setPendingMigration] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -52,7 +54,12 @@ export default function PlatformReferralsPage() {
     const response = await fetch('/api/platform/settings', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ referral_headline: form.get('headline'), referral_percent: String(form.get('percent')), referral_terms: form.get('terms') }),
+      body: JSON.stringify({
+        referral_enabled: form.get('enabled') === 'on' ? 'true' : 'false',
+        referral_headline: form.get('headline'),
+        referral_percent: String(form.get('percent')),
+        referral_terms: form.get('terms'),
+      }),
     })
     if (!response.ok) { setError('No se pudo guardar la promoción'); return }
     setMessage('Promoción guardada. Todos los negocios ven este texto.')
@@ -66,13 +73,14 @@ export default function PlatformReferralsPage() {
   }
 
   return <>
-    <PageHeader title="Invitaciones" description="Qué negocio trajo a quién y qué descuentos quedan por aplicar."/>
+    <PageHeader title="Invitaciones" description="Quién pidió que lo contactaran, qué negocio lo invitó y qué descuentos quedan por aplicar."/>
     {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{error}</p>}
     {pendingMigration && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Falta aplicar la migración de invitaciones en la base de datos.</p>}
 
     <form onSubmit={savePromo} className="rounded-2xl border border-black/5 bg-white p-5">
       <h2 className="font-extrabold">La promoción que ven los negocios</h2>
-      <p className="mt-1 text-sm text-[#736f83]">El descuento lo pagas tú, así que este texto se define una sola vez acá.</p>
+      <p className="mt-1 text-sm text-[#736f83]">El descuento lo pagas tú. Apágala cuando quieras — la pantalla de Invitar de cada negocio deja de mencionar ningún premio.</p>
+      <label className="mt-4 flex items-center gap-2 text-sm font-semibold"><input key={String(promo.enabled)} name="enabled" type="checkbox" defaultChecked={promo.enabled}/>Promoción activa</label>
       <label className="mt-4 block text-sm font-semibold">Titular<input key={promo.headline} name="headline" defaultValue={promo.headline} className="mt-2 w-full rounded-xl border p-3"/></label>
       <label className="mt-4 block text-sm font-semibold">Descuento (%)<input key={promo.percent} name="percent" type="number" min="0" max="100" step="1" defaultValue={promo.percent} className="mt-2 w-full rounded-xl border p-3"/></label>
       <label className="mt-4 block text-sm font-semibold">Condiciones<textarea key={promo.terms} name="terms" rows={2} defaultValue={promo.terms} className="mt-2 w-full rounded-xl border p-3"/></label>
@@ -81,14 +89,18 @@ export default function PlatformReferralsPage() {
     </form>
 
     <section className="mt-6 rounded-2xl border border-black/5 bg-white p-5">
-      <h2 className="font-extrabold">Invitaciones</h2>
+      <h2 className="font-extrabold">Pedidos de contacto</h2>
       <div className="mt-4 space-y-2">
         {referrals.map((referral) => {
           const status = STATUS[referral.status] ?? { label: referral.status, className: 'bg-slate-100 text-slate-600' }
           return <div key={referral.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/5 p-3">
             <div className="min-w-0">
-              <b className="text-sm">{referral.referrer?.name ?? 'Negocio'} → {referral.referred?.name ?? referral.referred_name ?? 'invitado'}</b>
-              <p className="text-xs text-[#736f83]">{referral.referred_email ?? 'sin correo'} · {referral.reward_percent ?? 0}% · {new Date(referral.created_at).toLocaleDateString('es-CL')}</p>
+              <b className="text-sm">{referral.referred?.name ?? referral.referred_name ?? 'Interesado'}</b>
+              <p className="text-xs text-[#736f83]">
+                {referral.referred_phone ?? 'sin teléfono'} · {referral.referred_email ?? 'sin correo'}
+                {referral.referred_business_type && <> · {referral.referred_business_type}</>}
+                {' · '}invitado por {referral.referrer?.name ?? 'nadie (llegó solo)'} · {referral.reward_percent ?? 0}% · {new Date(referral.created_at).toLocaleDateString('es-CL')}
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-full px-3 py-1 text-xs font-bold ${status.className}`}>{status.label}</span>
