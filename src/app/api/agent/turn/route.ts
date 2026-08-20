@@ -218,7 +218,9 @@ export async function POST(request: Request) {
   const dichoAntes = ((datos.recent ?? []) as Array<{ quien?: string; texto?: string; creadoEn?: string }>)
     .filter((linea) => linea.quien === 'cliente' && linea.creadoEn && ahora - new Date(linea.creadoEn).getTime() <= RECIENCIA_CUANDO_MS)
     .map((linea) => String(linea.texto ?? '')).slice(-4).reverse()
-  const cuando = interpretarCuando(mensaje, (datos.time ?? null) as ReferenciasTemporales | null, dichoAntes)
+  const ultimaRespuestaAgente = ((datos.recent ?? []) as Array<{ quien?: string; texto?: string }>)
+    .filter((linea) => linea.quien === 'agen').map((linea) => String(linea.texto ?? '')).pop() ?? null
+  const cuando = interpretarCuando(mensaje, (datos.time ?? null) as ReferenciasTemporales | null, dichoAntes, ultimaRespuestaAgente)
 
   const estado: EstadoDelTurno = {
     actorType: datos.actorType === 'TEAM' ? 'TEAM' : 'CLIENT',
@@ -233,8 +235,7 @@ export async function POST(request: Request) {
     cuando,
     // Solo el mensaje de ESTE turno decide si pide otra hora: lo de antes ya se le ofreció.
     pideOtroHorario: pideOtroHorario(mensaje, apartados.map((item) => ({ hora: item.hora, fecha: item.start.slice(0, 10) })), (datos.time ?? null) as ReferenciasTemporales | null),
-    ultimaRespuesta: ((datos.recent ?? []) as Array<{ quien?: string; texto?: string }>)
-      .filter((linea) => linea.quien === 'agen').map((linea) => String(linea.texto ?? '')).pop() ?? null,
+    ultimaRespuesta: ultimaRespuestaAgente,
   }
 
   const cumple = esCumpleanosHoy(estado.nacimientoCliente, timezone)

@@ -437,6 +437,47 @@ test.describe('A9 — dos cosas en el mismo mensaje', () => {
   })
 })
 
+/* ═══════════ A10. Contesta un día después, sin repetir la hora ═══════════ */
+
+test.describe('A10 — el cliente contesta tarde y no repite la hora', () => {
+  /*
+   * El caso real (2026-08-20): el agente preguntó "¿Confirmas Corte y Peinado para mañana a las
+   * 14:00?" y el cliente tardó más de un día en contestar "Sí, por favor" — sin repetir la
+   * hora. Como interpretarCuando solo miraba mensajes DEL CLIENTE, PEDIDO llegó vacío: buscó el
+   * día completo desde las 00:00 con tope de 3 resultados, que se llenaron con las 9 de la
+   * mañana sin llegar nunca a revisar las 14:00. El modelo dijo "a las 14:00 no me queda"
+   * basado en una búsqueda que nunca miró esa hora.
+   */
+  test('un "sí" sin fecha propia hereda la hora de la última pregunta del agente', () => {
+    const time = referenciasTemporales(new Date(), ZONA)
+    const pedido = interpretarCuando('Sí, por favor', time, [], '¿Confirmas Corte y Peinado (caballero) para mañana a las 14:00?')
+    expect(pedido.hora).toBe('14:00')
+    expect(pedido.fecha).toBe(time.manana.fecha)
+    expect(pedido.desde).toContain('T14:00')
+  })
+
+  test('el turno le entrega al modelo la hora heredada, no una ventana del día completo', async () => {
+    conHistorial([
+      { quien: 'agen', texto: '¿Confirmas Corte y Peinado (caballero) para mañana a las 14:00?' },
+    ])
+    const cuerpo = await turno('Sí, por favor')
+    expect(cuerpo.userMessage).toContain('"hora":"14:00"')
+    expect(cuerpo.userMessage).not.toContain('"desde":null')
+  })
+
+  test('si el cliente SÍ dice su propia hora, esa gana sobre lo que preguntó el agente', () => {
+    const time = referenciasTemporales(new Date(), ZONA)
+    const pedido = interpretarCuando('mejor a las 10', time, [], '¿Confirmas para mañana a las 14:00?')
+    expect(pedido.hora).toBe('10:00')
+  })
+
+  test('sin ninguna pregunta previa del agente, sigue sin inventar una hora', () => {
+    const time = referenciasTemporales(new Date(), ZONA)
+    const pedido = interpretarCuando('Sí, por favor', time, [])
+    expect(pedido.hora).toBeNull()
+  })
+})
+
 /* ═══════════ B2. Memoria y nombre ═══════════ */
 
 test.describe('B2 — el agente sabe con quién habla', () => {
