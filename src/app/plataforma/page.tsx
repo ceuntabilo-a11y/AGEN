@@ -106,6 +106,7 @@ export default function PlatformOverviewPage() {
 
       <section className="rounded-2xl border bg-white p-5">
         <div className="flex items-center gap-2"><Gift size={18} className="text-[#5b3df5]" /><b>Demos y conversión</b></div>
+        <p className="mt-1 text-xs text-[#9a96a5]">Solo negocios marcados como demo al crearlos. &quot;Convertidas&quot; son las que dejaste de marcar como demo porque empezaron a pagar; &quot;Conversión&quot; es ese número sobre el total de demos entregadas — tu tasa real de demo → cliente.</p>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Dato etiqueta="Entregadas" valor={data.demos.entregadas} />
           <Dato etiqueta="Activas" valor={data.demos.activas} />

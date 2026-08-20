@@ -1,7 +1,7 @@
 'use client'
 
 import { ChangeEvent, useState } from 'react'
-import { Sparkles, Upload, X } from 'lucide-react'
+import { Sparkles, Upload } from 'lucide-react'
 import { ModalShell } from '@/components/ModalShell'
 import { sharpenRGBA } from '@/lib/image-sharpen'
 
@@ -139,7 +139,6 @@ export function ProfessionalPhotoModal({ professionalId, professionalName, brand
     <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6">
       <div className="flex justify-between">
         <div><h2 className="text-xl font-black">Foto del profesional</h2><p className="text-sm text-[#736f83]">{professionalName}</p></div>
-        <button type="button" aria-label="Cerrar" onClick={onClose}><X/></button>
       </div>
 
       <label className="mt-5 inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold">

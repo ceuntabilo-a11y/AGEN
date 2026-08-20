@@ -162,7 +162,8 @@ test.describe('La pestaña del prompt ya no existe', () => {
 
   test('el número de transferencia se configura sin salir de la página', () => {
     expect(pagina).toContain('Configurar número')
-    expect(pagina).toContain('aria-modal="true"')
+    // El modal accesible (role="dialog", aria-modal, Escape, X para cerrar) lo da ModalShell.
+    expect(pagina).toContain('ModalShell')
     expect(pagina).toContain('handoff_phone')
   })
 

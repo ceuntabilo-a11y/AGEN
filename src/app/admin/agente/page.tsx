@@ -1,4 +1,5 @@
 'use client'
+import { ModalShell } from '@/components/ModalShell'
 import { PageHeader } from '@/components/PageHeader'
 import { Bot } from 'lucide-react'
 import { FormEvent, useEffect, useState } from 'react'
@@ -170,7 +171,7 @@ export default function AgentPage() {
       {saved && <p className="mt-3 text-sm font-bold text-emerald-600" role="status">✓ Configuración guardada y aplicada al agente.</p>}
     </form>
 
-    {phoneModal && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Número para transferir a una persona">
+    {phoneModal && <ModalShell titulo="Número para transferir a una persona" onClose={() => setPhoneModal(false)}>
       <div className="w-full max-w-md rounded-2xl bg-white p-6">
         <h2 className="text-lg font-extrabold">Número para transferir a una persona</h2>
         <p className="mt-2 text-sm text-[#736f83]">Aquí llegará el aviso por WhatsApp cuando el agente necesite que atienda alguien del equipo. Escríbelo con el código del país.</p>
@@ -192,7 +193,7 @@ export default function AgentPage() {
         </div>
         <p className="mt-3 text-xs text-[#736f83]">Se guarda cuando pulses «Guardar configuración».</p>
       </div>
-    </div>}
+    </ModalShell>}
 
     <article className="mt-6 rounded-2xl bg-[#19162b] p-6 text-white"><Bot size={28} className="text-violet-400" /><h2 className="mt-4 text-lg font-extrabold">Reglas protegidas (no editables)</h2><ul className="mt-3 space-y-2 text-sm text-white/75"><li>· Solo muestra profesionales habilitados para el servicio</li><li>· Consulta disponibilidad antes de ofrecer una hora</li><li>· Revalida dentro de la transacción al reservar</li><li>· El modo equipo es siempre de solo lectura</li><li>· Nunca puede reservar, mover ni cancelar por su cuenta: lo ejecuta el sistema</li></ul></article>
   </>

@@ -1,5 +1,6 @@
 'use client'
 
+import { ModalShell } from '@/components/ModalShell'
 import { money } from '@/lib/money'
 import { formatInZone } from '@/lib/timezone'
 import { ESTADO_EN_PALABRAS, numeroDePresupuesto, presupuestoComoHtml, type NegocioDelDocumento, type PresupuestoParaDocumento } from '@/lib/quote-document'
@@ -63,7 +64,7 @@ export function FinanceDetailModal({ ficha, negocio, onClose, onCambio, onElimin
     </div>
   )
 
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label={`Detalle de ${ficha.tipo}`}>
+  return <ModalShell titulo={`Detalle de ${ficha.tipo}`} onClose={onClose}>
     <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6">
 
       {ficha.tipo === 'cobro' && <>
@@ -146,5 +147,5 @@ export function FinanceDetailModal({ ficha, negocio, onClose, onCambio, onElimin
         <button onClick={onClose} className="rounded-xl border px-4 py-2.5 text-sm font-bold">Cerrar</button>
       </div>
     </div>
-  </div>
+  </ModalShell>
 }
