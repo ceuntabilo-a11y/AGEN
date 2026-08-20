@@ -1,6 +1,7 @@
 'use client'
 
 import { PageHeader } from '@/components/PageHeader'
+import { mensajeDeFallo } from '@/lib/api-fetch-error'
 import { formatInZone, formatTimeInZone } from '@/lib/timezone'
 import { CalendarDays, Clock3, MapPin, Sparkles } from 'lucide-react'
 import Link from 'next/link'
@@ -15,20 +16,22 @@ export default function ClientHome() {
   const [settings,setSettings] = useState<Record<string,any>>({})
   const [logoUrl,setLogoUrl] = useState<string|null>(null)
   const [businessName,setBusinessName] = useState('')
-  const [error,setError] = useState(false)
+  const [error,setError] = useState('')
 
   useEffect(() => {
     fetch('/api/client/appointments').then(async (response) => {
-      if (!response.ok) throw new Error()
+      if (!response.ok) { setError(mensajeDeFallo(response.status, 'cargar tus datos')); return null }
       return response.json()
     }).then((data) => {
+      if (!data) return
       const upcoming = (data.appointments ?? []).filter((appointment:Appointment) => !['CANCELLED','COMPLETED','NO_SHOW'].includes(appointment.status) && start(appointment.service_period) > new Date()).sort((a:Appointment,b:Appointment) => start(a.service_period).getTime() - start(b.service_period).getTime())
       setNext(upcoming[0] ?? null)
       setTimezone(data.timezone ?? 'America/Santiago')
       setSettings(data.settings ?? {})
       setLogoUrl(data.logoUrl ?? null)
       setBusinessName(data.businessName ?? '')
-    }).catch(() => setError(true))
+      setError('')
+    }).catch(() => setError(mensajeDeFallo(null, 'cargar tus datos')))
   },[])
 
   const brand = typeof settings.brand_color === 'string' ? settings.brand_color : '#5b3df5'
@@ -41,7 +44,7 @@ export default function ClientHome() {
       {businessName && <b className="text-lg">{businessName}</b>}
     </div>}
     <PageHeader title="Mi espacio" description={welcome || 'Reservas y servicios en un solo lugar.'}/>
-    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Conecta Supabase para cargar tus datos.</p>}
+    {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{error}</p>}
     {next ? <section className="rounded-3xl p-6 text-white" style={{background:`linear-gradient(135deg, ${brand}, ${brand}cc)`}}>
       <p className="text-sm text-white/70">Próxima reserva</p><h2 className="mt-2 text-2xl font-black">{next.service?.name}</h2><p className="mt-1">con {next.professional?.display_name}</p>
       <div className="mt-6 flex flex-wrap gap-4 text-sm">

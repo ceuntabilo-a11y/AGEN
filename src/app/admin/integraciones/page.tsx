@@ -1,6 +1,7 @@
 'use client'
 import { PageHeader } from '@/components/PageHeader'
 import { WhatsAppConnect } from '@/components/WhatsAppConnect'
+import { mensajeDeFallo } from '@/lib/api-fetch-error'
 import { FormEvent, useEffect, useState } from 'react'
 
 type Integrations = { whatsapp_provider: string | null; whatsapp_instance: string | null; whatsapp_phone_id: string | null; whatsapp_token: string | null; whatsapp_360_api_key: string | null; openai_api_key: string | null; dashscope_api_key: string | null; dashscope_endpoint: string | null; feature_image: boolean; feature_voice: boolean; resend_configured: boolean; google_review_url: string | null }
@@ -11,7 +12,15 @@ export default function IntegrationsPage() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => { fetch('/api/admin/integrations').then(r => r.ok ? r.json() : Promise.reject()).then(d => { setData(d.integrations); setProvider(d.integrations.whatsapp_provider || 'EVOLUTION') }).catch(() => setError('Conecta Supabase para ver integraciones.')) }, [])
+  useEffect(() => {
+    fetch('/api/admin/integrations').then(r => {
+      if (!r.ok) { setError(mensajeDeFallo(r.status, 'ver integraciones')); return null }
+      return r.json()
+    }).then(d => {
+      if (!d) return
+      setData(d.integrations); setProvider(d.integrations.whatsapp_provider || 'EVOLUTION'); setError('')
+    }).catch(() => setError(mensajeDeFallo(null, 'ver integraciones')))
+  }, [])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaved(false); setError('')
