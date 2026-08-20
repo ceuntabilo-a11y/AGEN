@@ -88,7 +88,8 @@ export function Copilot() {
 
   return <>
     <button
-      aria-label="Abrir el asistente de Agen (arrástrame para moverme)"
+      aria-label="Abrir el asistente de Agen"
+      title="Arrástrame para moverme"
       onPointerDown={alPresionar}
       onPointerMove={alMover}
       onPointerUp={alSoltar}
