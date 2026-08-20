@@ -1,24 +1,22 @@
 'use client'
 
 import { PageHeader } from '@/components/PageHeader'
-import { Check, ChevronRight } from 'lucide-react'
+import { ARTICULOS_AYUDA } from '@/lib/help-content'
+import { buscarAyuda } from '@/lib/help-search'
+import { Check, ChevronRight, Search } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 type Step = { key: string; title: string; detail: string; href: string; done: boolean }
 
-const GUIDES: Array<[string, string]> = [
-  ['¿Cómo hago una reserva a mano?', 'Agenda → botón "Nueva reserva". Elige cliente, servicio y fecha, pulsa "Buscar disponibilidad" y selecciona una hora de las que aparecen: son las que de verdad están libres.'],
-  ['¿Por qué no aparecen horas disponibles?', 'Casi siempre es el horario: Equipo → "Horario" en la tarjeta del profesional. Si no tiene días cargados, no se generan cupos. Revisa también que el servicio esté activo y asignado a ese profesional.'],
-  ['¿Cómo cobro algo?', 'Finanzas → "Registrar cobro". Si todavía no te pagaron, guárdalo como "Por cobrar" y márcalo cobrado cuando llegue la plata.'],
-  ['¿Cómo le escribo a mis clientes?', 'Marketing → "Nueva campaña". Solo llega a quienes tienen permiso vigente; el número de personas se muestra antes de enviar.'],
-  ['¿Qué pasa si un cliente no llega?', 'En la agenda del profesional, botón "No asistió". Queda registrado en su ficha y el seguimiento te propone contactarlo.'],
-]
+const CATEGORIAS = Array.from(new Set(ARTICULOS_AYUDA.map((articulo) => articulo.categoria)))
 
 export default function HelpPage() {
   const [steps, setSteps] = useState<Step[]>([])
   const [done, setDone] = useState(0)
   const [error, setError] = useState(false)
+  const [consulta, setConsulta] = useState('')
+  const [categoria, setCategoria] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/admin/onboarding', { cache: 'no-store' })
@@ -28,6 +26,11 @@ export default function HelpPage() {
   }, [])
 
   const percent = steps.length ? Math.round(done / steps.length * 100) : 0
+
+  const resultados = useMemo(() => {
+    if (consulta.trim()) return buscarAyuda(consulta, ARTICULOS_AYUDA, 8)
+    return ARTICULOS_AYUDA.filter((articulo) => !categoria || articulo.categoria === categoria)
+  }, [consulta, categoria])
 
   return <>
     <PageHeader title="Ayuda" description="Primeros pasos y respuestas a lo que más se pregunta."/>
@@ -50,11 +53,30 @@ export default function HelpPage() {
 
     <section className="mt-6 rounded-2xl border border-black/5 bg-white p-5">
       <h2 className="font-extrabold">Preguntas frecuentes</h2>
+      <div className="relative mt-3">
+        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9a96a5]"/>
+        <input
+          type="search"
+          value={consulta}
+          onChange={(event) => setConsulta(event.target.value)}
+          placeholder="Escribe tu pregunta, por ejemplo: cómo cambio la hora de una cita"
+          className="w-full rounded-xl border border-black/10 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#5b3df5]"
+        />
+      </div>
+
+      {!consulta.trim() && <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" onClick={() => setCategoria(null)} className={`rounded-full px-3 py-1 text-xs font-bold ${!categoria ? 'bg-[#5b3df5] text-white' : 'bg-[#eceaf4] text-[#4b4761]'}`}>Todas</button>
+        {CATEGORIAS.map((cat) => <button key={cat} type="button" onClick={() => setCategoria(cat)} className={`rounded-full px-3 py-1 text-xs font-bold ${categoria === cat ? 'bg-[#5b3df5] text-white' : 'bg-[#eceaf4] text-[#4b4761]'}`}>{cat}</button>)}
+      </div>}
+
       <div className="mt-4 space-y-2">
-        {GUIDES.map(([question, answer]) => <details key={question} className="rounded-xl border border-black/5 p-3">
-          <summary className="cursor-pointer text-sm font-bold">{question}</summary>
-          <p className="mt-2 text-sm leading-6 text-[#4b4761]">{answer}</p>
+        {resultados.map((articulo) => <details key={articulo.id} className="rounded-xl border border-black/5 p-3">
+          <summary className="cursor-pointer text-sm font-bold">{articulo.pregunta}</summary>
+          <p className="mt-2 text-sm leading-6 text-[#4b4761]">{articulo.respuesta}</p>
         </details>)}
+        {consulta.trim() && !resultados.length && <p className="rounded-xl bg-[#f7f6fa] p-3 text-sm text-[#736f83]">
+          No encontramos nada para &quot;{consulta.trim()}&quot;. Prueba con otras palabras, o escríbenos desde Conversaciones si no lo encuentras.
+        </p>}
       </div>
     </section>
   </>
