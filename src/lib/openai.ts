@@ -17,11 +17,14 @@ export async function resolveDashScopeKey(businessOwnKey: string | null | undefi
   return { key: (typeof key === 'string' ? key : null), endpoint: (typeof endpoint === 'string' ? endpoint : null) }
 }
 
-export async function chatCompletion(apiKey: string, messages: { role: 'system' | 'user'; content: string }[], options?: { model?: string; maxTokens?: number; temperature?: number }) {
+export async function chatCompletion(apiKey: string, messages: { role: 'system' | 'user'; content: string }[], options?: { model?: string; maxTokens?: number; temperature?: number; json?: boolean }) {
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: options?.model ?? 'gpt-4o-mini', messages, max_tokens: options?.maxTokens ?? 400, temperature: options?.temperature ?? 0.3 }),
+    body: JSON.stringify({
+      model: options?.model ?? 'gpt-4o-mini', messages, max_tokens: options?.maxTokens ?? 400, temperature: options?.temperature ?? 0.3,
+      ...(options?.json ? { response_format: { type: 'json_object' } } : {}),
+    }),
     signal: AbortSignal.timeout(15000),
   })
   if (!response.ok) throw new Error(`OPENAI_${response.status}`)
