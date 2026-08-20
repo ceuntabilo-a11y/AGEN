@@ -126,13 +126,32 @@ function diaDelMensaje(mensaje: string, time: ReferenciasTemporales | null): { f
  *
  * Se aplica sobre el mensaje del turno Y sobre lo que ya se habló, porque una persona dice el
  * día en un mensaje y la hora en el siguiente («Para mañana» … «3pm»).
+ *
+ * `ultimaPreguntaAgente` es el último mensaje que mandó EL AGENTE, y se mira en último lugar,
+ * después de todo lo que dijo el cliente. Fallo real en producción (2026-08-20): el agente
+ * preguntó «¿Confirmas Corte y Peinado para mañana a las 14:00?», el cliente tardó más de un
+ * día en contestar «Sí, por favor» —sin repetir la hora—, y como el código solo miraba
+ * mensajes DEL CLIENTE, PEDIDO llegó vacío: buscó el día completo desde las 00:00 con tope de
+ * 3 resultados, que se llenaron con lo primero del día (9:00 de la mañana) sin llegar nunca a
+ * revisar las 14:00. El modelo, que sí leyó la conversación completa, entendió igual que el
+ * cliente quería las 14:00 y lo dijo en su respuesta — pero la búsqueda nunca se hizo cerca de
+ * esa hora.
+ *
+ * No hace falta filtrarlo por antigüedad como a los mensajes del cliente: acá el riesgo no es
+ * que se cuele una fecha vieja de una conversación sin relación (para eso está el filtro de
+ * 6 horas en quien llama), es al revés — un «sí» sin fecha propia SIEMPRE está contestando la
+ * última pregunta del agente, tenga la hora que tenga la respuesta. Y como «mañana» se vuelve a
+ * resolver contra la hora de AHORA (no contra cuándo se escribió la pregunta vieja), nunca
+ * apunta a un día ya pasado.
  */
 export function interpretarCuando(
   mensaje: string,
   time: ReferenciasTemporales | null,
   anteriores: string[] = [],
+  ultimaPreguntaAgente: string | null = null,
 ): CuandoPedido {
-  const textos = [String(mensaje ?? ''), ...anteriores.map((item) => String(item ?? ''))]
+  const propios = [String(mensaje ?? ''), ...anteriores.map((item) => String(item ?? ''))]
+  const textos = ultimaPreguntaAgente ? [...propios, String(ultimaPreguntaAgente)] : propios
 
   const hora = textos.map(horaDelMensaje).find(Boolean) ?? null
   const franja = textos.map(franjaDelMensaje).find(Boolean) ?? (hora ? franjaDeHora(hora) : null)
