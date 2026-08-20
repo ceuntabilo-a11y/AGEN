@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, CalendarClock, CheckCircle2, MessageSquareText, TimerReset, X } from 'lucide-react'
+import { AlertTriangle, CalendarClock, CheckCircle2, MessageSquareText, TimerReset } from 'lucide-react'
 import { useState } from 'react'
 import { dateKeyInZone, formatInZone, formatTimeInZone, zonedDayRange } from '@/lib/timezone'
 import { ModalShell } from '@/components/ModalShell'
@@ -181,7 +181,6 @@ export function AppointmentDetailsModal({ appointment, timezone, onClose, onUpda
             <h2 className="mt-1 text-2xl font-black">{appointment.client}</h2>
             <p className="text-sm text-[#736f83]">{appointment.serviceName} · {appointment.professionalName}</p>
           </div>
-          <button aria-label="Cerrar" onClick={onClose} className="rounded-xl bg-white p-2"><X/></button>
         </div>
 
         {alert && <div role="alert" className={`mt-4 flex items-start gap-3 rounded-2xl border-2 p-4 text-sm font-bold ${alert.tone === 'error' ? 'border-red-300 bg-red-50 text-red-800' : 'border-emerald-300 bg-emerald-50 text-emerald-800'}`}>

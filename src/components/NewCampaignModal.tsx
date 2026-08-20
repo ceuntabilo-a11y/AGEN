@@ -1,7 +1,7 @@
 'use client'
 
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
-import { ImagePlus, Sparkles, X } from 'lucide-react'
+import { ImagePlus, Sparkles } from 'lucide-react'
 import { ModalShell } from '@/components/ModalShell'
 
 type AudienceDraft = { segment?:string; q?:string; visitedWithinDays?:number; daysSinceLastVisitMin?:number; daysSinceLastVisitMax?:number; visitCountMin?:number; visitCountMax?:number; visitCountWindowDays?:number }
@@ -121,7 +121,6 @@ export function NewCampaignModal({ onClose, onCreated, campaign }: { onClose: ()
     <form onSubmit={submit} className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6">
       <div className="flex justify-between">
         <div><h2 className="text-xl font-black">{campaign?'Editar campaña':'Nueva campaña'}</h2><p className="text-sm text-[#736f83]">Solo se enviará a clientes con consentimiento vigente.</p></div>
-        <button aria-label="Cerrar" type="button" onClick={onClose}><X/></button>
       </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
