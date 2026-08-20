@@ -6,6 +6,7 @@ import { PORTFOLIO_BUCKET, portfolioPublicUrl } from '@/lib/storage'
 const BUCKETS: Record<string, { bucket: string; maxBytes: number }> = {
   logo: { bucket: 'business-assets', maxBytes: 5 * 1024 * 1024 },
   campaign: { bucket: 'business-assets', maxBytes: 5 * 1024 * 1024 },
+  professional: { bucket: 'business-assets', maxBytes: 5 * 1024 * 1024 },
   portfolio: { bucket: 'portfolio', maxBytes: 10 * 1024 * 1024 },
 }
 const TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/svg+xml': 'svg' }

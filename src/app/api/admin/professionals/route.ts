@@ -61,7 +61,7 @@ export async function PATCH(request:Request){
     const {data:current,error:currentError}=await db.from('professionals').select('id').eq('business_id',businessId).eq('id',body.id).maybeSingle()
     if(currentError)throw currentError
     if(!current)return NextResponse.json({error:'Ese profesional no pertenece al negocio'},{status:404})
-    const allowed=['display_name','bio','color','commission_percent','branch_id','active','calendar_hide_client_names']
+    const allowed=['display_name','bio','color','commission_percent','branch_id','active','calendar_hide_client_names','photo_url']
     const changes=Object.fromEntries(Object.entries(body.changes??{}).filter(([key])=>allowed.includes(key)))
     if(typeof changes.display_name==='string'){const name=changes.display_name.trim();if(!name)return NextResponse.json({error:'El nombre no puede quedar vacío'},{status:400});changes.display_name=name.slice(0,120)}
     if(changes.commission_percent!==undefined){const value=Number(changes.commission_percent);if(!Number.isFinite(value)||value<0||value>100)return NextResponse.json({error:'La comisión debe estar entre 0 y 100'},{status:400});changes.commission_percent=value}
