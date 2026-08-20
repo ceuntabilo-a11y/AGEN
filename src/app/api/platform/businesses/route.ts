@@ -29,12 +29,15 @@ export async function GET() {
     const porNegocio = new Map((invitaciones.data ?? []).map((fila) => [fila.business_id, fila]))
     const hoy = hoyISO()
     return NextResponse.json({
-      businesses: (negocios.data ?? []).map((negocio) => ({
-        ...negocio,
-        estado: estadoDeNegocio(negocio, hoy),
-        restantes: diasRestantes(negocio.expires_on, hoy),
-        invitacion: porNegocio.get(negocio.id) ?? null,
-      })),
+      businesses: (negocios.data ?? []).map((negocio) => {
+        const invitacion = porNegocio.get(negocio.id) ?? null
+        return {
+          ...negocio,
+          estado: estadoDeNegocio(negocio, hoy, invitacion),
+          restantes: diasRestantes(negocio.expires_on, hoy),
+          invitacion,
+        }
+      }),
     })
   } catch (error) { return apiError(error) }
 }

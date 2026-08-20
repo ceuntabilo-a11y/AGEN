@@ -67,11 +67,12 @@ export async function GET() {
     const hace7 = diaISO(new Date(ahora.getTime() - 7 * 86400000))
     const hace30 = diaISO(new Date(ahora.getTime() - 30 * 86400000))
 
-    const [negocios, profesionales, citas, ping, n8n] = await Promise.all([
+    const [negocios, invitaciones, profesionales, citas, ping, n8n] = await Promise.all([
       negociosConVigencia(
         (columnas) => db.from('businesses').select(columnas),
         'id,name,active,suspended_at,created_at,membership_plans(code,name,price)',
       ),
+      db.from('business_invitations').select('business_id,status'),
       db.from('professionals').select('id', { count: 'exact', head: true }).eq('active', true),
       db.from('appointments').select('id', { count: 'exact', head: true }).not('status', 'eq', 'CANCELLED'),
       db.from('businesses').select('id', { count: 'exact', head: true }).limit(1).then(
@@ -82,10 +83,11 @@ export async function GET() {
     ])
     if (negocios.error) throw negocios.error
 
+    const invitacionPorNegocio = new Map((invitaciones.data ?? []).map((fila) => [fila.business_id, fila]))
     const filas = (negocios.data ?? []) as unknown as FilaNegocio[]
     const conEstado = filas.map((fila) => ({
       ...fila,
-      estado: estadoDeNegocio(fila, hoy),
+      estado: estadoDeNegocio(fila, hoy, invitacionPorNegocio.get(fila.id) ?? null),
       restantes: diasRestantes(fila.expires_on, hoy),
     }))
 
@@ -120,6 +122,7 @@ export async function GET() {
         total: filas.length,
         activos: conEstado.filter((f) => f.estado === 'ACTIVO').length,
         demos: conEstado.filter((f) => f.estado === 'DEMO').length,
+        pendientes: conEstado.filter((f) => f.estado === 'PENDIENTE').length,
         vencidos: conEstado.filter((f) => f.estado === 'VENCIDO').length,
         suspendidos: conEstado.filter((f) => f.estado === 'SUSPENDIDO').length,
         inactivos: conEstado.filter((f) => f.estado === 'INACTIVO').length,
