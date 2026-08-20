@@ -476,6 +476,35 @@ decía «no hay reserva activa».
 - **Orden de despliegue, obligatorio:** migración SQL → desplegar la app → subir el workflow.
   `npm run n8n -- subir` lo comprueba solo y se niega si las rutas nuevas no existen todavía.
 
+## 6.10 El asistente flotante ("Robot Agen"): copiloto + ayuda, arrastrable, en todo el panel
+
+Añadido el 2026-08-20. Antes había DOS cosas separadas: el Copiloto (`src/components/Copilot.tsx`,
+solo datos del negocio de hoy, fijo abajo a la izquierda) y el buscador sin IA de `/admin/ayuda`
+(`src/lib/help-content.ts`, `src/lib/help-search.ts`). El dueño pidió un asistente
+que responda CUALQUIER pregunta —no solo las 38 fijas de `help-content.ts`— y que sepa en qué
+pantalla está ("si estoy en Seguimiento, que me conteste sobre Seguimiento"), sin duplicar el
+ícono flotante. Se fusionaron en el mismo componente en vez de agregar un segundo bot.
+
+- **Sigue siendo de solo lectura.** El system prompt de `/api/admin/copilot` es explícito: el
+  asistente nunca ejecuta ninguna acción él mismo (no reserva, no cambia configuración, no borra
+  nada) — si el dueño quiere hacer algo, le dice el botón y la pantalla exactos, nunca afirma
+  haberlo hecho. Mismo principio que el agente de WhatsApp (§6.9): el modelo explica, el código
+  ejecuta.
+- **Grounding sin alucinar:** antes de llamar al modelo se usa el mismo `buscarAyuda()` de la
+  Tanda 9 (cero costo) para preseleccionar artículos relevantes por la pregunta, más TODOS los
+  artículos de la categoría de la pantalla actual (`categoriaDePagina()` en
+  `src/lib/help-content.ts`, mapea cada ruta de `/admin/*` a su categoría). Solo esos artículos
+  —hechos reales ya escritos— entran al prompt junto con los datos del negocio de hoy que ya
+  calculaba el Copiloto. El modelo no inventa botones ni pantallas que no existan.
+- **Arrastrable, no tapa nada a la fuerza.** El botón flotante (`Copilot.tsx`) se mueve con el
+  mouse o el dedo (Pointer Events) y su posición se guarda en `localStorage`
+  (`agen_asistente_pos`) — se mueve una vez y queda ahí en cualquier pantalla del panel del
+  dueño. Sin posición guardada, mantiene la esquina de siempre (abajo a la izquierda) para no
+  cambiar la conducta de quien nunca lo mueve.
+- **Límite y respaldo sin cambios:** sigue el rate limit de 30/min por negocio
+  (`src/lib/rate-limit.ts`) y, si OpenAI falla o no hay clave, cae al enrutado por palabras clave
+  de siempre — nunca deja al dueño sin respuesta, solo con una más simple.
+
 ## 7. Entorno y despliegue
 
 Variables nuevas: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` (Evolution API compartida por la
