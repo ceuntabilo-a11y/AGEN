@@ -41,7 +41,7 @@ export default function ImportClientsPage() {
   const [bloques, setBloques] = useState<Bloque[]>([])
   const [marketing, setMarketing] = useState(false)
   const [error, setError] = useState('')
-  const [result, setResult] = useState<{ created: number; skipped: Array<{ row: number; reason: string }> } | null>(null)
+  const [result, setResult] = useState<{ created: number; updated?: number; skipped: Array<{ row: number; reason: string }> } | null>(null)
   const [loading, setLoading] = useState(false)
 
   function actualizarBloque(id: string, cambios: Partial<Bloque>) {
@@ -207,6 +207,7 @@ export default function ImportClientsPage() {
 
     {result && <section className="mt-6 rounded-2xl border border-black/5 bg-white p-5">
       <h2 className="font-extrabold text-emerald-700">Se importaron {result.created} clientes.</h2>
+      {Boolean(result.updated) && <p className="mt-1 text-sm font-semibold text-[#5b3df5]">Se completaron {result.updated} fichas que ya existían (solo se agregó lo que les faltaba — nada se sobrescribió).</p>}
       {result.skipped.length > 0 && <>
         <p className="mt-3 text-sm font-semibold">{result.skipped.length} filas quedaron fuera:</p>
         <ul className="mt-2 space-y-1 text-sm text-[#736f83]">{result.skipped.slice(0, 30).map((item) => <li key={item.row}>Fila {item.row}: {item.reason}</li>)}</ul>
