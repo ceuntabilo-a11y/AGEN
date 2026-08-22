@@ -55,12 +55,30 @@ export default function AgentPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaved(false); setError(''); setSaving(true)
     const form = new FormData(event.currentTarget)
+    /*
+     * Cada pestaña solo monta en el DOM sus propios campos (`{tab === 'Voz' && <div>...`), así
+     * que un FormData del formulario completo únicamente trae lo de la pestaña visible — el
+     * resto de los campos no existen y form.get() devuelve null para todos, casillas incluidas.
+     * Construir agent_settings solo con form.get() (como antes) volvía a los valores por
+     * defecto todo lo que no estuviera en la pestaña activa: guardar desde "Voz" apagaba
+     * "Agente habilitado" (vive en "General"), y guardar desde "General" apagaba la voz. Por
+     * eso se parte de lo que ya había guardado (`business.agent_settings`) y solo se pisa la
+     * parte de la pestaña que el usuario realmente está viendo y editando.
+     */
+    const previo = business?.agent_settings ?? {}
     const agent_settings: AgentSettings = {
-      enabled: form.get('enabled') === 'on',
-      tone: String(form.get('tone') || 'friendly'),
+      ...previo,
       human_handoff_enabled: handoffEnabled,
       handoff_phone: handoffPhone.trim() || null,
-      voice: {
+    }
+    if (tab === 'General') {
+      agent_settings.enabled = form.get('enabled') === 'on'
+    }
+    if (tab === 'Personalidad') {
+      agent_settings.tone = String(form.get('tone') || 'friendly')
+    }
+    if (tab === 'Voz') {
+      agent_settings.voice = {
         enabled: form.get('voiceEnabled') === 'on',
         gender: String(form.get('gender') || 'female'),
         style: String(form.get('style') || 'warm'),
@@ -68,13 +86,15 @@ export default function AgentPage() {
         accent: String(form.get('accent') || 'neutral'),
         emotion: String(form.get('emotion') || 'neutral'),
         language: String(form.get('language') || 'es'),
-      },
-      behavior: {
+      }
+    }
+    if (tab === 'Comportamiento') {
+      agent_settings.behavior = {
         respond_voice: form.get('respondVoice') === 'on',
         respond_voice_only_if_voice: form.get('respondVoiceOnlyIfVoice') === 'on',
         also_send_text: form.get('alsoSendText') === 'on',
         max_duration_seconds: Number(form.get('maxDuration') || 30),
-      },
+      }
     }
     const response = await fetch('/api/admin/settings', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agent_settings }) })
     const data = await response.json()
