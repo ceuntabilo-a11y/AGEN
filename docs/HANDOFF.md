@@ -20,23 +20,30 @@ Cómo mantenerlo:
 
 | Dato | Valor |
 |---|---|
-| Rama | `contexto-sin-vuelta-extra` |
-| HEAD local | `56b029c` — feat: la plataforma se puede vender — ciclo comercial, acceso del dueño y panel real |
-| HEAD remoto | `56b029c` (sincronizado) |
-| Commits por delante de `main` | 2 |
-| Árbol de trabajo | limpio |
-| PR abierto | [#34](https://github.com/ceuntabilo-a11y/AGEN/pull/34) — feat: la plataforma se puede vender — ciclo comercial, acceso del dueño y panel real (listo) |
-| Último CI | completed / **cancelled** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/31980226371 |
+| Rama | `importar-completar-existentes` |
+| HEAD local | `0918cea` — fix: la importación de clientes reconoce más encabezados y completa fichas repetidas |
+| HEAD remoto | `0918cea` (sincronizado) |
+| Commits por delante de `main` | 13 |
+| Árbol de trabajo | **sucio** — 2 archivo(s) |
+| PR abierto | ninguno |
+| Último CI | completed / **success** — https://github.com/ceuntabilo-a11y/AGEN/actions/runs/32430650947 |
+
+Archivos sin commitear:
+
+```
+?? _revisar_excel_temporal.mjs
+?? tests/contract/zzz-debug-temporal.spec.ts
+```
 
 Últimos commits:
 
 ```
-56b029c feat: la plataforma se puede vender — ciclo comercial, acceso del dueño y panel real
-a69d21f perf: el agente dejó de pedir lo que ya tenía delante, y el prompt adelgaza
-23cdc7c fix: el turno nunca muere en silencio y la respuesta no sale dos veces (#31)
-2b615ca Sale de probar el agente contra producción con WhatsApp real y de leer el desglose de latencia por nodo del n8n, no de leer el código. (#29)
-0e5c3c6 Encontrado probando el agente contra producción con WhatsApp real. (#28)
-eda4651 Dos afinados salidos de probar el agente contra producción con WhatsApp real. (#27)
+0918cea fix: la importación de clientes reconoce más encabezados y completa fichas repetidas
+304fa91 fix: el agente ya busca cerca de la hora que preguntó, no solo la del cliente
+5774c96 merge: integrar main (evita el choque por historia de squash)
+bd409c6 ## Qué hace (#56)
+133c4a5 ## Qué hace (#55)
+ea13f65 ## Qué hace (#54)
 ```
 
 <!-- AUTO:FIN -->
